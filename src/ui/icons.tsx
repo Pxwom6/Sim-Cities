@@ -110,3 +110,23 @@ export const IconLock = (p: P) => (
     <path d="M8 11V7a4 4 0 018 0v4" />
   </svg>
 );
+export const IconBolt = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M13 2L4 14h7l-1 8 9-12h-7z" />
+  </svg>
+);
+export const IconDrop = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M12 3c4 5 6 8 6 11a6 6 0 01-12 0c0-3 2-6 6-11z" />
+  </svg>
+);
+export const IconTrash = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6" />
+  </svg>
+);
+export const IconLayers = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M12 3l9 5-9 5-9-5zM3 13l9 5 9-5M3 17l9 5 9-5" />
+  </svg>
+);

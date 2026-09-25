@@ -1,7 +1,16 @@
 import { TerrainGen, sampleHeights } from '../sim/terrain/generate';
-import type { BuildingData, CityStats, FrameDiff, NetDiff, Snapshot } from '../sim/protocol';
+import type {
+  BuildingData,
+  CityStats,
+  CivicData,
+  FrameDiff,
+  NetDiff,
+  Snapshot,
+  VehicleData,
+} from '../sim/protocol';
 import { Network, type NetworkState, type RoadSegment, type ZoneBlock } from '../sim/world/network';
 import { SpatialHash } from '../sim/world/spatial';
+import { CIVIC } from '../data/civic';
 import type { GameOptions } from '../sim/state';
 import { MAP_SIZE } from '../data/world';
 
@@ -35,6 +44,11 @@ export class ClientWorld {
   /** Spatial index of building footprints (by bounding circle). */
   readonly bldHash = new SpatialHash(32);
   private buildingListeners: ((changed: number[], removed: number[]) => void)[] = [];
+  readonly civics = new Map<number, CivicData>();
+  private civicListeners: ((changed: number[], removed: number[]) => void)[] = [];
+  /** Active service vehicles and the tick they were reported at (the renderer extrapolates). */
+  vehicles: VehicleData[] = [];
+  vehiclesTick = 0;
   /** Recent sim events (built, abandoned, ...) for notifications and sounds. */
   events: { kind: string; id: number }[] = [];
   /** Fractional tick, advanced smoothly between frames for lighting. */
@@ -58,6 +72,32 @@ export class ClientWorld {
     for (const b of snap.net.blocks) this.netState.blocks.set(b.id, { ...b });
     this.net = new Network(this.netState, null, null);
     for (const b of snap.buildings) this.setBuilding(b);
+    for (const c of snap.civics) this.civics.set(c.id, c);
+    this.vehicles = snap.vehicles;
+    this.vehiclesTick = snap.stats.tick;
+  }
+
+  onCivics(l: (changed: number[], removed: number[]) => void): () => void {
+    this.civicListeners.push(l);
+    return () => {
+      this.civicListeners = this.civicListeners.filter((x) => x !== l);
+    };
+  }
+
+  /** Civic building whose footprint contains (x, z). */
+  civicAt(x: number, z: number): CivicData | null {
+    for (const c of this.civics.values()) {
+      const d = CIVIC.get(c.def);
+      if (!d) continue;
+      const ca = Math.cos(c.angle);
+      const sa = Math.sin(c.angle);
+      const dx = x - c.x;
+      const dz = z - c.z;
+      const lx = dx * ca + dz * sa;
+      const lz = -dx * sa + dz * ca;
+      if (Math.abs(lx) <= d.w / 2 && Math.abs(lz) <= d.d / 2) return c;
+    }
+    return null;
   }
 
   private setBuilding(b: BuildingData): void {
@@ -194,6 +234,17 @@ export class ClientWorld {
       const changed = diff.buildings.upserts.map((b) => b.id);
       for (const l of this.buildingListeners) l(changed, diff.buildings.removed);
       this.emit('buildings');
+    }
+    if (diff.civics) {
+      for (const id of diff.civics.removed) this.civics.delete(id);
+      for (const c of diff.civics.upserts) this.civics.set(c.id, c);
+      const changed = diff.civics.upserts.map((c) => c.id);
+      for (const l of this.civicListeners) l(changed, diff.civics.removed);
+      this.emit('civics');
+    }
+    if (diff.vehicles) {
+      this.vehicles = diff.vehicles;
+      this.vehiclesTick = diff.tick;
     }
     if (diff.events) {
       this.events = diff.events;

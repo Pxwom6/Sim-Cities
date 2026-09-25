@@ -1,6 +1,8 @@
 import { ZONED_DEFS } from '../../data/buildings';
 import type { ModelData } from './builder';
 import { buildZonedModel } from './models';
+import { buildCivicModel } from './civicModels';
+import { CIVIC } from '../../data/civic';
 
 /** Number of visual variants per archetype and lot size. */
 export const VARIANTS = 12;
@@ -30,6 +32,18 @@ export class AssetRegistry {
     if (!m) {
       const o = this.overrides.get(def);
       m = o ? o() : buildZonedModel(ZONED_DEFS.get(def)!, w, d, variant % VARIANTS);
+      this.cache.set(k, m);
+    }
+    return m;
+  }
+
+  civic(def: string, variant: number, fill = 0): ModelData {
+    const q = Math.round(fill * 4);
+    const k = `civic:${def}|${variant % 4}|${q}`;
+    let m = this.cache.get(k);
+    if (!m) {
+      const o = this.overrides.get(def);
+      m = o ? o() : buildCivicModel(CIVIC.get(def)!, variant % 4, q / 4);
       this.cache.set(k, m);
     }
     return m;

@@ -5,6 +5,7 @@ import { rectsOverlap } from '../src/sim/geom';
 import { ROWS } from '../src/data/zones';
 import type { CommandOk, CommandResult } from '../src/sim/commands';
 import { CIVIC } from '../src/data/civic';
+import { roadsidePose as roadsidePoseNet } from '../src/sim/world/civic';
 
 export function newSim(opts: Parameters<typeof Sim.create>[0] = {}): Sim {
   const sim = Sim.create({ seed: 'citybloom', preset: 'river', ...opts });
@@ -149,15 +150,8 @@ export function countBuildings(
   return n;
 }
 
-/** Centre, angle and side for a civic building of depth `d` standing beside a segment at arc length s. */
 export function roadsidePose(sim: Sim, segId: number, s: number, side: 1 | -1, d: number) {
-  const curve = sim.net.curve(segId);
-  const p = curve.pointAt(s);
-  const t = curve.tangentAt(s);
-  const hw = sim.net.halfWidth(segId);
-  const away = { x: t.z * side, z: -t.x * side };
-  const off = hw + d / 2 + 0.5;
-  return { x: p.x + away.x * off, z: p.z + away.z * off, angle: Math.atan2(t.z, t.x), side };
+  return roadsidePoseNet(sim.net, segId, s, side, d);
 }
 
 /** Place a civic building somewhere along a segment (tries positions and both sides). */

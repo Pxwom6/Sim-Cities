@@ -90,9 +90,14 @@ uniform float uGridOn;`,
   float border = (1.0 - smoothstep(0.8, 2.5, dEdge)) * inRange;
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(1.0, 0.97, 0.85), border * 0.6);
   // Data-map overlay.
-  if (uOverlayOn > 0.5 && outside < 0.5) {
-    vec4 o = texture2D(uOverlay, p / uMapSize);
-    diffuseColor.rgb = mix(diffuseColor.rgb, o.rgb, o.a * 0.85);
+  if (uOverlayOn > 0.5) {
+    // Data maps: mute the scene, then paint the data on top.
+    float g2 = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
+    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(g2) * 0.95 + 0.03, 0.75);
+    if (outside < 0.5) {
+      vec4 o = texture2D(uOverlay, p / uMapSize);
+      diffuseColor.rgb = mix(diffuseColor.rgb, o.rgb, o.a * 0.9);
+    }
   }
   // Construction grid (8 m) while placing things.
   if (uGridOn > 0.5 && outside < 0.5) {

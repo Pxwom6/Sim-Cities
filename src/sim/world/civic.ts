@@ -205,3 +205,23 @@ export function bulldozeCivic(
   sim.earn(refund, 'refunds');
   return ok(-refund, { info: { refund, buildings: [] } });
 }
+
+/** Centre, angle and side for a civic building of depth `d` standing beside a segment at arc length s. */
+export function roadsidePose(
+  net: {
+    curve(id: number): { pointAt(s: number): Vec2; tangentAt(s: number): Vec2; length: number };
+    halfWidth(id: number): number;
+  },
+  segId: number,
+  s: number,
+  side: 1 | -1,
+  d: number,
+): { x: number; z: number; angle: number; side: 1 | -1 } {
+  const curve = net.curve(segId);
+  const p = curve.pointAt(s);
+  const t = curve.tangentAt(s);
+  const hw = net.halfWidth(segId);
+  const away = { x: t.z * side, z: -t.x * side };
+  const off = hw + d / 2 + 0.5;
+  return { x: p.x + away.x * off, z: p.z + away.z * off, angle: Math.atan2(t.z, t.x), side };
+}

@@ -292,6 +292,10 @@ Trade       = export revenue, specialisation revenue (M10)
 
 ### 3.6 Utilities (power, water, sewage, garbage)
 
+Civic buildings (`src/data/civic.ts`) are placed by the player beside a road, facing it; their front
+edge must touch the road corridor, which gives their access point on the graph. Zone cells under them
+become invalid. Use per consumer = capacity × a per-zone rate (`UTILITY_USE`).
+
 Flow through the road network. For utility U, each network component `k` has
 `supply_k = Σ plant.capacity · eff(funding) · condition` (water pumps × `0.3 + 0.7·groundwater` at the
 pump; river pumps full). Consumers are sorted by road travel distance to the nearest producer
@@ -327,8 +331,13 @@ of the network first — readable on the data map. `served_b ∈ [0, 1]`.
     (1 − 0.8·policeCov)`. A patrol car is dispatched; if it arrives within 20 game minutes the crime is
     stopped, otherwise the crime grid rises around the building.
   - Sickness and emergencies: see §3.11; ambulances are dispatched for emergencies.
-- Service vehicles are sim entities with a node path and progress, moving each tick at the segment's
-  congested speed — traffic delays response. The renderer animates them from the path.
+- Service vehicles are sim entities with a route of road legs and progress, moving each tick at the
+  segment's congested speed — traffic delays response. The renderer extrapolates them between frames.
+- **Vehicle time.** One tick is a game minute, so a truck driving at real speed would cross the map in
+  a few ticks (a blur on screen). Dispatched vehicles instead move `0.2 m per tick per m/s of road
+  speed` (≈ 60 km/h on screen at 1×), and incident timings (fire spread, collection rounds) are tuned
+  in ticks to match. Commute times used for happiness stay realistic. (The Cities: Skylines approach:
+  the clock runs faster than the cars.)
 
 ### 3.8 Traffic, commuting and employment
 

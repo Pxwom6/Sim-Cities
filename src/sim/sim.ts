@@ -52,6 +52,7 @@ import { bulldozeCivic, civicDef, civicRect, findAccess, placeCivic, type Civic 
 import { civicOutput, emptyUtilityStats, updateUtilities, utilityConsequences } from './systems/utilities';
 import { dispatchGarbage, garbageHour } from './systems/garbage';
 import { segSpeed, stepVehicles } from './systems/vehicles';
+import { computeOverlay } from './systems/overlays';
 import { GARBAGE, UTILITIES, VEHICLE_SPEED_SCALE } from '../data/civic';
 import { fieldAt, updateGroundPollution } from './systems/pollution';
 import { rectsOverlap, type ORect } from './geom';
@@ -543,6 +544,7 @@ export class Sim {
       bankrupt: this.state.economy.bankrupt,
       negativeHours: this.state.economy.negativeHours,
       utilities: this.state.utilityStats,
+      unlockAll: this.state.unlockAll,
       civics: this.state.civics.size,
       vehicles: this.state.vehicles.size,
     };
@@ -791,6 +793,8 @@ export class Sim {
         return this.budget();
       case 'civic':
         return this.civicDetails(q.id);
+      case 'overlay':
+        return computeOverlay(this, q.map);
     }
   }
 

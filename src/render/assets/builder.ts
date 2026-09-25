@@ -87,6 +87,46 @@ export class ModelBuilder {
     }
   }
 
+  /** Truncated cone (cooling towers, tanks, spires): radius r0 at y0 to r1 at y1. */
+  frustum(
+    cx: number,
+    cz: number,
+    r0: number,
+    r1: number,
+    y0: number,
+    y1: number,
+    col: Color,
+    sides = 12,
+    cap = true,
+  ): void {
+    for (let i = 0; i < sides; i++) {
+      const a0 = (i / sides) * Math.PI * 2;
+      const a1 = ((i + 1) / sides) * Math.PI * 2;
+      const p = (r: number, a: number, y: number) => [cx + Math.cos(a) * r, y, cz + Math.sin(a) * r];
+      this.quad(p(r0, a0, y0), p(r1, a0, y1), p(r1, a1, y1), p(r0, a1, y0), col);
+      if (cap && r1 > 0.01) this.tri([cx, y1, cz], p(r1, a1, y1), p(r1, a0, y1), 0, 1, 0, col);
+    }
+  }
+
+  /** Low dome (hemisphere approximation) of radius r on y. */
+  dome(cx: number, cz: number, r: number, y: number, col: Color, rings = 4, sides = 12): void {
+    for (let k = 0; k < rings; k++) {
+      const t0 = (k / rings) * (Math.PI / 2);
+      const t1 = ((k + 1) / rings) * (Math.PI / 2);
+      this.frustum(
+        cx,
+        cz,
+        r * Math.cos(t0),
+        r * Math.cos(t1),
+        y + r * Math.sin(t0),
+        y + r * Math.sin(t1),
+        col,
+        sides,
+        k === rings - 1,
+      );
+    }
+  }
+
   /** Gable roof over [x0,x1]×[z0,z1] from height y, ridge along x (or z). */
   gable(
     x0: number,

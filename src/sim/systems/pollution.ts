@@ -54,10 +54,22 @@ export function updateGroundPollution(sim: Sim, hours: number): void {
       const k = j * GRID_RES + i;
       let nb = 0;
       let cnt = 0;
-      if (i > 0) ((nb += field[k - 1]!), cnt++);
-      if (i < GRID_RES - 1) ((nb += field[k + 1]!), cnt++);
-      if (j > 0) ((nb += field[k - GRID_RES]!), cnt++);
-      if (j < GRID_RES - 1) ((nb += field[k + GRID_RES]!), cnt++);
+      if (i > 0) {
+        nb += field[k - 1]!;
+        cnt++;
+      }
+      if (i < GRID_RES - 1) {
+        nb += field[k + 1]!;
+        cnt++;
+      }
+      if (j > 0) {
+        nb += field[k - GRID_RES]!;
+        cnt++;
+      }
+      if (j < GRID_RES - 1) {
+        nb += field[k + GRID_RES]!;
+        cnt++;
+      }
       const v = field[k]! * 0.96 + (cnt ? (nb / cnt) * 0.04 : 0);
       out[k] = Math.max(0, Math.min(1, v * decay + add[k]!));
     }

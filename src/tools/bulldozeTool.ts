@@ -1,11 +1,13 @@
+import type { BulldozeTarget } from '../sim/commands';
 import type { Game } from '../game';
 import type { Tool, ToolPointer } from './tool';
+import { CIVIC } from '../data/civic';
 
-/** Click a road to demolish it (with a partial refund). Hovering shows what would go. */
+/** Click a building, civic building or road to demolish it. Hovering shows what would go. */
 export class BulldozeTool implements Tool {
   readonly id = 'bulldoze';
   readonly usesLeftDrag = true;
-  private hover: number | null = null;
+  private hover: string | null = null;
   private hoverInfo: string | null = null;
   private seq = 0;
 
@@ -16,6 +18,7 @@ export class BulldozeTool implements Tool {
   deactivate(): void {
     this.hover = null;
     this.game.renderer.ghost.highlightSegment(null, 0);
+    this.game.renderer.ghost.showSelection(null);
     this.game.setHint(null);
   }
 
@@ -23,29 +26,57 @@ export class BulldozeTool implements Tool {
     return false;
   }
 
-  private pick(p: ToolPointer): number | null {
+  private pick(p: ToolPointer): BulldozeTarget | null {
+    const hitB = this.game.renderer.pick(p.clientX, p.clientY);
+    if (hitB)
+      return hitB.kind === 'civic' ? { kind: 'civic', id: hitB.id } : { kind: 'building', id: hitB.id };
     if (!p.ground) return null;
     const net = this.game.world.net;
     const hit = net.nearestSegment(p.ground, 14);
     if (!hit || hit.d > net.halfWidth(hit.seg) + 1) return null;
-    return hit.seg;
+    return { kind: 'segment', id: hit.seg };
+  }
+
+  private describe(t: BulldozeTarget, refund: number, buildings: number): string {
+    const money = refund > 0 ? ` · refund $${refund.toLocaleString('en-US')}` : '';
+    if (t.kind === 'segment')
+      return `Bulldoze road${money}${buildings ? ` · demolishes ${buildings} building${buildings > 1 ? 's' : ''}` : ''}`;
+    if (t.kind === 'civic')
+      return `Bulldoze ${CIVIC.get(this.game.world.civics.get(t.id)?.def ?? '')?.name ?? 'building'}${money}`;
+    return 'Bulldoze building';
+  }
+
+  private highlight(t: BulldozeTarget | null): void {
+    const g = this.game.renderer.ghost;
+    const net = this.game.world.net;
+    g.highlightSegment(
+      t?.kind === 'segment' ? net.curve(t.id) : null,
+      t?.kind === 'segment' ? net.halfWidth(t.id) : 0,
+    );
+    if (t?.kind === 'building') {
+      const b = this.game.world.buildings.get(t.id);
+      g.showSelection(b ? { x: b.x, z: b.z, hw: b.w * 4, hd: b.d * 4, angle: b.angle } : null);
+    } else if (t?.kind === 'civic') {
+      const c = this.game.world.civics.get(t.id);
+      const d = c ? CIVIC.get(c.def) : undefined;
+      g.showSelection(c && d ? { x: c.x, z: c.z, hw: d.w / 2, hd: d.d / 2, angle: c.angle } : null);
+    } else g.showSelection(null);
   }
 
   pointerMove(p: ToolPointer): void {
-    const id = this.pick(p);
-    const net = this.game.world.net;
-    if (id !== this.hover) {
-      this.hover = id;
+    const t = this.pick(p);
+    const key = t ? `${t.kind}:${t.id}` : null;
+    if (key !== this.hover) {
+      this.hover = key;
       this.hoverInfo = null;
-      this.game.renderer.ghost.highlightSegment(
-        id !== null ? net.curve(id) : null,
-        id !== null ? net.halfWidth(id) : 0,
-      );
-      if (id !== null) {
+      this.highlight(t);
+      if (t) {
         const seq = ++this.seq;
-        void this.game.client.preview({ type: 'bulldoze', target: { kind: 'segment', id } }).then((r) => {
+        void this.game.client.preview({ type: 'bulldoze', target: t }).then((r) => {
           if (seq !== this.seq) return;
-          this.hoverInfo = r.ok ? `Bulldoze road · refund $${(-r.cost).toLocaleString('en-US')}` : r.reason;
+          this.hoverInfo = r.ok
+            ? this.describe(t, -r.cost, ((r.info?.buildings as number[]) ?? []).length)
+            : r.reason;
           this.game.setHint({
             x: p.clientX,
             y: p.clientY,
@@ -56,20 +87,20 @@ export class BulldozeTool implements Tool {
       }
     }
     this.game.setHint(
-      id === null
-        ? { x: p.clientX, y: p.clientY, text: 'Bulldozer — click a road', tone: 'info' }
-        : { x: p.clientX, y: p.clientY, text: this.hoverInfo ?? 'Bulldoze road', tone: 'bad' },
+      !t
+        ? { x: p.clientX, y: p.clientY, text: 'Bulldozer — click a road or building', tone: 'info' }
+        : { x: p.clientX, y: p.clientY, text: this.hoverInfo ?? 'Bulldoze', tone: 'bad' },
     );
   }
 
   pointerDown(p: ToolPointer): void {
     if (p.button !== 0) return;
-    const id = this.pick(p);
-    if (id === null) return;
-    void this.game.dispatch({ type: 'bulldoze', target: { kind: 'segment', id } }).then((r) => {
+    const t = this.pick(p);
+    if (!t) return;
+    void this.game.dispatch({ type: 'bulldoze', target: t }).then((r) => {
       if (r.ok) this.game.audio?.play('bulldoze');
       this.hover = null;
-      this.game.renderer.ghost.highlightSegment(null, 0);
+      this.highlight(null);
     });
   }
 

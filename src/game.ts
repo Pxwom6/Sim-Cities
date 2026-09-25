@@ -6,6 +6,8 @@ import type { Command, CommandResult } from './sim/commands';
 import type { WorkerPerf } from './sim/protocol';
 import { SPEED_TICKS_PER_SECOND, type Speed } from './sim/time';
 import { ToolManager } from './tools/manager';
+import { CIVIC } from './data/civic';
+import { OverlayController } from './client/overlay';
 import type { ToolHint } from './tools/tool';
 
 /** Minimal audio interface (procedural audio arrives in M8). */
@@ -26,11 +28,12 @@ export class Game {
   /** Open side panel (budget, and later data maps, advisors...). */
   panel: 'budget' | null = null;
   /** Currently inspected building. */
-  selected: number | null = null;
+  selected: { kind: 'building' | 'civic'; id: number } | null = null;
   toasts: { id: number; text: string; tone: 'info' | 'ok' | 'bad' }[] = [];
   private toastId = 1;
   audio: AudioSink | null = null;
   readonly tools: ToolManager;
+  readonly overlay: OverlayController;
   private listeners = new Set<Listener>();
   private lastFrameAt = 0;
 
@@ -41,10 +44,13 @@ export class Game {
   ) {
     client.onFrame((diff, perf, speed) => {
       this.world.applyFrame(diff);
-      if (this.selected !== null && diff.buildings) {
-        if (diff.buildings.removed.includes(this.selected)) this.select(null);
-        else if (diff.buildings.upserts.some((b) => b.id === this.selected)) this.select(this.selected);
+      if (diff.events) this.onEvents(diff.events);
+      const sel = this.selected;
+      if (sel?.kind === 'building' && diff.buildings) {
+        if (diff.buildings.removed.includes(sel.id)) this.select(null);
+        else if (diff.buildings.upserts.some((b) => b.id === sel.id)) this.select(sel);
       }
+      if (sel?.kind === 'civic' && diff.civics?.removed.includes(sel.id)) this.select(null);
       this.perf = perf;
       this.speed = speed;
       // Keep the smooth display clock close to the authoritative tick.
@@ -53,6 +59,7 @@ export class Game {
       this.notify();
     });
     this.tools = new ToolManager(this);
+    this.overlay = new OverlayController(this);
     renderer.controller.focus = () => {
       const hw = this.world.gen.params.highway;
       return { x: 260, z: hw.connectZ };
@@ -77,12 +84,18 @@ export class Game {
     this.notify();
   }
 
-  select(id: number | null): void {
-    this.selected = id;
-    const b = id !== null ? this.world.buildings.get(id) : undefined;
-    this.renderer.ghost.showSelection(
-      b ? { x: b.x, z: b.z, hw: b.w * 4, hd: b.d * 4, angle: b.angle } : null,
-    );
+  select(sel: { kind: 'building' | 'civic'; id: number } | null): void {
+    this.selected = sel;
+    let rect: { x: number; z: number; hw: number; hd: number; angle: number } | null = null;
+    if (sel?.kind === 'building') {
+      const b = this.world.buildings.get(sel.id);
+      if (b) rect = { x: b.x, z: b.z, hw: b.w * 4, hd: b.d * 4, angle: b.angle };
+    } else if (sel?.kind === 'civic') {
+      const c = this.world.civics.get(sel.id);
+      const d = c ? CIVIC.get(c.def) : undefined;
+      if (c && d) rect = { x: c.x, z: c.z, hw: d.w / 2, hd: d.d / 2, angle: c.angle };
+    }
+    this.renderer.ghost.showSelection(rect);
     this.notify();
   }
 
@@ -94,6 +107,26 @@ export class Game {
       this.toasts = this.toasts.filter((t) => t.id !== id);
       this.notify();
     }, ms);
+  }
+
+  private lastAlert = new Map<string, number>();
+
+  /** Turn sim events into short alerts (rate-limited per kind; advisors arrive in M8). */
+  private onEvents(events: { kind: string; id: number }[]): void {
+    const now = performance.now();
+    const alert = (key: string, text: string, tone: 'info' | 'ok' | 'bad') => {
+      if (now - (this.lastAlert.get(key) ?? -1e9) < 20_000) return;
+      this.lastAlert.set(key, now);
+      this.toast(text, tone, 5000);
+    };
+    for (const e of events) {
+      if (e.kind === 'closed')
+        alert('closed', 'A business closed: it has had no power or water for half a day.', 'bad');
+      else if (e.kind === 'abandoned')
+        alert('abandoned', 'A building was abandoned. Check the inspector to see why.', 'bad');
+      else if (e.kind === 'bankrupt') alert('bankrupt', 'The city is bankrupt.', 'bad');
+      else if (e.kind === 'moneyNegative') alert('money', 'The treasury is empty!', 'bad');
+    }
   }
 
   setHint(h: ToolHint | null): void {

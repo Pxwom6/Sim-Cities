@@ -4,7 +4,7 @@
 - [x] M1 Roads and zoning
 - [x] M2 Growth
 - [x] M3 Money
-- [ ] M4 Utilities
+- [x] M4 Utilities
 - [ ] M5 Services and happiness
 - [ ] M6 Traffic and transport
 - [ ] M7 Environment, health and education
@@ -15,16 +15,18 @@
 - [ ] M12 Balance, performance and polish
 
 ## In progress
-M4 Utilities (not started).
+M5 Services and happiness (not started).
 
 ## Next tasks
-1. Placeable service/utility buildings (data table, footprint snapped to a road side, validity, cost + upkeep via departments, bulldoze with refund), `placeBuilding` command, undo.
-2. Power, water, sewage: supply by road distance from plants (multi-source Dijkstra), capacity × funding, groundwater at pumps, polluted water, outflow pollution. Garbage: accumulation, landfill/recycling/incinerator trucks.
-3. Consequences: mood penalties, businesses closing after 12 h, abandonment; problem icons over buildings; advisor-style alerts.
-4. Data maps (power, water, sewage, garbage, groundwater/resources) with legends, colour-blind-friendly ramps.
-5. Scenario tests: cutting a utility hurts the right buildings and causes decline.
+1. Service civic defs (fire station, police station, clinic, hospital, primary/high school, university, library, parks and plazas) with capacity and road-distance coverage (bounded Dijkstra in travel time, funding-scaled).
+2. Incidents with dispatch: fires (ignite, grow, spread, destroy → rubble, engines extinguish), crime (patrol cars), emergencies (ambulances); vehicles reuse the M4 vehicle system.
+3. Full happiness model (services, parks, crime, taxes by wealth expectations) and approval; land value with services/parks/crime; high wealth needs services.
+4. Coverage data maps (fire, police, health, education, parks, crime) and coverage preview while placing services.
+5. Scenario tests: coverage follows roads, vehicles respond, every building explains its mood.
 
 ## Known issues
+- A town without utilities drops to ~0 % approval quickly; balance the early-game grace in M12 (e.g. softer penalties for the first days).
+- Early utility upkeep (coal + pumps + treatment + landfill ≈ $1,600/month) exceeds a small town's taxes; wind turbines are the cheap start. Tune in M12.
 - Mood tops out around 0.65 until services exist (M5); upgrade threshold set to 0.62 for now.
 - Commercial demand runs slightly negative in small towns (0.12 shop jobs per resident); revisit in balance.
 - Night lighting is serviceable but plain until M8 (lit windows, street lights).

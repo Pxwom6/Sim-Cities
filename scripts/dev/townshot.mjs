@@ -19,7 +19,7 @@ try {
   await page.goto('http://localhost:4182/?paused=1');
   await page.waitForFunction(() => window.__game?.ready, null, { timeout: 60000 });
   await page.evaluate(
-    async ([ticks, hour]) => {
+    async ([ticks, hour, NOUTIL]) => {
       const g = window.__game;
       const s = await g.getState();
       const c = { x: 24, z: s.highwayZ };
@@ -42,6 +42,12 @@ try {
       await brush('C', { x: c.x + 20, z: c.z + 20 }, { x: c.x + len, z: c.z + 20 }, 22);
       await brush('R', { x: c.x + 20, z: c.z + 90 }, { x: c.x + len / 2, z: c.z + 90 }, 50);
       await brush('I', { x: c.x + len / 2 + 20, z: c.z + 110 }, { x: c.x + len, z: c.z + 110 }, 50);
+      await g.dispatch({ type: 'cheat', cheat: 'unlockAll' });
+      await g.dispatch({ type: 'cheat', cheat: 'addMoney', amount: 80000 });
+      if (NOUTIL !== '1') {
+        for (const def of ['coal', 'pump', 'pump', 'treatment', 'landfill'])
+          await g.placeCivic(def, { x: 300, z: c.z + 170 });
+      }
       await g.advance(ticks);
       if (hour) {
         const st = await g.getState();
@@ -51,11 +57,13 @@ try {
         await g.advance(Math.round(d));
       }
     },
-    [ticks, hour],
+    [ticks, hour, process.env.NOUTIL ?? '0'],
   );
   const st = await page.evaluate(() => window.__game.getState());
   console.log('pop', st.population, 'buildings', st.buildings);
   const cz = st.highwayZ;
+  const map = process.env.MAP;
+  if (map) await page.evaluate((m) => window.__game.setOverlay(m), map);
   const shots = [
     ['town-a', { x: 260, z: cz, distance: 520, yaw: 0.5, tilt: 0 }],
     ['town-b', { x: 150, z: cz - 60, distance: 110, yaw: 0.8, tilt: 0 }],

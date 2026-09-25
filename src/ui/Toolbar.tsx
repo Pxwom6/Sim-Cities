@@ -5,8 +5,14 @@ import type { ZoneLetter } from '../data/zones';
 import type { RoadMode } from '../tools/roadTool';
 import type { ToolId } from '../tools/manager';
 import { useGameUpdates } from './hooks';
+import { CIVIC_DEFS, type CivicCategory } from '../data/civic';
+import { MAPS } from '../client/overlay';
 import {
+  IconBolt,
   IconBulldozer,
+  IconDrop,
+  IconLayers,
+  IconTrash,
   IconCurve,
   IconEraser,
   IconFactory,
@@ -128,6 +134,7 @@ export function Toolbar() {
   const active: ToolId = tools.activeId;
   const pop = game.world.stats.population;
   const use = (id: ToolId) => tools.use(active === id && id !== 'select' ? 'select' : id);
+  const [mapsOpen, setMapsOpen] = useState(false);
   return (
     <div class="toolbar-wrap">
       {active === 'road' && (
@@ -237,6 +244,37 @@ export function Toolbar() {
           </label>
         </div>
       )}
+      {active === 'place' && (
+        <div class="subbar panel" data-testid="place-options">
+          {CIVIC_DEFS.filter((d) => d.category === tools.place.category).map((d) => {
+            const locked = pop < d.unlockPopulation && !game.world.stats.unlockAll;
+            const out = d.output ? Object.entries(d.output).map(([k, v]) => `${v} ${k} units`) : [];
+            return (
+              <ToolButton
+                key={d.id}
+                id={`place-${d.id}`}
+                active={tools.place.def === d.id}
+                disabled={locked}
+                onClick={() => tools.place.setDef(d.id)}
+                tip={{
+                  title: d.name,
+                  lines: [
+                    `$${d.cost.toLocaleString('en-US')} to build · $${d.upkeep.toLocaleString('en-US')}/month upkeep`,
+                    ...out,
+                    ...(d.garbage ? [`${d.garbage.trucks} trucks`] : []),
+                    d.blurb,
+                    ...(locked ? [`Unlocks at ${d.unlockPopulation.toLocaleString('en-US')} residents`] : []),
+                  ],
+                }}
+              >
+                {locked ? <IconLock /> : null}
+                <span class="tool-label">{d.name}</span>
+              </ToolButton>
+            );
+          })}
+        </div>
+      )}
+      {mapsOpen && <MapsMenu onClose={() => setMapsOpen(false)} />}
       <div class="toolbar panel" data-testid="toolbar">
         <ToolButton
           id="tool-select"
@@ -270,6 +308,35 @@ export function Toolbar() {
         >
           <IconZone />
         </ToolButton>
+        {(
+          [
+            ['power', IconBolt, 'Power', 'Power plants. Electricity flows along the roads.'],
+            [
+              'water',
+              IconDrop,
+              'Water and sewage',
+              'Pumps bring water in; outflows or treatment plants take sewage away.',
+            ],
+            ['garbage', IconTrash, 'Garbage', 'Trucks collect garbage from buildings in reach.'],
+          ] as [CivicCategory, typeof IconBolt, string, string][]
+        ).map(([cat, Icon, name, blurb]) => (
+          <ToolButton
+            key={cat}
+            id={`tool-${cat}`}
+            active={active === 'place' && tools.place.category === cat}
+            onClick={() => {
+              if (active === 'place' && tools.place.category === cat) tools.use('select');
+              else {
+                const first = CIVIC_DEFS.find((d) => d.category === cat)!;
+                tools.place.setDef(first.id);
+                tools.use('place');
+              }
+            }}
+            tip={{ title: name, lines: [blurb] }}
+          >
+            <Icon />
+          </ToolButton>
+        ))}
         <ToolButton
           id="tool-bulldoze"
           active={active === 'bulldoze'}
@@ -279,6 +346,18 @@ export function Toolbar() {
           <IconBulldozer />
         </ToolButton>
         <span class="sep" />
+        <ToolButton
+          id="tool-maps"
+          active={mapsOpen || game.overlay.active !== null}
+          onClick={() => setMapsOpen(!mapsOpen)}
+          tip={{
+            title: 'Data maps',
+            lines: ['See power, water, garbage, land value, pollution and resources at a glance.'],
+            key: 'L',
+          }}
+        >
+          <IconLayers />
+        </ToolButton>
         <ToolButton
           id="tool-undo"
           active={false}
@@ -308,6 +387,65 @@ export function ToolHintLabel() {
       data-testid="tool-hint"
     >
       {h.text}
+    </div>
+  );
+}
+
+function MapsMenu({ onClose }: { onClose: () => void }) {
+  const game = useGameUpdates(200);
+  const groups = [...new Set(MAPS.map((m) => m.group))];
+  return (
+    <div class="maps-menu panel" data-testid="maps-menu">
+      {groups.map((g) => (
+        <div key={g} class="maps-group">
+          <h4>{g}</h4>
+          {MAPS.filter((m) => m.group === g).map((m) => (
+            <button
+              key={m.id}
+              class={`map-item ${game.overlay.active === m.id ? 'active' : ''}`}
+              data-testid={`map-${m.id}`}
+              onClick={() => {
+                game.overlay.set(game.overlay.active === m.id ? null : m.id);
+                onClose();
+              }}
+            >
+              {m.name}
+            </button>
+          ))}
+        </div>
+      ))}
+      {game.overlay.active && (
+        <button class="map-item off" onClick={() => (game.overlay.set(null), onClose())}>
+          Hide data map
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Legend for the active data map. */
+export function MapLegend() {
+  const game = useGameUpdates(300);
+  const res = game.overlay.last;
+  if (!game.overlay.active || !res) return null;
+  const name = MAPS.find((m) => m.id === game.overlay.active)?.name ?? '';
+  const grad =
+    res.ramp === 'diverging'
+      ? 'linear-gradient(90deg, #e34948, #f0efec, #2a78d6)'
+      : 'linear-gradient(90deg, #cde2fb, #9ec5f4, #6da7ec, #3987e5, #256abf, #184f95, #0d366b)';
+  return (
+    <div class="legend panel" data-testid="map-legend">
+      <div class="legend-head">
+        <strong>{name}</strong>
+        <button class="btn icon" aria-label="Hide data map" onClick={() => game.overlay.set(null)}>
+          ×
+        </button>
+      </div>
+      <div class="legend-bar" style={{ background: grad }} />
+      <div class="legend-labels">
+        <span>{res.legend[0]}</span>
+        <span>{res.legend[1]}</span>
+      </div>
     </div>
   );
 }

@@ -24,6 +24,6 @@ export class SelectTool implements Tool {
     const d = this.down;
     this.down = null;
     if (!d || p.button !== 0 || Math.hypot(p.clientX - d.x, p.clientY - d.y) > 5) return;
-    this.game.select(this.game.renderer.pickBuilding(p.clientX, p.clientY));
+    this.game.select(this.game.renderer.pick(p.clientX, p.clientY));
   }
 }

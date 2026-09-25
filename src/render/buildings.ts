@@ -31,7 +31,7 @@ export function buildingYaw(b: { angle: number; side: number }): number {
   return -b.angle + (b.side === 1 ? Math.PI : 0);
 }
 
-function makeMaterial(uniforms: BuildingUniforms, terrain: TerrainUniforms, clip: boolean): Material {
+export function makeMaterial(uniforms: BuildingUniforms, terrain: TerrainUniforms, clip: boolean): Material {
   const mat = new MeshLambertMaterial({ vertexColors: true });
   mat.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms, {
@@ -73,8 +73,10 @@ ${clip ? 'varying float vClip;' : ''}`,
         `#include <color_fragment>
 ${clip ? 'if (vWorldPos.y > vClip) discard;' : ''}
 if (uOverlayOn > 0.5) {
+  float g2 = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(g2), 0.8);
   vec4 o = texture2D(uOverlay, vWorldPos.xz / uMapSize);
-  diffuseColor.rgb = mix(diffuseColor.rgb, o.rgb, o.a * 0.75);
+  diffuseColor.rgb = mix(diffuseColor.rgb, o.rgb, o.a * 0.85);
 }`,
       )
       .replace(
@@ -97,7 +99,7 @@ interface Chunk {
 export class BuildingRenderer {
   readonly group = new Group();
   readonly uniforms: BuildingUniforms = { uNight: { value: 0 }, uWindow: { value: WINDOW_LIGHT.clone() } };
-  private material: Material;
+  readonly material: Material;
   private clipMaterial: Material;
   private chunks = new Map<number, Chunk>();
   private chunkOf = new Map<number, number>();
@@ -154,41 +156,7 @@ export class BuildingRenderer {
 
   /** Append a building's model, transformed into world space, to the arrays. */
   private append(b: BuildingData, m: ModelData, out: Arrays, clipTo?: number): void {
-    const yaw = buildingYaw(b);
-    const c = Math.cos(yaw);
-    const s = Math.sin(yaw);
-    const abandoned = b.state === STATE_ABANDONED;
-    const n = m.pos.length / 3;
-    out.reserve(n);
-    for (let i = 0; i < n; i++) {
-      const lx = m.pos[i * 3]!;
-      const ly = m.pos[i * 3 + 1]!;
-      const lz = m.pos[i * 3 + 2]!;
-      const nx = m.nrm[i * 3]!;
-      const nz = m.nrm[i * 3 + 2]!;
-      const o = out.n * 3;
-      out.pos[o] = b.x + lx * c + lz * s;
-      out.pos[o + 1] = b.y + ly;
-      out.pos[o + 2] = b.z - lx * s + lz * c;
-      out.nrm[o] = nx * c + nz * s;
-      out.nrm[o + 1] = m.nrm[i * 3 + 1]!;
-      out.nrm[o + 2] = -nx * s + nz * c;
-      let r = m.col[i * 3]!;
-      let g = m.col[i * 3 + 1]!;
-      let bl = m.col[i * 3 + 2]!;
-      if (abandoned) {
-        const grey = (r + g + bl) / 3;
-        r = (r * 0.35 + grey * 0.65) * 0.62;
-        g = (g * 0.35 + grey * 0.65) * 0.6;
-        bl = (bl * 0.35 + grey * 0.65) * 0.58;
-      }
-      out.col[o] = r;
-      out.col[o + 1] = g;
-      out.col[o + 2] = bl;
-      out.emi[out.n] = abandoned ? 0 : m.emi[i]!;
-      if (out.clip) out.clip[out.n] = clipTo ?? 1e6;
-      out.n++;
-    }
+    appendModel(out, m, b.x, b.y, b.z, buildingYaw(b), b.state === STATE_ABANDONED, clipTo);
   }
 
   private rebuildChunk(k: number): void {
@@ -328,7 +296,7 @@ function boxesModel(bars: number[][], col: Color): ModelData {
   };
 }
 
-class Arrays {
+export class Arrays {
   pos = new Float32Array(3 * 4096);
   nrm = new Float32Array(3 * 4096);
   col = new Float32Array(3 * 4096);
@@ -365,5 +333,51 @@ class Arrays {
     if (this.clip) g.setAttribute('clipY', new BufferAttribute(this.clip.slice(0, this.n), 1));
     g.computeBoundingSphere();
     return g;
+  }
+}
+
+/** Transform a model into world space (position, yaw) and append it; optionally darken as abandoned. */
+export function appendModel(
+  out: Arrays,
+  m: ModelData,
+  x: number,
+  y: number,
+  z: number,
+  yaw: number,
+  abandoned = false,
+  clipTo?: number,
+): void {
+  const c = Math.cos(yaw);
+  const s = Math.sin(yaw);
+  const n = m.pos.length / 3;
+  out.reserve(n);
+  for (let i = 0; i < n; i++) {
+    const lx = m.pos[i * 3]!;
+    const ly = m.pos[i * 3 + 1]!;
+    const lz = m.pos[i * 3 + 2]!;
+    const nx = m.nrm[i * 3]!;
+    const nz = m.nrm[i * 3 + 2]!;
+    const o = out.n * 3;
+    out.pos[o] = x + lx * c + lz * s;
+    out.pos[o + 1] = y + ly;
+    out.pos[o + 2] = z - lx * s + lz * c;
+    out.nrm[o] = nx * c + nz * s;
+    out.nrm[o + 1] = m.nrm[i * 3 + 1]!;
+    out.nrm[o + 2] = -nx * s + nz * c;
+    let r = m.col[i * 3]!;
+    let g = m.col[i * 3 + 1]!;
+    let bl = m.col[i * 3 + 2]!;
+    if (abandoned) {
+      const grey = (r + g + bl) / 3;
+      r = (r * 0.35 + grey * 0.65) * 0.62;
+      g = (g * 0.35 + grey * 0.65) * 0.6;
+      bl = (bl * 0.35 + grey * 0.65) * 0.58;
+    }
+    out.col[o] = r;
+    out.col[o + 1] = g;
+    out.col[o + 2] = bl;
+    out.emi[out.n] = abandoned ? 0 : m.emi[i]!;
+    if (out.clip) out.clip[out.n] = clipTo ?? 1e6;
+    out.n++;
   }
 }

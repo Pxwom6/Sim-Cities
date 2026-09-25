@@ -1,4 +1,6 @@
 import { Vector3 } from 'three';
+import { CIVIC } from '../data/civic';
+import { roadsidePose } from '../sim/world/civic';
 import type { Game } from '../game';
 import type { Command, CommandResult } from '../sim/commands';
 import type { CameraPose, CameraPresetName } from '../render/camera';
@@ -18,6 +20,12 @@ export interface TestApi {
       zoned: { R: number; C: number; I: number };
     }
   >;
+  /** Place a civic building beside any road that has room (test helper). Returns its id or null. */
+  placeCivic(def: string, near?: { x: number; z: number }): Promise<number | null>;
+  /** Id of the first civic building with this def, or null. */
+  findCivic(def: string): number | null;
+  /** Show a data map (or null to hide). */
+  setOverlay(map: string | null): Promise<void>;
   /** Render-side building list (id, position, state). */
   getBuildings(): { id: number; x: number; z: number; state: number; zone: number }[];
   /** Client (CSS pixel) coordinates of a world point on the ground. */
@@ -61,6 +69,35 @@ export function installTestApi(game: Game): TestApi {
     },
     setCamera: (preset) => game.setCamera(preset, true),
     getCamera: () => ({ ...game.renderer.controller.goal }),
+    placeCivic: async (def, near) => {
+      const d = CIVIC.get(def);
+      if (!d) return null;
+      const net = game.world.net;
+      const segs = [...game.world.netState.segments.values()]
+        .filter((s) => s.type !== 'highway')
+        .map((s) => ({ s, mid: net.curve(s.id).pointAt(net.curve(s.id).length / 2) }))
+        .sort((a, b) =>
+          near
+            ? Math.hypot(a.mid.x - near.x, a.mid.z - near.z) - Math.hypot(b.mid.x - near.x, b.mid.z - near.z)
+            : a.s.id - b.s.id,
+        );
+      for (const { s } of segs) {
+        const len = net.curve(s.id).length;
+        for (let at = d.w / 2 + 10; at < len - d.w / 2 - 10; at += 8) {
+          for (const side of [1, -1] as const) {
+            const pose = roadsidePose(net, s.id, at, side, d.d);
+            const r = await game.dispatch({ type: 'placeBuilding', def, ...pose });
+            if (r.ok) return r.created![0]!;
+          }
+        }
+      }
+      return null;
+    },
+    findCivic: (def) => [...game.world.civics.values()].find((c) => c.def === def)?.id ?? null,
+    setOverlay: async (map) => {
+      game.overlay.set(map as never);
+      if (map) await game.overlay.refresh();
+    },
     getBuildings: () =>
       [...game.world.buildings.values()].map((b) => ({
         id: b.id,

@@ -18,6 +18,10 @@ import { RoadRenderer } from './roads';
 import { ZoneRenderer } from './zones';
 import { GhostRenderer } from './ghost';
 import { BuildingRenderer } from './buildings';
+import { CivicRenderer } from './civics';
+import { VehicleRenderer } from './vehicles';
+import { IconRenderer } from './icons';
+import { GarbageProps } from './props';
 
 export interface RenderStats {
   calls: number;
@@ -25,6 +29,8 @@ export interface RenderStats {
   geometries: number;
   textures: number;
   trees: number;
+  icons: number;
+  vehicles: number;
 }
 
 /** Owns the Three.js scene. Reads ClientWorld; never mutates the simulation. */
@@ -41,10 +47,22 @@ export class GameRenderer {
   readonly zones: ZoneRenderer;
   readonly ghost: GhostRenderer;
   readonly buildings: BuildingRenderer;
+  readonly civics: CivicRenderer;
+  readonly vehicles: VehicleRenderer;
+  readonly icons: IconRenderer;
+  readonly garbage: GarbageProps;
   private time = 0;
   private treePoints: { x: number; z: number }[] = [];
   private treeRebuildAt = 0;
-  lastStats: RenderStats = { calls: 0, triangles: 0, geometries: 0, textures: 0, trees: 0 };
+  lastStats: RenderStats = {
+    calls: 0,
+    triangles: 0,
+    geometries: 0,
+    textures: 0,
+    trees: 0,
+    icons: 0,
+    vehicles: 0,
+  };
 
   constructor(
     readonly canvas: HTMLCanvasElement,
@@ -70,12 +88,27 @@ export class GameRenderer {
     this.scene.add(this.zones.group);
     this.buildings = new BuildingRenderer(world, this.terrain.uniforms);
     this.scene.add(this.buildings.group);
+    this.civics = new CivicRenderer(world, this.buildings.material);
+    this.scene.add(this.civics.group);
+    this.vehicles = new VehicleRenderer(world);
+    this.scene.add(this.vehicles.group);
+    this.icons = new IconRenderer(world);
+    this.scene.add(this.icons.points);
+    this.garbage = new GarbageProps(world);
+    this.scene.add(this.garbage.mesh);
     this.ghost = new GhostRenderer((x, z) => world.heightAt(x, z));
     this.scene.add(this.ghost.group);
     this.trees = new TreeRenderer(world);
-    this.trees.blocked = (x, z) => this.roads.onRoad(x, z, 1.5) || this.onBuilding(x, z);
+    this.trees.blocked = (x, z) =>
+      this.roads.onRoad(x, z, 1.5) || this.onBuilding(x, z) || this.world.civicAt(x, z) !== null;
     this.trees.rebuildAll();
     this.scene.add(this.trees.group);
+    world.onCivics((changed) => {
+      for (const id of changed) {
+        const c = world.civics.get(id);
+        if (c) this.treePoints.push({ x: c.x, z: c.z });
+      }
+    });
     world.onBuildings((changed) => {
       for (const id of changed) {
         const b = world.buildings.get(id);
@@ -103,6 +136,27 @@ export class GameRenderer {
     this.controller = new CameraController(this.camera, canvas, (x, z) => world.heightAt(x, z));
     this.resize();
     window.addEventListener('resize', () => this.resize());
+  }
+
+  /** Zoned or civic building under a screen position. */
+  pick(clientX: number, clientY: number): { kind: 'building' | 'civic'; id: number } | null {
+    const ground = this.controller.screenToGround(clientX, clientY);
+    const cam = this.camera.position;
+    const end = ground ?? cam.clone().add(new Vector3(0, -1, 0));
+    const dir = end.clone().sub(cam);
+    const len = dir.length();
+    dir.normalize();
+    for (let t = 0; t <= len + 1; t += 1.5) {
+      const x = cam.x + dir.x * t;
+      const y = cam.y + dir.y * t;
+      const z = cam.z + dir.z * t;
+      const c = this.world.civicAt(x, z);
+      if (c && y <= c.y + (this.civics.heights.get(c.id) ?? 8) + 0.5) return { kind: 'civic', id: c.id };
+      const b = this.world.buildingAt(x, z, -0.5);
+      if (b && y <= b.y + (this.buildings.heights.get(b.id) ?? 5) + 0.5)
+        return { kind: 'building', id: b.id };
+    }
+    return null;
   }
 
   /** Building under a screen position: marches the view ray and tests lot boxes by height. */
@@ -158,6 +212,9 @@ export class GameRenderer {
     this.renderer.toneMappingExposure = 1.0 + l.night * 0.35;
     this.terrain.update(this.time);
     this.buildings.update(l.night);
+    this.vehicles.update(this.world.displayTick);
+    this.icons.update(this.time, this.buildings.heights);
+    this.garbage.update();
     // Trees under new buildings: rebuilt at most twice a second.
     if (this.treePoints.length && this.time - this.treeRebuildAt > 0.5) {
       this.treeRebuildAt = this.time;
@@ -181,6 +238,8 @@ export class GameRenderer {
       geometries: info.memory.geometries,
       textures: info.memory.textures,
       trees: this.trees.instanceCount,
+      icons: this.icons.count,
+      vehicles: this.vehicles.positions.size,
     };
   }
 }

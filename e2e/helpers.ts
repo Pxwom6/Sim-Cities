@@ -61,3 +61,19 @@ export async function buildTownViaApi(page: Page, len = 480, streets = 4): Promi
     [len, streets],
   );
 }
+
+/** Power, water, sewage and garbage for the planned town (via the test API). */
+export async function serveTownViaApi(page: Page): Promise<void> {
+  const ok = await page.evaluate(async () => {
+    const g = window.__game!;
+    await g.dispatch({ type: 'cheat', cheat: 'unlockAll' });
+    await g.dispatch({ type: 'cheat', cheat: 'addMoney', amount: 80_000 });
+    const s = await g.getState();
+    const near = { x: 300, z: s.highwayZ + 170 };
+    const ids = [];
+    for (const def of ['coal', 'pump', 'pump', 'treatment', 'landfill'])
+      ids.push(await g.placeCivic(def, near));
+    return ids.every((x) => x !== null);
+  });
+  expect(ok).toBe(true);
+}

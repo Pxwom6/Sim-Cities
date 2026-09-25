@@ -3,7 +3,7 @@ import type { Game } from '../game';
 import { DebugPanel } from './DebugPanel';
 import { GameContext } from './hooks';
 import { TopBar } from './TopBar';
-import { ToolHintLabel, Toolbar } from './Toolbar';
+import { MapLegend, ToolHintLabel, Toolbar } from './Toolbar';
 import { Inspector } from './Inspector';
 import { Toasts } from './SystemMenu';
 import { formatMoney, useGameUpdates } from './hooks';
@@ -22,6 +22,8 @@ function Shortcuts({ game }: { game: Game }) {
       else if (e.code === 'Digit2') game.setSpeed(2);
       else if (e.code === 'Digit3') game.setSpeed(3);
       else if (e.code === 'KeyM' && !e.ctrlKey && !e.metaKey) game.openPanel('budget');
+      else if (e.code === 'KeyL' && !e.ctrlKey && !e.metaKey)
+        game.overlay.set(game.overlay.active ? null : 'power');
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -38,6 +40,7 @@ export function App({ game }: { game: Game }) {
       <Toolbar />
       <ToolHintLabel />
       <Inspector />
+      <MapLegend />
       <BudgetPanel />
       <MoneyBanner />
       <ToastLayer />

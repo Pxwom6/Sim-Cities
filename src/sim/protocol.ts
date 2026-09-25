@@ -7,6 +7,7 @@ import type { Speed } from './time';
 import type { RoadTypeId } from '../data/roads';
 import type { Factor } from './systems/demand';
 import type { UtilityStats } from './systems/utilities';
+import type { OverlayMap } from './systems/overlays';
 
 export interface CityStats {
   tick: number;
@@ -29,6 +30,7 @@ export interface CityStats {
   bankrupt: boolean;
   negativeHours: number;
   utilities: UtilityStats;
+  unlockAll: boolean;
   civics: number;
   vehicles: number;
 }
@@ -230,7 +232,8 @@ export type Query =
   | { type: 'summary' }
   | { type: 'building'; id: number }
   | { type: 'budget' }
-  | { type: 'civic'; id: number };
+  | { type: 'civic'; id: number }
+  | { type: 'overlay'; map: OverlayMap };
 
 export type MainToWorker =
   | { type: 'init'; options: Partial<GameOptions>; testMode?: boolean }

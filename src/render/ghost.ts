@@ -170,6 +170,51 @@ export class GhostRenderer {
     this.group.add(this.selection);
   }
 
+  private footprint: Mesh | null = null;
+  private fpMat = new MeshBasicMaterial({
+    color: OK,
+    transparent: true,
+    opacity: 0.45,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -4,
+    polygonOffsetUnits: -8,
+  });
+
+  /** Translucent box over a footprint for building placement. */
+  showFootprint(
+    r: { x: number; z: number; hw: number; hd: number; angle: number } | null,
+    state: 'ok' | 'bad' | 'pending',
+    height = 6,
+  ): void {
+    if (this.footprint) {
+      this.group.remove(this.footprint);
+      this.footprint.geometry.dispose();
+      this.footprint = null;
+    }
+    if (!r) return;
+    const buf = new GeoBuffer(64);
+    const c = Math.cos(r.angle);
+    const s = Math.sin(r.angle);
+    const base = Math.max(
+      ...[-1, 1].flatMap((u) =>
+        [-1, 1].map((v) => this.y(r.x + u * r.hw * c - v * r.hd * s, r.z + u * r.hw * s + v * r.hd * c)),
+      ),
+    );
+    const pt = (u: number, v: number, y: number) => [r.x + u * c - v * s, base + y, r.z + u * s + v * c];
+    const col = new Color('#ffffff');
+    const { hw, hd } = r;
+    buf.quad(pt(-hw, -hd, height), pt(-hw, hd, height), pt(hw, hd, height), pt(hw, -hd, height), col);
+    buf.quad(pt(-hw, -hd, 0), pt(-hw, -hd, height), pt(hw, -hd, height), pt(hw, -hd, 0), col, false);
+    buf.quad(pt(hw, hd, 0), pt(hw, hd, height), pt(-hw, hd, height), pt(-hw, hd, 0), col, false);
+    buf.quad(pt(-hw, hd, 0), pt(-hw, hd, height), pt(-hw, -hd, height), pt(-hw, -hd, 0), col, false);
+    buf.quad(pt(hw, -hd, 0), pt(hw, -hd, height), pt(hw, hd, height), pt(hw, hd, 0), col, false);
+    this.fpMat.color.copy(state === 'ok' ? OK : state === 'bad' ? BAD : WARN);
+    this.footprint = new Mesh(mergeChunks([buf.trimmed()]), this.fpMat);
+    this.footprint.renderOrder = 12;
+    this.group.add(this.footprint);
+  }
+
   showBrush(p: Vec2 | null, radius: number, color = '#ffffff'): void {
     this.brush.visible = !!p;
     if (!p) return;
@@ -190,6 +235,7 @@ export class GhostRenderer {
 
   clear(): void {
     this.showRoad(null, 'street', 'ok');
+    this.showFootprint(null, 'ok');
     this.highlightSegment(null, 0);
     this.showBrush(null, 1);
     this.showSnap(null);

@@ -50,3 +50,15 @@ One line each: what was decided and why. Newest at the bottom of each section.
 - Policies are listed under Money in the spec but built in M10 with progression; the ledger already has a `policies` line.
 - Budget charts use two single-axis charts (treasury line, net-income bars in the diverging blue/red poles), never a dual axis.
 - Save format v2 adds the economy; `migrations[1]` upgrades v1 saves with default taxes and funding (tested).
+
+## M4
+- Service vehicles move at a visual speed (0.2 m per tick per m/s of road speed), not at real speed in game time; incident timings are tuned in ticks to match (DESIGN §3.7).
+- Civic buildings are placed beside a road, facing it, sliding along it with the cursor; the sim validates road frontage, water, slope, overlaps, unlocks and money. Zoned buildings in the way are demolished (shown in the preview).
+- Utilities go to consumers in order of road distance from the nearest producer, per connected network; with too little capacity the far end goes dark first.
+- Consumption follows capacity (not occupancy) so supply needs don't swing with move-ins.
+- Businesses close after 12 hours without power or water and reopen when both return; homes don't close but their mood drops (-28 % each for power and water, -15 % for sewage), which leads to abandonment within about two days.
+- A pump draws polluted water when ground pollution under it exceeds 0.25; its share of the network's water is "polluted" for every building on that network (sickness arrives in M7).
+- Garbage accumulates per building; trucks go to the fullest buildings within reach and also empty neighbours within 48 m. Landfills fill up; recycling earns trade revenue; incinerators turn yesterday's burn into power.
+- Bulldozing a civic building refunds 25 %; undo refunds 100 %.
+- Data maps mute the scene and paint values with the reference data-viz ramps: diverging red–grey–blue for supply (bad→good), sequential blue for amounts. A legend names both ends.
+- Problem icons are one Points draw call with a canvas-drawn atlas; one icon per building, most urgent first.

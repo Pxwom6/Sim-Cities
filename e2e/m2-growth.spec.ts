@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { buildTownViaApi, openGame, shot, watchErrors } from './helpers';
+import { buildTownViaApi, openGame, serveTownViaApi, shot, watchErrors } from './helpers';
 
 test('M2: a town grows from zoning, buildings can be inspected, and save/load round-trips exactly', async ({
   page,
@@ -7,6 +7,7 @@ test('M2: a town grows from zoning, buildings can be inspected, and save/load ro
   const errs = watchErrors(page);
   await openGame(page);
   await buildTownViaApi(page);
+  await serveTownViaApi(page);
   // Run the clock for real for a moment at top speed, then fast-forward.
   await page.getByTestId('speed-3').click();
   await page.waitForTimeout(1500);
