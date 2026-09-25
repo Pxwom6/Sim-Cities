@@ -53,6 +53,16 @@ export interface Building {
   noPowerH: number;
   noWaterH: number;
   closed: boolean;
+  /** Service coverage 0..1 from the last update (education = share of students seated). */
+  covFire: number;
+  covPolice: number;
+  covHealth: number;
+  covEdu: number;
+  covPark: number;
+  /** Fire intensity 0..1, ticks burnt at full intensity, hours spent as rubble. */
+  fire: number;
+  burn: number;
+  rubbleH: number;
   /** Consecutive good hourly checks (upgrade) or hours of recovery (abandoned). */
   good: number;
   variant: number;

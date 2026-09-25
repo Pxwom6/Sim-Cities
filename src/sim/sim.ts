@@ -53,6 +53,10 @@ import { civicOutput, emptyUtilityStats, updateUtilities, utilityConsequences } 
 import { dispatchGarbage, garbageHour } from './systems/garbage';
 import { segSpeed, stepVehicles } from './systems/vehicles';
 import { computeOverlay } from './systems/overlays';
+import { coverageNear, coveragePreview, updateCoverage, type NodeCoverage } from './systems/services';
+import { incidentsHour, incidentsTick } from './systems/incidents';
+import { decayCrime, splatField } from './systems/pollution';
+import type { ServiceKind } from '../data/civic';
 import { GARBAGE, UTILITIES, VEHICLE_SPEED_SCALE } from '../data/civic';
 import { fieldAt, updateGroundPollution } from './systems/pollution';
 import { rectsOverlap, type ORect } from './geom';
@@ -76,6 +80,13 @@ export const HIGHWAY_CONNECT_X = 24;
 
 export type SimEvent = {
   kind:
+    | 'fire'
+    | 'crime'
+    | 'death'
+    | 'destroyed'
+    | 'fireOut'
+    | 'crimeStopped'
+    | 'patientSaved'
     | 'built'
     | 'abandoned'
     | 'upgrading'
@@ -162,6 +173,9 @@ export class Sim {
       groundPollution: new Float32Array(GRID_RES * GRID_RES),
       utilityStats: emptyUtilityStats(),
       unlockAll: false,
+      burning: [],
+      incidents: new Map(),
+      crime: new Float32Array(GRID_RES * GRID_RES),
     };
     const sim = new Sim(state, terrain);
     sim.buildHighway();
@@ -228,6 +242,24 @@ export class Sim {
 
   groundPollutionAt(x: number, z: number): number {
     return fieldAt(this.state.groundPollution, x, z);
+  }
+
+  crimeAt(x: number, z: number): number {
+    return fieldAt(this.state.crime, x, z);
+  }
+
+  /** Crime committed near (x, z): raise the crime raster in a small radius. */
+  addCrime(x: number, z: number, amount: number): void {
+    splatField(this.state.crime, x, z, amount * 12, 3);
+    for (let k = 0; k < this.state.crime.length; k++) if (this.state.crime[k]! > 1) this.state.crime[k] = 1;
+  }
+
+  /** Latest per-node service coverage (null until the first hourly update). */
+  coverage: NodeCoverage | null = null;
+
+  serviceCoverageNear(x: number, z: number, kind: ServiceKind): number {
+    if (!this.coverage) this.coverage = updateCoverage(this);
+    return coverageNear(this, this.coverage, x, z, kind);
   }
 
   /** Effectiveness (0..1.25) of a department at its current funding. */
@@ -467,16 +499,22 @@ export class Sim {
       }
     }
     stepVehicles(this);
+    incidentsTick(this);
     if (t % GROWTH.passInterval === 0) growthPass(this);
     if (t % TICKS_PER_HOUR === 0) {
       updateUtilities(this);
       utilityConsequences(this);
+      this.coverage = updateCoverage(this);
       this.refreshFlags();
       garbageHour(this);
       dispatchGarbage(this);
-      if (t % (TICKS_PER_HOUR * 3) === 0) updateGroundPollution(this, 3);
+      if (t % (TICKS_PER_HOUR * 3) === 0) {
+        updateGroundPollution(this, 3);
+        decayCrime(this, 3);
+      }
       if (t % (TICKS_PER_HOUR * 2) === 0) runMatcher(this);
       updateHappiness(this);
+      incidentsHour(this);
       lifecycle(this);
       s.totals = computeTotals(this);
       updateDemand(this);
@@ -639,6 +677,7 @@ export class Sim {
       if (b.closed) f |= 32;
       if (b.polluted > 0.2) f |= 64;
     }
+    if (b.fire > 0) f |= 128;
     return f;
   }
 
@@ -700,6 +739,7 @@ export class Sim {
       progress: b.progress,
       variant: b.variant,
       flags: this.buildingFlags(b),
+      fire: Math.round(b.fire * 10) / 10,
     };
   }
 
@@ -795,6 +835,8 @@ export class Sim {
         return this.civicDetails(q.id);
       case 'overlay':
         return computeOverlay(this, q.map);
+      case 'coveragePreview':
+        return coveragePreview(this, q.def, q.x, q.z, q.angle, q.side);
     }
   }
 
@@ -867,6 +909,15 @@ export class Sim {
       polluted: b.polluted,
       garbage: Math.round(b.garbage),
       closed: b.closed,
+      coverage: {
+        fire: b.covFire,
+        police: b.covPolice,
+        health: b.covHealth,
+        education: b.covEdu,
+        park: b.covPark,
+      },
+      crime: Math.round(this.crimeAt(b.x, b.z) * 100) / 100,
+      fire: b.fire,
     };
   }
 }

@@ -9,6 +9,7 @@ import type { EconomyState } from './systems/economy';
 import type { Civic } from './world/civic';
 import type { Vehicle } from './systems/vehicles';
 import type { UtilityStats } from './systems/utilities';
+import type { Incident } from './systems/incidents';
 
 export type Difficulty = 'easy' | 'normal' | 'hard';
 
@@ -67,4 +68,9 @@ export interface SimState {
   utilityStats: UtilityStats;
   /** Debug cheat: ignore unlock thresholds. */
   unlockAll: boolean;
+  /** Buildings on fire (ids, ascending). */
+  burning: number[];
+  incidents: Map<number, Incident>;
+  /** Crime raster (GRID_RES²), 0..1. */
+  crime: Float32Array;
 }

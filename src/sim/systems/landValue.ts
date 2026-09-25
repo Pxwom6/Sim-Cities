@@ -113,6 +113,19 @@ export function updateLandValue(sim: Sim, instant = false): void {
     }
   }
   const ground = sim.state.groundPollution;
+  const crime = sim.state.crime;
+  // Average service coverage of nearby buildings (fire, police, health, education).
+  const svcSum = new Float32Array(n);
+  const svcW = new Float32Array(n);
+  for (const b of sim.state.buildings.values()) {
+    if (b.state !== BState.Active) continue;
+    const i = Math.min(GRID_RES - 1, Math.max(0, Math.floor(b.x / GRID_CELL)));
+    const j = Math.min(GRID_RES - 1, Math.max(0, Math.floor(b.z / GRID_CELL)));
+    svcSum[j * GRID_RES + i]! += (b.covFire + b.covPolice + b.covHealth + b.covEdu) / 4;
+    svcW[j * GRID_RES + i]! += 1;
+  }
+  const svcBlur = blur(svcSum, 4);
+  const svcWBlur = blur(svcW, 4);
   const trees = sim.state.trees;
   for (let k = 0; k < n; k++) {
     const i = k % GRID_RES;
@@ -126,6 +139,8 @@ export function updateLandValue(sim: Sim, instant = false): void {
     target -= 0.06 * Math.min(3, aband[k]!);
     target += civicEffect[k]!;
     target -= 0.2 * ground[k]!;
+    target -= 0.2 * Math.min(1, crime[k]!);
+    if (svcWBlur[k]! > 0) target += 0.12 * (svcBlur[k]! / svcWBlur[k]!);
     target = Math.max(0, Math.min(1, target));
     lv[k] = instant ? target : lv[k]! + (target - lv[k]!) * 0.25;
   }

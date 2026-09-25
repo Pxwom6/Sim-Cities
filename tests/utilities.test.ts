@@ -164,7 +164,7 @@ describe('utilities', () => {
     serveTown(sim);
     for (const c of [...sim.state.civics.values()])
       if (c.def === 'landfill') sim.dispatch({ type: 'bulldoze', target: { kind: 'civic', id: c.id } });
-    sim.advance(TICKS_PER_MONTH * 3);
+    sim.advance(TICKS_PER_MONTH * 4);
     const dirty = countBuildings(sim, (b) => b.garbage > 20);
     expect(dirty).toBeGreaterThan(10);
     const ave = [...sim.state.net.segments.values()].find((s) => s.type === 'avenue')!;

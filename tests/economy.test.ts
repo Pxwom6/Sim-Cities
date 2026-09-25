@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Sim } from '../src/sim/sim';
 import { TICKS_PER_MONTH } from '../src/sim/time';
 import { annuity } from '../src/sim/systems/economy';
+import { SAVE_VERSION } from '../src/sim/save';
 import { buildTown, connectPoint, newSim, road, serveTown } from './helpers';
 
 const sum = (r: Record<string, number>) => Object.values(r).reduce((a, b) => a + b, 0);
@@ -180,7 +181,7 @@ describe('save migrations', () => {
     const loaded = Sim.fromSave(save as never);
     loaded.testMode = true;
     expect(loaded.state.economy.taxes.R).toEqual([9, 9, 9]);
-    expect(loaded.state.version).toBe(3);
+    expect(loaded.state.version).toBe(SAVE_VERSION);
     expect(loaded.state.civics.size).toBe(0);
     loaded.advance(TICKS_PER_MONTH);
     expect(loaded.state.economy.history.length).toBeGreaterThan(0);

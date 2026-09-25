@@ -172,9 +172,9 @@ export function placeAlong(sim: Sim, def: string, segId: number): number {
  * A utility street west–east south of the town: coal power, groundwater pumps, a sewage
  * treatment plant and a landfill (unlock thresholds lifted with the debug cheat).
  */
-export function serveTown(sim: Sim): { street: number; civics: number[] } {
+export function serveTown(sim: Sim, services = true): { street: number; civics: number[] } {
   sim.dispatch({ type: 'cheat', cheat: 'unlockAll' });
-  sim.dispatch({ type: 'cheat', cheat: 'addMoney', amount: 80_000 });
+  sim.dispatch({ type: 'cheat', cheat: 'addMoney', amount: services ? 140_000 : 80_000 });
   const c = connectPoint(sim);
   let pts: Vec2[] | null = null;
   for (const dz of [230, 250, 270, 210, 290]) {
@@ -212,6 +212,7 @@ export function serveTown(sim: Sim): { street: number; civics: number[] } {
   );
   const civics: number[] = [];
   const order = ['coal', 'pump', 'pump', 'treatment', 'landfill', 'pump'];
+  if (services) order.push('firestation', 'police', 'clinic', 'primary', 'park_small');
   // Prefer the utility street; fall back to any road in town.
   const others = [...sim.state.net.segments.values()].filter(
     (s) => !streetSegs.includes(s) && s.type !== 'highway',

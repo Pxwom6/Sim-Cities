@@ -31,9 +31,10 @@ export function wealthFromLandValue(lv: number): Wealth {
   return lv < 0.4 ? 0 : lv < 0.7 ? 1 : 2;
 }
 
-/** Highest wealth that can move in without services (services arrive in M5). */
-export function maxWealth(_sim: Sim, _x: number, _z: number): Wealth {
-  return 1;
+/** High wealth only moves where fire, police and health care all reach (DESIGN §3.4). */
+export function maxWealth(sim: Sim, x: number, z: number): Wealth {
+  const ok = (['fire', 'police', 'health'] as const).every((k) => sim.serviceCoverageNear(x, z, k) >= 0.4);
+  return ok ? 2 : 1;
 }
 
 export function unlockedDensity(sim: Sim): Density {
@@ -128,6 +129,14 @@ export function createBuilding(sim: Sim, block: ZoneBlock, col: number, def: Zon
     noPowerH: 0,
     noWaterH: 0,
     closed: false,
+    covFire: 0,
+    covPolice: 0,
+    covHealth: 0,
+    covEdu: 0,
+    covPark: 0,
+    fire: 0,
+    burn: 0,
+    rubbleH: 0,
     good: 0,
     variant: sim.rng.growth.int(1 << 16),
     born: s.tick,
@@ -154,7 +163,7 @@ export function growthPass(sim: Sim): void {
       b.progress = 1;
       b.cap = buildingCapacity(b);
       sim.events.push({ kind: 'built', id: b.id });
-    } else constructing++;
+    } else if (b.cap === 0) constructing++; // in-place upgrades don't use up new-building slots
     sim.markBuildingDirty(b.id);
   }
 
@@ -238,7 +247,9 @@ export function lifecycle(sim: Sim): void {
     if (b.state !== BState.Active) continue;
     const unhappy = b.happiness < GROWTH.distressHappiness;
     const cut = !sim.isBuildingConnected(b);
-    if (unhappy || cut) b.distress += cut ? 2 : 1;
+    // Nobody stays long in a building without power or water, however nice the neighbourhood.
+    const dark = b.power < 0.5 || b.water < 0.5;
+    if (unhappy || cut || dark) b.distress += cut ? 2 : 1;
     else b.distress = Math.max(0, b.distress - GROWTH.recoverRate);
     if (b.distress >= GROWTH.abandonAt) {
       b.state = BState.Abandoned;

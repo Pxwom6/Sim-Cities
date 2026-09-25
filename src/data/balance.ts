@@ -40,7 +40,7 @@ export const GROWTH = {
   /** Residents only move in while R demand is above this. */
   moveInMinDemand: -0.2,
   /** Upgrade: needs this happiness and occupancy for `upgradeChecks` hourly checks. */
-  upgradeHappiness: 0.62,
+  upgradeHappiness: 0.66,
   upgradeOccupancy: 0.88,
   upgradeChecks: 3,
   upgradeChance: 0.25,
@@ -86,4 +86,12 @@ export const HAPPINESS = {
   workersBad: -0.2,
   staffedGood: 0.06,
   landValue: 0.1,
+  /** Services: +gain × coverage − loss × (1 − coverage) × expectation[wealth]. */
+  serviceGain: 0.05,
+  serviceLoss: 0.06,
+  serviceExpect: [0.6, 1.0, 1.5],
+  bizServiceGain: 0.03,
+  bizServiceLoss: 0.04,
+  park: 0.1,
+  crime: -0.15,
 };

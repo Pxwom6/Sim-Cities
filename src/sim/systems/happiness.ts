@@ -35,6 +35,32 @@ export function happinessFactors(sim: Sim, b: Building): Factor[] {
     f.push({ label: 'Uncollected garbage', value: GARBAGE.moodPenalty * k });
   }
   if (b.closed) f.push({ label: 'Closed: no power or water', value: -0.2 });
+  // Services (DESIGN §3.9): coverage lifts moods; missing coverage hurts more for the wealthy.
+  const expect = HAPPINESS.serviceExpect[b.wealth]!;
+  const svc = (label: string, cov: number, gain: number, loss: number) => {
+    const v = gain * cov - loss * (1 - cov) * expect;
+    if (Math.abs(v) >= 0.005)
+      f.push({ label: cov >= 0.5 ? `${label} nearby` : `No ${label.toLowerCase()} nearby`, value: v });
+  };
+  if (b.zone === ZONE_R) {
+    svc('Fire station', b.covFire, HAPPINESS.serviceGain, HAPPINESS.serviceLoss);
+    svc('Police', b.covPolice, HAPPINESS.serviceGain, HAPPINESS.serviceLoss);
+    svc('Health care', b.covHealth, HAPPINESS.serviceGain, HAPPINESS.serviceLoss);
+    svc('School', b.covEdu, HAPPINESS.serviceGain, HAPPINESS.serviceLoss);
+    if (b.covPark > 0.05) f.push({ label: 'Park nearby', value: HAPPINESS.park * b.covPark });
+  } else {
+    svc('Fire station', b.covFire, HAPPINESS.bizServiceGain, HAPPINESS.bizServiceLoss);
+    svc('Police', b.covPolice, HAPPINESS.bizServiceGain, HAPPINESS.bizServiceLoss);
+    if (b.zone === ZONE_C && b.covPark > 0.05)
+      f.push({ label: 'Park nearby', value: HAPPINESS.park * 0.5 * b.covPark });
+  }
+  const crime = sim.crimeAt(b.x, b.z);
+  if (crime > 0.02)
+    f.push({
+      label: 'Crime in the area',
+      value: (b.zone === ZONE_R ? HAPPINESS.crime : HAPPINESS.crime * 0.7) * Math.min(1, crime),
+    });
+  if (b.fire > 0) f.push({ label: 'On fire!', value: -0.3 });
   const tax = sim.taxRate(ZONE_LETTER[b.zone]!, b.wealth);
   const taxTerm = HAPPINESS.taxPerPoint * (tax - DEMAND.neutralTax) * HAPPINESS.taxSensitivity[b.wealth]!;
   if (b.zone === ZONE_R) {

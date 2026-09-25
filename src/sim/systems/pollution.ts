@@ -8,6 +8,23 @@ import { civicDef } from '../world/civic';
  * Ground pollution raster (DESIGN §3.11). M4: industry, sewage outflows, landfills and unserved
  * sewage; slow spread and decay. Air pollution with wind drift joins in M7.
  */
+/** Crime fades over time. */
+export function decayCrime(sim: Sim, hours: number): void {
+  const f = sim.state.crime;
+  const k = Math.pow(0.97, hours);
+  for (let i = 0; i < f.length; i++) f[i] = f[i]! < 0.001 ? 0 : f[i]! * k;
+}
+
+export function splatField(
+  field: Float32Array,
+  x: number,
+  z: number,
+  amount: number,
+  radiusCells: number,
+): void {
+  splat(field, x, z, amount, radiusCells);
+}
+
 function splat(field: Float32Array, x: number, z: number, amount: number, radiusCells: number): void {
   const ci = Math.floor(x / GRID_CELL);
   const cj = Math.floor(z / GRID_CELL);

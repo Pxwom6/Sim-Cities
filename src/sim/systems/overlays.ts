@@ -5,7 +5,22 @@ import { civicOutput } from './utilities';
 
 /** Data maps (DESIGN §4): values in [0, 1] per raster cell, −1 where there is nothing to show. */
 export type OverlayMap =
-  'power' | 'water' | 'sewage' | 'garbage' | 'groundwater' | 'groundPollution' | 'landValue' | 'resources';
+  | 'power'
+  | 'water'
+  | 'sewage'
+  | 'garbage'
+  | 'groundwater'
+  | 'groundPollution'
+  | 'landValue'
+  | 'resources'
+  | 'fire'
+  | 'police'
+  | 'health'
+  | 'education'
+  | 'park'
+  | 'crime'
+  | 'happiness'
+  | 'wealth';
 
 export interface OverlayResult {
   map: OverlayMap;
@@ -110,5 +125,50 @@ export function computeOverlay(sim: Sim, map: OverlayMap): OverlayResult {
     case 'landValue':
       for (let k = 0; k < n; k++) values[k] = s.landValue[k]!;
       return { map, values, ramp: 'sequential', legend: ['Low', 'High'] };
+    case 'fire':
+    case 'police':
+    case 'health':
+    case 'education':
+    case 'park': {
+      const cov = sim.coverage;
+      // Coverage follows the roads: stamp each road cell with its interpolated coverage.
+      if (cov) {
+        for (const seg of s.net.segments.values()) {
+          if (seg.type === 'highway') continue;
+          const ia = cov.graph.index.get(seg.a);
+          const ib = cov.graph.index.get(seg.b);
+          const ca = ia !== undefined ? cov.kinds[map][ia]! : 0;
+          const cb = ib !== undefined ? cov.kinds[map][ib]! : 0;
+          const c = sim.net.curve(seg.id);
+          for (let d = 0; d <= c.length; d += 6) {
+            const p = c.pointAt(d);
+            const i = Math.floor(p.x / GRID_CELL);
+            const j = Math.floor(p.z / GRID_CELL);
+            if (i < 0 || j < 0 || i >= GRID_RES || j >= GRID_RES) continue;
+            const v = ca + (cb - ca) * (d / c.length);
+            const k = j * GRID_RES + i;
+            values[k] = Math.max(values[k]!, v);
+          }
+        }
+      }
+      const key = {
+        fire: 'covFire',
+        police: 'covPolice',
+        health: 'covHealth',
+        education: 'covEdu',
+        park: 'covPark',
+      } as const;
+      stampBuildings(sim, values, (b) => (b.state === BState.Active ? b[key[map]] : null));
+      return { map, values, ramp: 'diverging', legend: ['Not covered', 'Well covered'] };
+    }
+    case 'crime':
+      for (let k = 0; k < n; k++) values[k] = s.crime[k]! > 0.01 ? Math.min(1, s.crime[k]!) : -1;
+      return { map, values, ramp: 'sequential', legend: ['Safe', 'High crime'] };
+    case 'happiness':
+      stampBuildings(sim, values, (b) => (b.state === BState.Active ? b.happiness : null));
+      return { map, values, ramp: 'diverging', legend: ['Unhappy', 'Happy'] };
+    case 'wealth':
+      stampBuildings(sim, values, (b) => (b.state === BState.Active && b.zone !== 3 ? b.wealth / 2 : null));
+      return { map, values, ramp: 'sequential', legend: ['Low wealth', 'High wealth'] };
   }
 }

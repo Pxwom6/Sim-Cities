@@ -21,6 +21,8 @@ export interface Vehicle {
   load: number;
   /** Ticks left working on site. */
   wait: number;
+  /** Incident this vehicle answers (0 if none). */
+  ref: number;
 }
 
 export function segSpeed(sim: Sim, segId: number): number {
@@ -71,6 +73,7 @@ export function spawnVehicle(
     phase: 'out',
     load: 0,
     wait: 0,
+    ref: 0,
   };
   sim.state.vehicles.set(v.id, v);
   const c = sim.state.civics.get(home);

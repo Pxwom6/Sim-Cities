@@ -5,6 +5,8 @@
 import type { Dept } from './economy';
 
 export type Utility = 'power' | 'water' | 'sewage';
+export type ServiceKind = 'fire' | 'police' | 'health' | 'education' | 'park';
+export const SERVICE_KINDS: ServiceKind[] = ['fire', 'police', 'health', 'education', 'park'];
 export type CivicCategory =
   | 'power'
   | 'water'
@@ -52,10 +54,12 @@ export interface CivicDef {
   };
   /** Service coverage and capacity (M5). */
   service?: {
-    kind: 'fire' | 'police' | 'health' | 'school' | 'park';
+    kind: ServiceKind;
     range: number;
     vehicles?: number;
     capacity?: number;
+    level?: number;
+    vehicle?: 'fire' | 'police' | 'ambulance';
   };
   /** Land-value effect radius (m) and strength (negative for nuisances). */
   landValue?: { radius: number; value: number };
@@ -215,7 +219,7 @@ export const CIVIC_DEFS: CivicDef[] = [
     d: 48,
     cost: 9_000,
     upkeep: 240,
-    garbage: { trucks: 4, truckCapacity: 60, storage: 80_000 },
+    garbage: { trucks: 4, truckCapacity: 90, storage: 80_000 },
     groundPollution: 0.5,
     landValue: { radius: 200, value: -0.18 },
     blurb: 'Trucks collect garbage and bury it here until it fills up.',
@@ -231,7 +235,7 @@ export const CIVIC_DEFS: CivicDef[] = [
     d: 32,
     cost: 18_000,
     upkeep: 380,
-    garbage: { trucks: 3, truckCapacity: 60, process: 900, revenuePerUnit: 0.8 },
+    garbage: { trucks: 3, truckCapacity: 90, process: 900, revenuePerUnit: 0.8 },
     landValue: { radius: 90, value: -0.05 },
     blurb: 'Collects and recycles garbage, earning a little from the materials.',
     unlockPopulation: 2_500,
@@ -246,16 +250,206 @@ export const CIVIC_DEFS: CivicDef[] = [
     d: 40,
     cost: 28_000,
     upkeep: 600,
-    garbage: { trucks: 3, truckCapacity: 60, process: 1_400, powerPerUnit: 0.25 },
+    garbage: { trucks: 3, truckCapacity: 90, process: 1_400, powerPerUnit: 0.25 },
     airPollution: 0.6,
     landValue: { radius: 160, value: -0.12 },
     blurb: 'Burns garbage for a little power, and some smoke.',
     unlockPopulation: 6_000,
     model: 'incinerator',
   },
+  // Safety
+  {
+    id: 'firestation',
+    name: 'Fire station',
+    category: 'fire',
+    dept: 'fire',
+    w: 24,
+    d: 24,
+    cost: 11_000,
+    upkeep: 360,
+    service: { kind: 'fire', range: 55, vehicles: 3, vehicle: 'fire' },
+    blurb: 'Fire engines race to fires along the roads. Covers what it can reach quickly.',
+    unlockPopulation: 0,
+    model: 'firestation',
+  },
+  {
+    id: 'police',
+    name: 'Police station',
+    category: 'police',
+    dept: 'police',
+    w: 24,
+    d: 24,
+    cost: 11_000,
+    upkeep: 360,
+    service: { kind: 'police', range: 60, vehicles: 3, vehicle: 'police' },
+    blurb: 'Patrol cars answer crimes. Coverage deters crime nearby.',
+    unlockPopulation: 0,
+    model: 'police',
+  },
+  // Health
+  {
+    id: 'clinic',
+    name: 'Clinic',
+    category: 'health',
+    dept: 'health',
+    w: 20,
+    d: 20,
+    cost: 8_000,
+    upkeep: 300,
+    service: { kind: 'health', range: 45, vehicles: 1, capacity: 40, vehicle: 'ambulance' },
+    blurb: 'Treats the sick nearby and runs an ambulance.',
+    unlockPopulation: 0,
+    model: 'clinic',
+  },
+  {
+    id: 'hospital',
+    name: 'Hospital',
+    category: 'health',
+    dept: 'health',
+    w: 40,
+    d: 40,
+    cost: 38_000,
+    upkeep: 1_100,
+    service: { kind: 'health', range: 100, vehicles: 4, capacity: 300, vehicle: 'ambulance' },
+    blurb: 'Many beds and ambulances; covers a large area.',
+    unlockPopulation: 4_000,
+    model: 'hospital',
+  },
+  // Education
+  {
+    id: 'primary',
+    name: 'Primary school',
+    category: 'education',
+    dept: 'education',
+    w: 32,
+    d: 24,
+    cost: 10_000,
+    upkeep: 340,
+    service: { kind: 'education', range: 45, capacity: 300, level: 1 },
+    blurb: 'Seats for the children of nearby homes.',
+    unlockPopulation: 0,
+    model: 'primary',
+  },
+  {
+    id: 'highschool',
+    name: 'High school',
+    category: 'education',
+    dept: 'education',
+    w: 40,
+    d: 32,
+    cost: 26_000,
+    upkeep: 760,
+    service: { kind: 'education', range: 80, capacity: 700, level: 2 },
+    blurb: 'Teenagers from a wide area study here.',
+    unlockPopulation: 2_500,
+    model: 'highschool',
+  },
+  {
+    id: 'university',
+    name: 'University',
+    category: 'education',
+    dept: 'education',
+    w: 64,
+    d: 48,
+    cost: 90_000,
+    upkeep: 2_300,
+    service: { kind: 'education', range: 240, capacity: 2_000, level: 3 },
+    blurb: 'Higher education for the whole city; educated workers attract high-tech industry.',
+    unlockPopulation: 15_000,
+    model: 'university',
+  },
+  {
+    id: 'library',
+    name: 'Library',
+    category: 'education',
+    dept: 'education',
+    w: 20,
+    d: 20,
+    cost: 7_000,
+    upkeep: 180,
+    service: { kind: 'education', range: 50, capacity: 200, level: 1 },
+    landValue: { radius: 120, value: 0.06 },
+    blurb: 'Lifelong learning; a small boost to education and land value.',
+    unlockPopulation: 1_500,
+    model: 'library',
+  },
+  // Parks
+  {
+    id: 'park_small',
+    name: 'Pocket park',
+    category: 'parks',
+    dept: 'parks',
+    w: 16,
+    d: 16,
+    cost: 1_500,
+    upkeep: 40,
+    service: { kind: 'park', range: 16 },
+    landValue: { radius: 110, value: 0.12 },
+    blurb: 'Trees, benches and a lawn. Lifts moods and land value nearby.',
+    unlockPopulation: 0,
+    model: 'park_small',
+  },
+  {
+    id: 'plaza',
+    name: 'Plaza',
+    category: 'parks',
+    dept: 'parks',
+    w: 24,
+    d: 24,
+    cost: 4_000,
+    upkeep: 90,
+    service: { kind: 'park', range: 20 },
+    landValue: { radius: 140, value: 0.14 },
+    blurb: 'A paved square with a fountain; especially loved by shops nearby.',
+    unlockPopulation: 600,
+    model: 'plaza',
+  },
+  {
+    id: 'park_large',
+    name: 'City park',
+    category: 'parks',
+    dept: 'parks',
+    w: 48,
+    d: 48,
+    cost: 12_000,
+    upkeep: 220,
+    service: { kind: 'park', range: 32 },
+    landValue: { radius: 240, value: 0.2 },
+    blurb: 'A big green space with a pond and paths. Absorbs pollution too.',
+    unlockPopulation: 2_000,
+    model: 'park_large',
+  },
 ];
 
 export const CIVIC = new Map(CIVIC_DEFS.map((d) => [d.id, d]));
+
+/** Incident and service tuning (in ticks; see DESIGN §3.7 on vehicle time). */
+export const SERVICES = {
+  /** Coverage is full within this share of the range, fading to zero at the range. */
+  fullShare: 0.5,
+  /** Fires per building per hour with no coverage (×4 for abandoned, ×1.5 for industry). */
+  fireBase: 0.00012,
+  fireCoverageCut: 0.75,
+  /** Intensity growth per tick and ticks at full intensity before collapse. */
+  fireGrowth: 0.004,
+  fireDestroyTicks: 700,
+  /** Every `fireSpreadEvery` ticks a strong fire may jump to buildings within `fireSpreadRange` m. */
+  fireSpreadEvery: 30,
+  fireSpreadRange: 14,
+  fireSpreadChance: 0.06,
+  /** Intensity removed per tick by one engine on site (× funding). */
+  extinguishRate: 0.012,
+  /** Crimes per building per hour at the base rate. */
+  crimeBase: 0.0015,
+  crimePoliceCut: 0.8,
+  /** Ticks before an unanswered crime happens. */
+  crimeWindow: 420,
+  /** Emergencies per resident per hour. */
+  emergencyRate: 0.00004,
+  emergencyWindow: 600,
+  /** Rubble is cleared automatically after this many hours. */
+  rubbleClearHours: 36,
+};
 
 /** Per-building consumption of utilities, per unit of capacity (residents or jobs). */
 export const UTILITY_USE: Record<Utility, [number, number, number, number]> = {
