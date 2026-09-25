@@ -31,6 +31,14 @@ export interface TestApi {
   getCivics(): { id: number; def: string; x: number; z: number; angle: number }[];
   /** Vehicles as last drawn. */
   getVehicles(): { id: number; kind: string; phase: string; x: number; z: number }[];
+  /** Road segment nearest (x, z) within 20 m. */
+  segmentAt(x: number, z: number): { id: number; type: string } | null;
+  /** Volume/capacity on a segment at the rush-hour peak. */
+  segVC(id: number): number;
+  /** Visible cars (id and position). */
+  getCars(): { id: number; x: number; z: number }[];
+  /** Bus stops and lines on the client mirror. */
+  getTransit(): { stops: number; lines: number[] };
   /** Terrain height (water below 0.6). */
   heightAt(x: number, z: number): number;
   /** Show a data map (or null to hide). */
@@ -105,6 +113,13 @@ export function installTestApi(game: Game): TestApi {
       return null;
     },
     heightAt: (x, z) => game.world.heightAt(x, z),
+    segmentAt: (x, z) => {
+      const hit = game.world.net.nearestSegment({ x, z }, 20);
+      return hit ? { id: hit.seg, type: game.world.net.segment(hit.seg).type } : null;
+    },
+    segVC: (id) => game.world.segVC(id, 1),
+    getCars: () => game.renderer.traffic.cars.map((c) => ({ id: c.id, x: c.x, z: c.z })),
+    getTransit: () => ({ stops: game.world.stops.size, lines: game.world.lines.map((l) => l.stops.length) }),
     findCivic: (def) => [...game.world.civics.values()].find((c) => c.def === def)?.id ?? null,
     getCivics: () =>
       [...game.world.civics.values()].map((c) => ({ id: c.id, def: c.def, x: c.x, z: c.z, angle: c.angle })),

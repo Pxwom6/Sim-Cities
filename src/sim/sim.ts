@@ -734,7 +734,21 @@ export class Sim {
       unlockAll: this.state.unlockAll,
       civics: this.state.civics.size,
       vehicles: this.state.vehicles.size,
+      avgCommute: this.avgCommute(),
+      busRiders: [...this.state.transit.riders.values()].reduce((a, b) => a + b, 0),
     };
+  }
+
+  /** Average door-to-door commute of employed residents, seconds. */
+  avgCommute(): number {
+    let n = 0;
+    let t = 0;
+    for (const b of this.state.buildings.values()) {
+      if (b.state !== BState.Active || b.employed <= 0) continue;
+      n += b.employed;
+      t += b.commute * b.employed;
+    }
+    return n ? Math.round(t / n) : 0;
   }
 
   /** Projected net income per month at current rates (whole dollars). */

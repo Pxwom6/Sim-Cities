@@ -353,30 +353,50 @@ of the network first — readable on the data map. `served_b ∈ [0, 1]`.
 
 ### 3.8 Traffic, commuting and employment
 
-One mechanism does job matching, shopping and traffic:
+One mechanism does job matching, shopping, traffic and transit (every 2 game hours):
 
 1. **Origins** = road nodes with residents attached (buildings attach to the nearer end of their segment).
-   Each round processes origins in a rotating order (fairness) across ticks.
-2. For an origin, a Dijkstra over **congested travel times** visits job buildings in order of time;
-   workers fill open job slots nearest-first (education-matched first, over-qualified second), up to
-   `MAX_COMMUTE` (30 min). The same search fills shop capacity with shoppers and school seats.
-3. Each assignment of `n` trips follows the predecessor tree back to the origin, adding `n·PCU` to
-   `nextVolume[segment]`. Freight: industry → commerce (goods) and surplus → highway; highway → commerce
-   for imports (trucks count 2.5 PCU).
-4. At the end of a round: `volume = volume + α·(nextVolume − volume)` (method of successive averages,
-   α = 0.35), and filled jobs/unemployment/commute times are published.
-5. Travel time per segment: `t = length / speed · (1 + 0.15·(v/c)^4)`, capped at 8× free-flow, where
-   `v = volume · PEAK_SHARE` (0.35 of daily trips in the peak hour) and `c` = capacity per road type.
-6. **Rush hours**: instantaneous flow = `volume · profile(hour)`, peaks at 08:00 and 17:30; congestion
-   shown on the traffic map and used for service vehicles is the instantaneous one; commute time (for
-   happiness) uses the peak.
-7. **Visible vehicles**: each round keeps ~400 sample routes by reservoir sampling weighted by trips,
-   tagged `{from, to, purpose}`. The main thread spawns cars along sampled routes in proportion to
-   current flow and time of day (commute out in the morning, back in the evening, shopping midday,
-   freight all day) and moves them at the segment's congested speed. Clicking one shows its trip.
-8. **Buses (M6)**: stops on segments, lines = ordered stops, a depot supplies buses. For an origin and
-   destination within 400 m of stops on one line: `transitTime = walk + headway/2 + ride`; bus share
-   `= capacityLimited(logistic((carTime − transitTime)/4 min))`; bus riders don't add car volume.
+   Each round processes origins in a rotating order (fairness).
+2. For an origin, a Dijkstra over **rush-hour travel times** visits job and shop buildings in order of
+   time; workers fill open job slots nearest-first up to `maxCommute` (30 min), shoppers fill shop
+   capacity within 15 min.
+3. **Trips → roads.** Each job assignment of `n` workers makes `n · 2 · 0.9 / 1.2` car trips (there and
+   back, car share, occupancy; shopping 0.5 trips per resident). The Dijkstra records predecessor edges;
+   loads at the destination nodes are pushed back along the search tree in reverse settle order, adding
+   to each segment's next volume. Each building's own street gets its trips too.
+4. **Freight**: industry makes `0.12` truck trips per worker per day and ships to the nearest shops that
+   need goods (`0.06` per commercial job); the rest is exported via the highway, and shops still short
+   import from it. One tree grown from the highway connection carries exports and imports. Trucks
+   count 2.5 cars.
+5. **Volumes** (state, daily PCU both directions) move towards each new assignment by successive
+   averages: `vol += 0.2 · (next − vol)`, which settles route choice within a game day.
+6. **Travel time** per segment at `share` of the rush-hour peak:
+   `t = t0 · (1 + 0.15·(v/c)^4)` (capped at 8×) `+ 600 s · max(0, 1 − c/v)` with
+   `v = vol · 0.25 · share` and `c` = capacity (× 0.8–1.0 for road maintenance). The second term is the
+   average wait in a queue that builds through the rush hour at an oversaturated bottleneck, so a narrow
+   link between homes and jobs costs minutes, not seconds.
+7. **Rush hours**: an hourly profile (peaks 08:00 and 17:00, night ≈ 5 %) scales the instantaneous
+   congestion used by service vehicles, visible cars and the traffic map; commute times (happiness)
+   use the peak. Service vehicles route over the current hour's congested times.
+8. **Visible vehicles**: each round keeps ~320 sample trips (weighted reservoir sampling on the traffic
+   RNG stream) with their road legs and purpose (work, shop, freight, export, import). The client
+   spawns cars and trucks along them in proportion to `√(daily trips) · share(hour)` (capped at 360),
+   commuters outbound in the morning and homebound in the evening, driving at each road's congested
+   speed. Clicking one shows its trip and highlights its route. Nothing here feeds back into the sim.
+9. **Buses**: a depot (civic building) and stops (snapped to roads). Each stop belongs to the depot
+   that reaches it soonest; each depot runs its buses round one loop through its stops, nearest-first
+   from the depot, with 20 s dwell per stop. For a commuter whose origin and job nodes both lie within
+   360 m of stops on the same loop: `bus = walk + headway/2 + ride (rush-hour speeds) + walk` and
+   `busShare = 0.7 · load / (1 + e^−((car + 300 − bus) / 240))` (300 s of parking and hassle saved).
+   Riders don't drive; buses add `passes · 2.5 PCU` spread over the day. If riders exceed what the
+   buses carry in the peak hour, `load` (state) scales the share down next round.
+10. **Road upgrades** change a segment's type in place for the cost difference; zone cells keep their
+   indices and slide with the new width, so buildings move with the road. **Bridges**: streets and
+   wider cross up to 360 m of water on a deck 6 m above it, with 8 % ramps (~68 m) on dry land at each
+   end; bridge metres cost 6× and upkeep 3×. The deck profile is a pure function of the curve and the
+   terrain, shared by the planner and the renderer.
+11. Service coverage (§3.7) stays on free-flow times so the coverage maps are stable; actual responses
+   are slowed by traffic through the vehicles' congested speeds.
 
 ### 3.9 Happiness
 

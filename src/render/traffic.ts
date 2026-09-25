@@ -118,7 +118,7 @@ export class TrafficRenderer {
   /** Most cars on screen at once (quality setting). */
   maxCars = 360;
   private meshes = new Map<ModelName, InstancedMesh>();
-  private cars: Car[] = [];
+  cars: Car[] = [];
   private nextId = 1;
   private lastTick = -1;
   private spawnDebt = 0;

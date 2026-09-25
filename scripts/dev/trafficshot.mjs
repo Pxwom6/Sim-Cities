@@ -53,7 +53,15 @@ try {
     ])
       await g.placeCivic(def, { x, z: c.z + dz });
     await g.placeCivic('busdepot', { x: 450, z: c.z - 150 });
-    for (const [x, dz] of [[96, -80], [192, 70], [288, -80], [384, 70], [384, -100], [150, 6], [330, -6]])
+    for (const [x, dz] of [
+      [96, -80],
+      [192, 70],
+      [288, -80],
+      [384, 70],
+      [384, -100],
+      [150, 6],
+      [330, -6],
+    ])
       console.log(JSON.stringify(await g.dispatch({ type: 'placeStop', x: c.x + x, z: c.z + dz })));
     await g.advance(ticks);
     // To 07:30 so the morning rush is on.

@@ -78,3 +78,15 @@ One line each: what was decided and why. Newest at the bottom of each section.
 - A debug/test `ignite` cheat starts a fire in a building; M9's disasters menu builds on it.
 - Toasts move left of the inspector while it's open so they never cover it.
 - Data maps are lit as midday whatever the clock, so they stay readable at night.
+
+## M6
+- Traffic volumes are part of the saved state (daily PCU per segment), updated every matcher round by successive averages with step 0.2: 0.35 flip-flopped between routes; 0.2 settles within a game day.
+- The day is compressed: 25 % of a day's traffic falls in the rush hour, so small towns flow and towns of a few thousand jam at bottlenecks.
+- BPR alone made a jammed 120 m link cost seconds; an oversaturated road also adds the average queue wait (up to 10 minutes × (1 − c/v)), which is what makes a bottleneck hurt.
+- Coverage maps stay on free-flow times (stable, cacheable); real responses are slowed by traffic via the vehicles' congested speeds.
+- Visible traffic is client-only and non-deterministic: it samples real sim trips but never feeds back. Trip samples aren't saved; after loading, cars reappear at the next assignment round (≤ 2 game hours).
+- Freight imports and exports always succeed through a connected highway; goods shortages don't yet affect shops (possible M10 trade specialisation hook).
+- Road upgrades cost the difference between the two road types (downgrades are free, no refund) and keep buildings by keeping cell indices; buildings are lost only where the new width leaves no room.
+- Bridges need at least a street, span at most 360 m and need ~68 m of dry land at each end for ramps; roads can't meet on a bridge.
+- Buses follow SimCity 2013: a depot plus stops, no hand-drawn lines. Each depot runs one loop through the stops it reaches first, visiting them nearest-first. Commuters choose by door-to-door time with a 300 s car-hassle allowance; shopping trips stay by car.
+- Road unlocks (boulevards at 20k) are now enforced by the sim as well as the UI.

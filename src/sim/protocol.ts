@@ -37,6 +37,10 @@ export interface CityStats {
   unlockAll: boolean;
   civics: number;
   vehicles: number;
+  /** Average commute of employed residents, seconds. */
+  avgCommute: number;
+  /** Bus trips per day across all lines. */
+  busRiders: number;
 }
 
 export interface CivicDetails {

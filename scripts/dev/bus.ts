@@ -13,7 +13,9 @@ const report = (label: string) => {
   const avgC = act.reduce((s, b) => s + b.commute * b.employed, 0) / Math.max(1, emp);
   const vc = segVC(sim, t.link, 1);
   const lines = sim.lines();
-  console.log(`${label} pop=${sim.state.totals.population} emp=${emp} avgCommute=${(avgC / 60).toFixed(1)}min link v/c=${vc.toFixed(2)} slow=${slowdown(vc).toFixed(2)} lines=${lines.length} ${lines.map((l) => `loop=${(l.loopTime / 60).toFixed(1)}min buses=${l.buses} stops=${l.stops.length} riders=${sim.state.transit.riders.get(l.depot)} load=${sim.state.transit.load.get(l.depot)}`).join(' ')}`);
+  console.log(
+    `${label} pop=${sim.state.totals.population} emp=${emp} avgCommute=${(avgC / 60).toFixed(1)}min link v/c=${vc.toFixed(2)} slow=${slowdown(vc).toFixed(2)} lines=${lines.length} ${lines.map((l) => `loop=${(l.loopTime / 60).toFixed(1)}min buses=${l.buses} stops=${l.stops.length} riders=${sim.state.transit.riders.get(l.depot)} load=${sim.state.transit.load.get(l.depot)}`).join(' ')}`,
+  );
 };
 sim.advance(TICKS_PER_MONTH * 5);
 report('m5');
