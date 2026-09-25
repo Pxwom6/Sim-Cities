@@ -135,7 +135,7 @@ export class Sim {
       case 'bulldoze':
         return bulldoze(this, cmd.target, dryRun);
       case 'zone':
-        return zone(this, cmd.zone, cmd.area, dryRun);
+        return zone(this, cmd.zone, cmd.area, dryRun, cmd.stroke);
       case 'undo':
         return this.undo(dryRun);
       default: {

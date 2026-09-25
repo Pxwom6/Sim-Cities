@@ -13,6 +13,9 @@ import { Lighting } from './lighting';
 import { TerrainRenderer } from './terrain';
 import { TreeRenderer } from './trees';
 import { WaterRenderer } from './water';
+import { RoadRenderer } from './roads';
+import { ZoneRenderer } from './zones';
+import { GhostRenderer } from './ghost';
 
 export interface RenderStats {
   calls: number;
@@ -32,6 +35,9 @@ export class GameRenderer {
   readonly terrain: TerrainRenderer;
   readonly water: WaterRenderer;
   readonly trees: TreeRenderer;
+  readonly roads: RoadRenderer;
+  readonly zones: ZoneRenderer;
+  readonly ghost: GhostRenderer;
   private time = 0;
   lastStats: RenderStats = { calls: 0, triangles: 0, geometries: 0, textures: 0, trees: 0 };
 
@@ -53,8 +59,33 @@ export class GameRenderer {
     this.scene.add(this.terrain.group);
     this.water = new WaterRenderer();
     this.scene.add(this.water.mesh);
+    this.roads = new RoadRenderer(world);
+    this.scene.add(this.roads.group);
+    this.zones = new ZoneRenderer(world);
+    this.scene.add(this.zones.group);
+    this.ghost = new GhostRenderer((x, z) => world.heightAt(x, z));
+    this.scene.add(this.ghost.group);
     this.trees = new TreeRenderer(world);
+    this.trees.blocked = (x, z) => this.roads.onRoad(x, z, 1.5);
+    this.trees.rebuildAll();
     this.scene.add(this.trees.group);
+    world.onNet((c) => {
+      const pts: { x: number; z: number }[] = [];
+      for (const id of c.segments) {
+        const s = world.netState.segments.get(id);
+        if (!s) continue;
+        const a = world.netState.nodes.get(s.a);
+        const b = world.netState.nodes.get(s.b);
+        if (a) pts.push(a);
+        if (b) pts.push(b);
+        pts.push({ x: s.cx, z: s.cz });
+      }
+      for (const id of c.nodes) {
+        const n = world.netState.nodes.get(id);
+        if (n) pts.push(n);
+      }
+      if (pts.length) this.trees.rebuildAround(pts);
+    });
 
     this.controller = new CameraController(this.camera, canvas, (x, z) => world.heightAt(x, z));
     this.resize();

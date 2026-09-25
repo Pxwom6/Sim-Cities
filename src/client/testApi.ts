@@ -1,3 +1,4 @@
+import { Vector3 } from 'three';
 import type { Game } from '../game';
 import type { Command, CommandResult } from '../sim/commands';
 import type { CameraPose, CameraPresetName } from '../render/camera';
@@ -7,7 +8,18 @@ import type { CityStats } from '../sim/protocol';
 export interface TestApi {
   ready: boolean;
   dispatch(cmd: Command): Promise<CommandResult>;
-  getState(): Promise<CityStats & { renderStats: RenderStats; tick: number }>;
+  getState(): Promise<
+    CityStats & {
+      renderStats: RenderStats;
+      tick: number;
+      highwayZ: number;
+      segments: number;
+      nodes: number;
+      zoned: { R: number; C: number; I: number };
+    }
+  >;
+  /** Client (CSS pixel) coordinates of a world point on the ground. */
+  worldToScreen(x: number, z: number): { x: number; y: number };
   advance(ticks: number): Promise<number>;
   setCamera(preset: CameraPresetName | Partial<CameraPose>): void;
   getCamera(): CameraPose;
@@ -30,7 +42,15 @@ export function installTestApi(game: Game): TestApi {
     dispatch: (cmd) => game.dispatch(cmd),
     getState: async () => {
       const stats = await game.client.query<CityStats>({ type: 'summary' });
-      return { ...stats, renderStats: game.renderer.lastStats };
+      const w = game.world;
+      return {
+        ...stats,
+        renderStats: game.renderer.lastStats,
+        highwayZ: w.netState.nodes.get(w.highway.connect)!.z,
+        segments: w.netState.segments.size,
+        nodes: w.netState.nodes.size,
+        zoned: countZones(game),
+      };
     },
     advance: async (ticks) => {
       const t = await game.client.advance(ticks);
@@ -39,6 +59,11 @@ export function installTestApi(game: Game): TestApi {
     },
     setCamera: (preset) => game.setCamera(preset, true),
     getCamera: () => ({ ...game.renderer.controller.goal }),
+    worldToScreen: (x, z) => {
+      const v = new Vector3(x, Math.max(0, game.world.heightAt(x, z)), z).project(game.renderer.camera);
+      const rect = game.renderer.canvas.getBoundingClientRect();
+      return { x: rect.left + ((v.x + 1) / 2) * rect.width, y: rect.top + ((1 - v.y) / 2) * rect.height };
+    },
     hash: () => game.client.query<string>({ type: 'hash' }),
     setSpeed: (s) => game.setSpeed(s),
     waitFrames: (n) =>
@@ -51,4 +76,17 @@ export function installTestApi(game: Game): TestApi {
   };
   window.__game = api;
   return api;
+}
+
+function countZones(game: Game): { R: number; C: number; I: number } {
+  const out = { R: 0, C: 0, I: 0 };
+  for (const b of game.world.netState.blocks.values()) {
+    for (let i = 0; i < b.zone.length; i++) {
+      if (!b.valid[i]) continue;
+      if (b.zone[i] === 1) out.R++;
+      else if (b.zone[i] === 2) out.C++;
+      else if (b.zone[i] === 3) out.I++;
+    }
+  }
+  return out;
 }

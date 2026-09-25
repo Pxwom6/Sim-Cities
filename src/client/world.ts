@@ -1,9 +1,16 @@
 import { TerrainGen, sampleHeights } from '../sim/terrain/generate';
-import type { CityStats, FrameDiff, Snapshot } from '../sim/protocol';
+import type { CityStats, FrameDiff, NetDiff, Snapshot } from '../sim/protocol';
+import { Network, type NetworkState, type RoadSegment, type ZoneBlock } from '../sim/world/network';
 import type { GameOptions } from '../sim/state';
 import { MAP_SIZE } from '../data/world';
 
 type Listener = () => void;
+
+export interface NetChanges {
+  segments: Set<number>;
+  nodes: Set<number>;
+  blocks: Set<number>;
+}
 
 /**
  * Read-only mirror of the sim state that rendering and UI need, updated from worker frames.
@@ -18,6 +25,11 @@ export class ClientWorld {
   readonly ore: Uint8Array;
   readonly oil: Uint8Array;
   stats: CityStats;
+  readonly netState: NetworkState;
+  /** Geometry-only view of the road network (curves, adjacency, cells, spatial queries). */
+  readonly net: Network;
+  readonly highway: Snapshot['highway'];
+  private netListeners: ((c: NetChanges) => void)[] = [];
   /** Fractional tick, advanced smoothly between frames for lighting. */
   displayTick: number;
   private listeners = new Map<string, Set<Listener>>();
@@ -32,6 +44,100 @@ export class ClientWorld {
     this.oil = snap.oil;
     this.stats = snap.stats;
     this.displayTick = snap.stats.tick;
+    this.highway = snap.highway;
+    this.netState = { nodes: new Map(), segments: new Map(), blocks: new Map() };
+    for (const n of snap.net.nodes) this.netState.nodes.set(n.id, { ...n });
+    for (const sg of snap.net.segments) this.netState.segments.set(sg.id, { ...sg });
+    for (const b of snap.net.blocks) this.netState.blocks.set(b.id, { ...b });
+    this.net = new Network(this.netState, null, null);
+  }
+
+  /** Subscribe to network changes (ids of touched segments, nodes and blocks, including removals). */
+  onNet(l: (c: NetChanges) => void): () => void {
+    this.netListeners.push(l);
+    return () => {
+      this.netListeners = this.netListeners.filter((x) => x !== l);
+    };
+  }
+
+  private applyNet(d: NetDiff): void {
+    const st = this.netState;
+    const net = this.net;
+    const ch: NetChanges = { segments: new Set(), nodes: new Set(), blocks: new Set() };
+    for (const id of d.removedBlocks) {
+      const b = st.blocks.get(id);
+      if (!b) continue;
+      net.unindexBlock(b);
+      st.blocks.delete(id);
+      ch.blocks.add(id);
+    }
+    const reindexBlocksOf = new Set<number>();
+    for (const id of d.removedSegments) {
+      const sg = st.segments.get(id);
+      if (!sg) continue;
+      net.unindexSegment(sg);
+      st.segments.delete(id);
+      ch.segments.add(id);
+      ch.nodes.add(sg.a);
+      ch.nodes.add(sg.b);
+    }
+    for (const n of d.nodes) {
+      st.nodes.set(n.id, { ...n });
+      if (!net.adj.has(n.id)) net.adj.set(n.id, []);
+      ch.nodes.add(n.id);
+    }
+    for (const sgData of d.segments) {
+      const old = st.segments.get(sgData.id);
+      if (old) {
+        net.unindexSegment(old);
+        if (old.type !== sgData.type) reindexBlocksOf.add(sgData.id);
+      }
+      const sg: RoadSegment = { ...sgData };
+      st.segments.set(sg.id, sg);
+      net.indexSegment(sg);
+      ch.segments.add(sg.id);
+      ch.nodes.add(sg.a);
+      ch.nodes.add(sg.b);
+    }
+    for (const bd of d.blocks) {
+      const old = st.blocks.get(bd.id);
+      const sameGeo =
+        old &&
+        old.seg === bd.seg &&
+        old.side === bd.side &&
+        old.s0 === bd.s0 &&
+        old.cols === bd.cols &&
+        !reindexBlocksOf.has(bd.seg);
+      const b: ZoneBlock = { ...bd };
+      if (sameGeo) {
+        old.zone = b.zone;
+        old.valid = b.valid;
+        old.bld = b.bld;
+      } else {
+        if (old) net.unindexBlock(old);
+        st.blocks.set(b.id, b);
+        net.indexBlock(b);
+      }
+      ch.blocks.add(b.id);
+    }
+    for (const segId of reindexBlocksOf) {
+      const sg = st.segments.get(segId);
+      if (!sg) continue;
+      for (const bid of [sg.left, sg.right]) {
+        const b = bid ? st.blocks.get(bid) : undefined;
+        if (!b) continue;
+        net.unindexBlock(b);
+        net.indexBlock(b);
+        ch.blocks.add(bid);
+      }
+    }
+    for (const id of d.removedNodes) {
+      st.nodes.delete(id);
+      net.adj.delete(id);
+      ch.nodes.add(id);
+    }
+    for (const l of this.netListeners) l(ch);
+    this.emit('net');
   }
 
   /** Terrain height anywhere: the sim grid inside the map, the generator outside. */
@@ -42,6 +148,7 @@ export class ClientWorld {
 
   applyFrame(diff: FrameDiff): void {
     this.stats = diff.stats;
+    if (diff.net) this.applyNet(diff.net);
     if (diff.trees) {
       for (let k = 0; k < diff.trees.idx.length; k++) this.trees[diff.trees.idx[k]!] = diff.trees.val[k]!;
       this.emit('trees');

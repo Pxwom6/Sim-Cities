@@ -5,6 +5,13 @@ import type { CameraPresetName, CameraPose } from './render/camera';
 import type { Command, CommandResult } from './sim/commands';
 import type { WorkerPerf } from './sim/protocol';
 import { SPEED_TICKS_PER_SECOND, type Speed } from './sim/time';
+import { ToolManager } from './tools/manager';
+import type { ToolHint } from './tools/tool';
+
+/** Minimal audio interface (procedural audio arrives in M8). */
+export interface AudioSink {
+  play(name: 'build' | 'zone' | 'bulldoze' | 'error' | 'click' | 'alert'): void;
+}
 
 type Listener = () => void;
 
@@ -15,6 +22,9 @@ export class Game {
   fps = 0;
   frameMs = 0;
   debugOpen = false;
+  hint: ToolHint | null = null;
+  audio: AudioSink | null = null;
+  readonly tools: ToolManager;
   private listeners = new Set<Listener>();
   private lastFrameAt = 0;
 
@@ -32,6 +42,7 @@ export class Game {
         this.world.displayTick = diff.tick;
       this.notify();
     });
+    this.tools = new ToolManager(this);
     renderer.controller.focus = () => {
       const hw = this.world.gen.params.highway;
       return { x: 260, z: hw.connectZ };
@@ -49,6 +60,19 @@ export class Game {
 
   dispatch(cmd: Command): Promise<CommandResult> {
     return this.client.command(cmd);
+  }
+
+  setHint(h: ToolHint | null): void {
+    if (!h && !this.hint) return;
+    this.hint = h;
+    this.notify();
+  }
+
+  async undo(): Promise<CommandResult> {
+    const r = await this.dispatch({ type: 'undo' });
+    if (!r.ok)
+      this.setHint({ x: window.innerWidth / 2, y: window.innerHeight - 140, text: r.reason, tone: 'bad' });
+    return r;
   }
 
   setSpeed(speed: Speed): void {

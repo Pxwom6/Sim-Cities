@@ -3,6 +3,7 @@ import type { Game } from '../game';
 import { DebugPanel } from './DebugPanel';
 import { GameContext } from './hooks';
 import { TopBar } from './TopBar';
+import { ToolHintLabel, Toolbar } from './Toolbar';
 
 function Shortcuts({ game }: { game: Game }) {
   useEffect(() => {
@@ -29,7 +30,8 @@ export function App({ game }: { game: Game }) {
       <Shortcuts game={game} />
       <TopBar />
       <DebugPanel />
-      <div class="hint">Drag to pan · right-drag to rotate · wheel to zoom · ` for debug</div>
+      <Toolbar />
+      <ToolHintLabel />
     </GameContext.Provider>
   );
 }

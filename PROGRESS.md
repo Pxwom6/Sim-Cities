@@ -1,7 +1,7 @@
 # PROGRESS
 
 - [x] M0 Foundation
-- [ ] M1 Roads and zoning
+- [x] M1 Roads and zoning
 - [ ] M2 Growth
 - [ ] M3 Money
 - [ ] M4 Utilities
@@ -15,20 +15,20 @@
 - [ ] M12 Balance, performance and polish
 
 ## In progress
-M1 Roads and zoning (not started).
+M2 Growth (not started).
 
 ## Next tasks
-1. Road graph in the sim: nodes, quadratic-Bézier segments, road types in `src/data/roads.ts`, planning (snap, split, validate, cost) and `buildRoad` / `bulldoze` / `undo` commands.
-2. Highway connection segment at the west edge (connectZ from terrain params).
-3. Road rendering (ribbons + intersections draped on terrain), ghost preview with valid/invalid colour and cost label.
-4. Zone blocks and cells along both sides of each segment; `zone` command (brush + fill); zone rendering.
-5. Bottom toolbar with road/zone/bulldoze tools; e2e that builds straight + curved roads and zones them through the real UI.
+1. Building data (`src/data/buildings.ts`): zoned archetypes by zone × density × wealth × level, footprints in cells, capacity, build time.
+2. Demand system (DESIGN §3.3) with named factors; employment/commute matcher stub (full traffic in M6) so jobs need a road connection.
+3. Growth system: lots, spawning, construction, occupancy, upgrades, abandonment; buildings clear trees; roads over zoned buildings demolish them.
+4. Procedural building models + asset registry + chunk-merged building renderer with construction scaffolding.
+5. Top bar (RCI, population, jobs), time controls, building inspector, basic save/load (IndexedDB + file) with state-hash round-trip test.
 
 ## Known issues
 - Night lighting is serviceable but plain until M8 (lit windows, street lights).
 - Tree count is high in forests (~25k in-map); LOD switches to low-poly beyond 750 m.
 
-## Performance (M0, cloud VM, SwiftShader)
+## Performance (M1, cloud VM, SwiftShader)
 - Sim tick: negligible (no systems yet).
 - Overview preset: 108 draw calls, ~675k triangles (trees dominate). Street preset: ~40 calls, ~510k triangles.
 - Frame times on SwiftShader are meaningless (several seconds per frame).

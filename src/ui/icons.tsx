@@ -31,3 +31,82 @@ export const IconSpeed3 = (p: P) => (
     <path d="M3 7l5 5-5 5zM10 7l5 5-5 5zM17 7l5 5-5 5z" fill="currentColor" stroke-width="1.5" />
   </svg>
 );
+
+export const IconPointer = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M5 3l14 8-6 1.5L10 19z" />
+  </svg>
+);
+export const IconRoad = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M6 21L9 3M18 21L15 3M12 5v2M12 11v2M12 17v2" />
+  </svg>
+);
+export const IconZone = (p: P) => (
+  <svg {...base} {...p}>
+    <rect x="3" y="3" width="8" height="8" rx="1" />
+    <rect x="13" y="3" width="8" height="8" rx="1" />
+    <rect x="3" y="13" width="8" height="8" rx="1" />
+    <rect x="13" y="13" width="8" height="8" rx="1" />
+  </svg>
+);
+export const IconHouse = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M3 11l9-7 9 7M5 10v10h14V10M10 20v-6h4v6" />
+  </svg>
+);
+export const IconShop = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M4 9h16l-1.5-5h-13zM4 9c0 1.7 1.3 3 3 3s3-1.3 3-3c0 1.7 1.3 3 3 3s3-1.3 3-3c0 1.7 1.3 3 3 3M5 12v8h14v-8M10 20v-5h4v5" />
+  </svg>
+);
+export const IconFactory = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M3 20V10l5 3V10l5 3V10l5 3V4h3v16zM7 17h2M12 17h2M17 17h2" />
+  </svg>
+);
+export const IconEraser = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M16 3l5 5-11 11H5l-3-3zM9 20h12M11 8l5 5" />
+  </svg>
+);
+export const IconBulldozer = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M3 17h11M4 17a2 2 0 104 0M10 17a2 2 0 104 0M5 13V8h6l2 5M3 13h11M16 9l5 2v8h-4" />
+  </svg>
+);
+export const IconStraight = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M4 20L20 4" />
+    <circle cx="4" cy="20" r="1.5" fill="currentColor" />
+    <circle cx="20" cy="4" r="1.5" fill="currentColor" />
+  </svg>
+);
+export const IconCurve = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M4 20C4 10 10 4 20 4" />
+    <circle cx="4" cy="20" r="1.5" fill="currentColor" />
+    <circle cx="20" cy="4" r="1.5" fill="currentColor" />
+  </svg>
+);
+export const IconFreeform = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M3 18c3-6 5 2 8-4s4-8 7-6 2 7 3 7" />
+  </svg>
+);
+export const IconGrid = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M3 9h18M3 15h18M9 3v18M15 3v18" />
+  </svg>
+);
+export const IconUndo = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M9 14L4 9l5-5M4 9h10a6 6 0 010 12h-3" />
+  </svg>
+);
+export const IconLock = (p: P) => (
+  <svg {...base} {...p}>
+    <rect x="5" y="11" width="14" height="10" rx="2" />
+    <path d="M8 11V7a4 4 0 018 0v4" />
+  </svg>
+);
