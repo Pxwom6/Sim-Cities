@@ -14,6 +14,8 @@ export type Command =
   /** points = [a, c, b, c, b, ...] (anchors and quadratic control points) or [a, b] for a straight road. */
   | { type: 'buildRoad'; road: RoadTypeId; points: Vec2[] }
   | { type: 'bulldoze'; target: BulldozeTarget }
+  /** Change a road segment to another type in place. */
+  | { type: 'upgradeRoad'; seg: number; road: RoadTypeId }
   /** `stroke` groups several paint commands from one drag into a single undo step. */
   | { type: 'zone'; zone: ZoneLetter | 'none'; area: ZoneArea; stroke?: number }
   | { type: 'undo' }

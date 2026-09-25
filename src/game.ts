@@ -28,7 +28,7 @@ export class Game {
   /** Open side panel (budget, and later data maps, advisors...). */
   panel: 'budget' | null = null;
   /** Currently inspected building. */
-  selected: { kind: 'building' | 'civic'; id: number } | null = null;
+  selected: { kind: 'building' | 'civic' | 'car'; id: number } | null = null;
   toasts: { id: number; text: string; tone: 'info' | 'ok' | 'bad' }[] = [];
   private toastId = 1;
   audio: AudioSink | null = null;
@@ -84,9 +84,19 @@ export class Game {
     this.notify();
   }
 
-  select(sel: { kind: 'building' | 'civic'; id: number } | null): void {
+  select(sel: { kind: 'building' | 'civic' | 'car'; id: number } | null): void {
     this.selected = sel;
     let rect: { x: number; z: number; hw: number; hd: number; angle: number } | null = null;
+    // A selected car shows its whole route.
+    const car = sel?.kind === 'car' ? this.renderer.traffic.car(sel.id) : undefined;
+    const net = this.world.net;
+    this.renderer.routeTint.show(
+      car
+        ? [...new Set(car.legs.map((l) => l.seg))]
+            .filter((id) => this.world.netState.segments.has(id))
+            .map((id) => ({ curve: net.curve(id), v: [1, 1], half: 2.5 }))
+        : null,
+    );
     if (sel?.kind === 'building') {
       const b = this.world.buildings.get(sel.id);
       if (b) rect = { x: b.x, z: b.z, hw: b.w * 4, hd: b.d * 4, angle: b.angle };

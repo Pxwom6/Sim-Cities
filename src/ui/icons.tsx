@@ -159,3 +159,9 @@ export const IconTree = (p: P) => (
     <path d="M12 17v4" />
   </svg>
 );
+export const IconUpgrade = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M5 20V9M19 20V9M12 4l-4 4h8z" />
+    <path d="M12 8v12" stroke-dasharray="2 2" />
+  </svg>
+);

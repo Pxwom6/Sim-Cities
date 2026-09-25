@@ -3,13 +3,24 @@ import { GRID_CELL, GRID_RES } from '../../data/world';
 import { fail, ok, type BulldozeTarget, type CommandResult } from '../commands';
 import { Curve, pointRectDistance, type Vec2 } from '../geom';
 import { footprint } from '../world/buildings';
-import { bulldozeCivic } from '../world/civic';
+import { bulldozeCivic, civicRect } from '../world/civic';
 import type { Sim } from '../sim';
 import { UNDO_LIMIT } from '../undo';
 import { applyRoadPlan, planRoad } from '../world/roadPlanner';
 
+/** Refusal reason if a road type isn't available yet, else null. */
+function roadLocked(sim: Sim, road: RoadTypeId): string | null {
+  const t = ROAD_TYPES[road];
+  if (!t.buildable) return "That road type can't be built";
+  if (sim.state.totals.population < t.unlockPopulation && !sim.state.unlockAll && !sim.state.options.sandbox)
+    return `${t.name}s unlock at ${t.unlockPopulation.toLocaleString('en-US')} residents`;
+  return null;
+}
+
 export function buildRoad(sim: Sim, road: RoadTypeId, points: Vec2[], dryRun: boolean): CommandResult {
   const s = sim.state;
+  const locked = roadLocked(sim, road);
+  if (locked) return fail(locked);
   const plan = planRoad(sim.net, sim.terrain, road, points, s.treasury, s.options.sandbox);
   const preview = {
     pieces: plan.pieces.map((p) => ({ a: p.a, c: p.c, b: p.b })),
@@ -32,6 +43,77 @@ export function buildRoad(sim: Sim, road: RoadTypeId, points: Vec2[], dryRun: bo
   });
   sim.markNetworkChanged();
   return ok(plan.cost, { created: res.segments, info: preview });
+}
+
+/**
+ * Change a road to another type in place (SPEC: upgrading keeps what's built along it wherever
+ * possible). Zone cells keep their indices and slide outward or inward with the new width;
+ * buildings move with them and are only lost where the wider road leaves no room.
+ */
+export function upgradeRoad(sim: Sim, segId: number, road: RoadTypeId, dryRun: boolean): CommandResult {
+  const s = sim.state;
+  const seg = s.net.segments.get(segId);
+  if (!seg) return fail('No road here');
+  if (!ROAD_TYPES[seg.type].buildable) return fail("The regional highway can't be changed");
+  if (seg.type === road) return fail(`This is already ${articled(ROAD_TYPES[road].name)}`);
+  const locked = roadLocked(sim, road);
+  if (locked) return fail(locked);
+  const curve = sim.net.curve(segId);
+  const len = curve.length;
+  const cost = Math.max(
+    0,
+    Math.round(len * (ROAD_TYPES[road].costPerMetre - ROAD_TYPES[seg.type].costPerMetre)),
+  );
+  const at = curve.pointAt(len / 2);
+  if (cost > s.treasury && !s.options.sandbox) return fail('Not enough money', { at });
+  // Room for the new width: other roads (not joined at the ends) and civic buildings.
+  const hwNew = roadHalfWidth(road);
+  const pts: Vec2[] = [];
+  for (let d = 6; d < len - 6; d += 4) pts.push(curve.pointAt(d));
+  const box = curve.bbox(hwNew + 40);
+  for (const other of sim.net.segHash.query(box).sort((x, y) => x - y)) {
+    if (other === segId) continue;
+    const o = sim.net.segment(other);
+    if (o.a === seg.a || o.a === seg.b || o.b === seg.a || o.b === seg.b) continue;
+    const oc = sim.net.curve(other);
+    const need = hwNew + sim.net.halfWidth(other) - 0.5;
+    for (const p of pts) if (oc.project(p).d < need) return fail('Not enough room to widen here', { at: p });
+  }
+  for (const c of s.civics.values()) {
+    const r = civicRect(c, 0.3);
+    for (const p of pts)
+      if (pointRectDistance(p, r) < hwNew) return fail('A civic building is in the way', { at: p });
+  }
+  const info = { length: Math.round(len), from: seg.type, to: road };
+  if (dryRun) return ok(cost, { info });
+  const from = seg.type;
+  sim.net.setSegmentType(segId, road);
+  sim.relocateBuildingsOn(segId);
+  sim.net.revalidate(sim.net.segmentInfluenceBox(segId));
+  sim.spend(cost, 'roads');
+  clearTreesAlong(sim, [segId]);
+  sim.pushUndo({ kind: 'upgrade', tick: s.tick, cost, seg: segId, from });
+  sim.markNetworkChanged();
+  return ok(cost, { info });
+}
+
+export function undoUpgrade(
+  sim: Sim,
+  rec: Extract<import('../undo').UndoRecord, { kind: 'upgrade' }>,
+  dryRun: boolean,
+): CommandResult {
+  if (!sim.state.net.segments.has(rec.seg)) return fail("Can't undo: that road has changed since");
+  if (dryRun) return ok(-rec.cost);
+  sim.net.setSegmentType(rec.seg, rec.from);
+  sim.relocateBuildingsOn(rec.seg);
+  sim.net.revalidate(sim.net.segmentInfluenceBox(rec.seg));
+  sim.earn(rec.cost, 'refunds');
+  sim.markNetworkChanged();
+  return ok(-rec.cost);
+}
+
+function articled(name: string): string {
+  return /^[aeiou]/i.test(name) ? `an ${name.toLowerCase()}` : `a ${name.toLowerCase()}`;
 }
 
 export function bulldoze(sim: Sim, target: BulldozeTarget, dryRun: boolean): CommandResult {

@@ -86,7 +86,10 @@ export class VehicleRenderer {
   }
 
   /** Point and heading along a vehicle's route after driving `extra` more ticks. */
-  locate(v: VehicleData, extra: number): { x: number; z: number; heading: number } | null {
+  locate(
+    v: VehicleData,
+    extra: number,
+  ): { x: number; z: number; heading: number; seg: number; s: number } | null {
     const net = this.world.net;
     let leg = v.leg;
     let t = v.t;
@@ -121,7 +124,7 @@ export class VehicleRenderer {
     const hz = tan.z * dir;
     // Drive on the right: offset to the right of the heading.
     const lane = 2.4;
-    return { x: pt.x - hz * lane, z: pt.z + hx * lane, heading: Math.atan2(hz, hx) };
+    return { x: pt.x - hz * lane, z: pt.z + hx * lane, heading: Math.atan2(hz, hx), seg: l.seg, s };
   }
 
   update(displayTick: number): void {
@@ -135,7 +138,7 @@ export class VehicleRenderer {
       if (!at) continue;
       const i = counts.get(v.kind) ?? 0;
       if (i >= MAX) continue;
-      this.p.set(at.x, Math.max(0, this.world.heightAt(at.x, at.z)) + 0.25, at.z);
+      this.p.set(at.x, this.world.roadHeight(at.seg, at.s, at.x, at.z) + 0.25, at.z);
       this.q.setFromAxisAngle(this.up, -at.heading);
       this.m.compose(this.p, this.q, this.s);
       mesh.setMatrixAt(i, this.m);

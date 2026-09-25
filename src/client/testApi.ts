@@ -31,6 +31,8 @@ export interface TestApi {
   getCivics(): { id: number; def: string; x: number; z: number; angle: number }[];
   /** Vehicles as last drawn. */
   getVehicles(): { id: number; kind: string; phase: string; x: number; z: number }[];
+  /** Terrain height (water below 0.6). */
+  heightAt(x: number, z: number): number;
   /** Show a data map (or null to hide). */
   setOverlay(map: string | null): Promise<void>;
   /** Render-side building list (id, position, state). */
@@ -102,6 +104,7 @@ export function installTestApi(game: Game): TestApi {
       }
       return null;
     },
+    heightAt: (x, z) => game.world.heightAt(x, z),
     findCivic: (def) => [...game.world.civics.values()].find((c) => c.def === def)?.id ?? null,
     getCivics: () =>
       [...game.world.civics.values()].map((c) => ({ id: c.id, def: c.def, x: c.x, z: c.z, angle: c.angle })),

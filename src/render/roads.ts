@@ -2,7 +2,8 @@ import { Group, Mesh, MeshLambertMaterial } from 'three';
 import type { ClientWorld, NetChanges } from '../client/world';
 import { Curve, angleOf, v2, type Vec2 } from '../sim/geom';
 import { GeoBuffer, mergeChunks, type GeoChunk } from './geoBuffer';
-import { buildJunction, buildSegmentRibbon, type Approach } from './roadMesh';
+import { buildBridgeStructure, buildJunction, buildSegmentRibbon, type Approach } from './roadMesh';
+import { deckAt } from '../sim/world/bridge';
 import { ROAD_STYLES } from './roadStyle';
 
 const CHUNK = 256;
@@ -140,7 +141,10 @@ export class RoadRenderer {
       const ta = layoutOf(seg.a)?.trims.get(id) ?? 0;
       const tb = layoutOf(seg.b)?.trims.get(id) ?? 0;
       const buf = new GeoBuffer(2048);
-      buildSegmentRibbon(buf, curve, ROAD_STYLES[seg.type], ta, curve.length - tb, this.h);
+      const deck = this.world.deck(id);
+      const deckFn = deck ? (s: number) => deckAt(deck, s) : undefined;
+      buildSegmentRibbon(buf, curve, ROAD_STYLES[seg.type], ta, curve.length - tb, this.h, deckFn);
+      if (deck && deckFn) buildBridgeStructure(buf, curve, ROAD_STYLES[seg.type], this.h, deckFn);
       this.setElement(`s${id}`, curve.pointAt(curve.length / 2), buf);
     }
     for (const id of this.dirtyNodes) {

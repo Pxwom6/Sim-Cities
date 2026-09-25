@@ -25,6 +25,7 @@ import { IconRenderer } from './icons';
 import { GarbageProps } from './props';
 import { EffectsRenderer } from './effects';
 import { RoadTint } from './roadTint';
+import { TrafficRenderer } from './traffic';
 
 export interface RenderStats {
   calls: number;
@@ -35,6 +36,7 @@ export interface RenderStats {
   icons: number;
   vehicles: number;
   fires: number;
+  cars: number;
 }
 
 /** Owns the Three.js scene. Reads ClientWorld; never mutates the simulation. */
@@ -56,6 +58,9 @@ export class GameRenderer {
   readonly icons: IconRenderer;
   readonly garbage: GarbageProps;
   readonly effects: EffectsRenderer;
+  readonly traffic: TrafficRenderer;
+  /** Route of the selected car. */
+  readonly routeTint: RoadTint;
   /** Road ribbons for the service coverage data maps. */
   readonly coverageMap: RoadTint;
   private time = 0;
@@ -71,6 +76,7 @@ export class GameRenderer {
     icons: 0,
     vehicles: 0,
     fires: 0,
+    cars: 0,
   };
 
   constructor(
@@ -109,6 +115,10 @@ export class GameRenderer {
     this.scene.add(this.effects.group);
     this.coverageMap = new RoadTint((x, z) => world.heightAt(x, z), 'diverging', 0.85);
     this.scene.add(this.coverageMap.group);
+    this.traffic = new TrafficRenderer(world, (seg, s, x, z) => world.roadHeight(seg, s, x, z));
+    this.scene.add(this.traffic.group);
+    this.routeTint = new RoadTint((x, z) => world.heightAt(x, z), 'sequential', 0.7);
+    this.scene.add(this.routeTint.group);
     this.ghost = new GhostRenderer((x, z) => world.heightAt(x, z));
     this.scene.add(this.ghost.group);
     this.trees = new TreeRenderer(world);
@@ -151,9 +161,13 @@ export class GameRenderer {
     window.addEventListener('resize', () => this.resize());
   }
 
-  /** Zoned or civic building under a screen position. */
-  pick(clientX: number, clientY: number): { kind: 'building' | 'civic'; id: number } | null {
+  /** Car, zoned or civic building under a screen position. */
+  pick(clientX: number, clientY: number): { kind: 'building' | 'civic' | 'car'; id: number } | null {
     const ground = this.controller.screenToGround(clientX, clientY);
+    if (ground) {
+      const car = this.traffic.carAt(ground.x, ground.z, 3.5);
+      if (car) return { kind: 'car', id: car.id };
+    }
     const cam = this.camera.position;
     const end = ground ?? cam.clone().add(new Vector3(0, -1, 0));
     const dir = end.clone().sub(cam);
@@ -227,6 +241,7 @@ export class GameRenderer {
     this.terrain.update(this.time);
     this.buildings.update(l.night);
     this.vehicles.update(this.world.displayTick);
+    this.traffic.update(this.world.displayTick);
     this.icons.update(this.time, this.buildings.heights);
     this.garbage.update();
     const bufH = this.renderer.getDrawingBufferSize(this.tmpSize).y;
@@ -257,6 +272,7 @@ export class GameRenderer {
       icons: this.icons.count,
       vehicles: this.vehicles.positions.size,
       fires: this.effects.fires,
+      cars: this.traffic.count,
     };
   }
 }

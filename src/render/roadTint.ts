@@ -18,12 +18,15 @@ export class RoadTint {
   readonly group = new Group();
   private mesh: Mesh | null = null;
   private mat: MeshBasicMaterial;
+  private get defaultRamp(): 'sequential' | 'diverging' | 'traffic' {
+    return this.ramp;
+  }
   /** Roads currently tinted (for tests and stats). */
   pieces = 0;
 
   constructor(
     private heightAt: (x: number, z: number) => number,
-    private ramp: 'sequential' | 'diverging',
+    private ramp: 'sequential' | 'diverging' | 'traffic',
     opacity: number,
     private skipBelow = -1,
   ) {
@@ -38,7 +41,7 @@ export class RoadTint {
     });
   }
 
-  show(list: RoadTintPiece[] | null): void {
+  show(list: RoadTintPiece[] | null, ramp = this.defaultRamp): void {
     if (this.mesh) {
       this.group.remove(this.mesh);
       this.mesh.geometry.dispose();
@@ -57,8 +60,8 @@ export class RoadTint {
         const k = Math.min(v.length - 2, Math.floor(f));
         const val = v[k]! + (v[k + 1]! - v[k]!) * (f - k);
         if (val <= this.skipBelow) continue;
-        if (this.ramp === 'sequential') rampColor('sequential', 0.25 + val * 0.75, col);
-        else rampColor('diverging', val, col);
+        if (ramp === 'sequential') rampColor('sequential', 0.25 + val * 0.75, col);
+        else rampColor(ramp, val, col);
         const a = curve.pointAt(s0);
         const b = curve.pointAt(s1);
         const ta = curve.tangentAt(s0);

@@ -12,6 +12,7 @@ import type {
 import { Network, type NetworkState, type RoadSegment, type ZoneBlock } from '../sim/world/network';
 import { SpatialHash } from '../sim/world/spatial';
 import { CIVIC } from '../data/civic';
+import { deckAt, deckProfile, type DeckProfile } from '../sim/world/bridge';
 import { ROAD_TYPES } from '../data/roads';
 import { TRAFFIC } from '../data/balance';
 import type { TripSample } from '../sim/systems/traffic';
@@ -92,6 +93,27 @@ export class ClientWorld {
     this.trips = t.trips;
     this.capScale = t.capScale;
     this.trafficVersion++;
+  }
+
+  private deckCache = new Map<number, DeckProfile | null>();
+
+  /** Bridge deck profile of a segment, or null on dry land (same maths as the sim). */
+  deck(segId: number): DeckProfile | null {
+    let d = this.deckCache.get(segId);
+    if (d === undefined) {
+      d = this.netState.segments.has(segId)
+        ? deckProfile(this.net.curve(segId), (x, z) => this.heightAt(x, z))
+        : null;
+      this.deckCache.set(segId, d);
+    }
+    return d;
+  }
+
+  /** Height of the road surface at arc length s along a segment (the deck on bridges). */
+  roadHeight(segId: number, s: number, x: number, z: number): number {
+    const g = Math.max(0, this.heightAt(x, z));
+    const d = this.deck(segId);
+    return d ? Math.max(g, deckAt(d, s)) : g;
   }
 
   /** Volume over capacity on a segment at `share` of the rush-hour peak (mirrors the sim). */

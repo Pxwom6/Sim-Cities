@@ -21,13 +21,14 @@ export type OverlayMap =
   | 'park'
   | 'crime'
   | 'happiness'
-  | 'wealth';
+  | 'wealth'
+  | 'traffic';
 
 export interface OverlayResult {
   map: OverlayMap;
   values: Float32Array;
-  /** 'diverging' = bad (0) … good (1); 'sequential' = none (0) … lots (1). */
-  ramp: 'diverging' | 'sequential';
+  /** 'diverging' = bad (0) … good (1); 'sequential' = none (0) … lots (1); 'traffic' = free (0) … jammed (1). */
+  ramp: 'diverging' | 'sequential' | 'traffic';
   legend: [string, string];
 }
 
@@ -162,6 +163,9 @@ export function computeOverlay(sim: Sim, map: OverlayMap): OverlayResult {
     case 'happiness':
       stampBuildings(sim, values, (b) => (b.state === BState.Active ? b.happiness : null));
       return { map, values, ramp: 'diverging', legend: ['Unhappy', 'Happy'] };
+    case 'traffic':
+      // Drawn on the roads by the client (volumes and the hour are mirrored there).
+      return { map, values, ramp: 'traffic', legend: ['Flowing', 'Jammed'] };
     case 'wealth':
       stampBuildings(sim, values, (b) => (b.state === BState.Active && b.zone !== 3 ? b.wealth / 2 : null));
       return { map, values, ramp: 'sequential', legend: ['Low wealth', 'High wealth'] };

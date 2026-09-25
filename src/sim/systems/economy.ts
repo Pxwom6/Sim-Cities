@@ -17,6 +17,7 @@ import {
 import { ZONE_C, ZONE_I, ZONE_R } from '../../data/zones';
 import { fail, ok, type CommandResult } from '../commands';
 import type { Sim } from '../sim';
+import { BRIDGE } from '../world/bridge';
 import { HOURS_PER_DAY } from '../time';
 import { BState } from '../world/buildings';
 
@@ -112,8 +113,12 @@ export function monthlyRates(sim: Sim): Record<string, number> {
     add(`tax${z}${b.wealth}`, base * rate);
   }
   let roadUpkeep = 0;
-  for (const seg of s.net.segments.values())
-    roadUpkeep += sim.net.curve(seg.id).length * ROAD_TYPES[seg.type].upkeepPerMetre;
+  for (const seg of s.net.segments.values()) {
+    const perMetre = ROAD_TYPES[seg.type].upkeepPerMetre;
+    roadUpkeep += sim.net.curve(seg.id).length * perMetre;
+    const deck = sim.deck(seg.id);
+    if (deck) roadUpkeep += deck.overWater * perMetre * (BRIDGE.upkeepFactor - 1);
+  }
   add('roadUpkeep', -roadUpkeep * (e.funding.roads / 100));
   for (const [dept, cost] of Object.entries(sim.departmentUpkeep()))
     add(`upkeep:${dept}`, -cost * (e.funding[dept as Dept] / 100));

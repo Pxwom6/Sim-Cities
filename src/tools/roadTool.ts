@@ -5,12 +5,13 @@ import type { Game } from '../game';
 import { fitFreeform, snapPoint, type SnapResult } from './snap';
 import type { Tool, ToolPointer } from './tool';
 
-export type RoadMode = 'straight' | 'curve' | 'free';
+export type RoadMode = 'straight' | 'curve' | 'free' | 'upgrade';
 
 /**
  * Road drawing. Straight: drag or click–click (chains from the last end). Curve: click start,
  * click the bend, click the end. Free-form: press and draw. Ghost colour and cost come from sim
- * previews of the exact command that a click would send.
+ * previews of the exact command that a click would send. Upgrade: click a road to change it to the
+ * selected type in place.
  */
 export class RoadTool implements Tool {
   readonly id = 'road';
@@ -30,6 +31,8 @@ export class RoadTool implements Tool {
   private lastResult: { seq: number; res: CommandResult } | null = null;
   private lastSentSeq = 0;
   private pointer = { x: 0, y: 0 };
+  /** Upgrade mode: the road under the cursor. */
+  private hoverSeg: number | null = null;
 
   constructor(private game: Game) {}
 
@@ -44,6 +47,8 @@ export class RoadTool implements Tool {
   }
 
   private reset(): void {
+    this.hoverSeg = null;
+    this.game.renderer.ghost.highlightSegment(null, 0);
     this.start = null;
     this.control = null;
     this.dragging = false;
@@ -71,6 +76,8 @@ export class RoadTool implements Tool {
   /** Command for the current geometry, or null if there is nothing to build yet. */
   private currentCommand(): Command | null {
     const c = this.cursor;
+    if (this.mode === 'upgrade')
+      return this.hoverSeg !== null ? { type: 'upgradeRoad', seg: this.hoverSeg, road: this.type } : null;
     if (this.mode === 'free') {
       if (this.freePath.length < 2) return null;
       return { type: 'buildRoad', road: this.type, points: fitFreeform(this.freePath) };
@@ -103,7 +110,42 @@ export class RoadTool implements Tool {
     });
   }
 
+  private drawUpgrade(): void {
+    const g = this.game.renderer.ghost;
+    g.showRoad(null, this.type, 'ok');
+    const id = this.hoverSeg;
+    const net = this.game.world.net;
+    if (id === null || !this.game.world.netState.segments.has(id)) {
+      g.highlightSegment(null, 0);
+      g.showMarker(null);
+      this.game.setHint({
+        ...this.pointer,
+        text: `Click a road to make it ${ROAD_TYPES[this.type].name.toLowerCase()}`,
+        tone: 'info',
+      });
+      return;
+    }
+    const res = this.lastResult?.res;
+    const from = ROAD_TYPES[net.segment(id).type].name;
+    const half = ROAD_TYPES[this.type].width / 2 + ROAD_TYPES[this.type].sidewalk;
+    g.highlightSegment(net.curve(id), half, res && !res.ok ? 'bad' : 'ok');
+    g.showMarker(res && !res.ok && res.at ? res.at : null);
+    if (!res)
+      this.game.setHint({ ...this.pointer, text: `${from} → ${ROAD_TYPES[this.type].name}`, tone: 'info' });
+    else if (res.ok)
+      this.game.setHint({
+        ...this.pointer,
+        text: `${from} → ${ROAD_TYPES[this.type].name} · $${res.cost.toLocaleString('en-US')}`,
+        tone: 'ok',
+      });
+    else this.game.setHint({ ...this.pointer, text: res.reason, tone: 'bad' });
+  }
+
   private drawGhost(): void {
+    if (this.mode === 'upgrade') {
+      this.drawUpgrade();
+      return;
+    }
     const g = this.game.renderer.ghost;
     const cmd = this.currentCommand();
     if (!cmd || cmd.type !== 'buildRoad') {
@@ -166,6 +208,21 @@ export class RoadTool implements Tool {
     );
   }
 
+  private async commitUpgrade(): Promise<void> {
+    const cmd = this.currentCommand();
+    if (!cmd || cmd.type !== 'upgradeRoad') return;
+    const res = await this.game.dispatch(cmd);
+    if (res.ok) {
+      this.game.audio?.play('build');
+      this.game.toast(`Road changed to ${ROAD_TYPES[cmd.road].name.toLowerCase()}`, 'ok', 2000);
+      this.lastResult = null;
+    } else {
+      this.game.audio?.play('error');
+      this.lastResult = { seq: this.previewSeq, res };
+    }
+    this.refresh();
+  }
+
   private async commit(): Promise<boolean> {
     const cmd = this.currentCommand();
     if (!cmd || cmd.type !== 'buildRoad') return false;
@@ -190,6 +247,10 @@ export class RoadTool implements Tool {
     if (p.button !== 0 || !p.ground) return;
     this.pointer = { x: p.clientX, y: p.clientY };
     this.downAt = { x: p.clientX, y: p.clientY };
+    if (this.mode === 'upgrade') {
+      void this.commitUpgrade();
+      return;
+    }
     if (this.mode === 'free') {
       const s = this.snap(p.ground, null);
       this.freePath = [s];
@@ -216,6 +277,17 @@ export class RoadTool implements Tool {
   pointerMove(p: ToolPointer): void {
     this.pointer = { x: p.clientX, y: p.clientY };
     if (!p.ground) return;
+    if (this.mode === 'upgrade') {
+      const net = this.game.world.net;
+      const hit = net.nearestSegment(p.ground, 14, (id) => ROAD_TYPES[net.segment(id).type].buildable);
+      const id = hit ? hit.seg : null;
+      if (id !== this.hoverSeg) {
+        this.hoverSeg = id;
+        this.lastResult = null;
+      }
+      this.refresh();
+      return;
+    }
     if (this.mode === 'free' && this.dragging) {
       const last = this.freePath[this.freePath.length - 1]!;
       if (Math.hypot(p.ground.x - last.x, p.ground.z - last.z) >= 6)
@@ -255,7 +327,14 @@ export class RoadTool implements Tool {
       return true;
     }
     if (e.code === 'Tab') {
-      this.mode = this.mode === 'straight' ? 'curve' : this.mode === 'curve' ? 'free' : 'straight';
+      this.mode =
+        this.mode === 'straight'
+          ? 'curve'
+          : this.mode === 'curve'
+            ? 'free'
+            : this.mode === 'free'
+              ? 'upgrade'
+              : 'straight';
       this.reset();
       this.game.notify();
       return true;

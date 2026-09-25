@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Sim } from '../src/sim/sim';
 import { ROAD_TYPES } from '../src/data/roads';
+import { deckAt } from '../src/sim/world/bridge';
 import { ROWS } from '../src/data/zones';
 import {
   cellsOf,
@@ -140,10 +141,12 @@ describe('building roads', () => {
         break;
       }
     expect(wx).toBeGreaterThan(0);
+    // A road that stops in the river, or a dirt road across it, is refused (bridges need
+    // ramps on dry land and at least a street).
     bad(
       [
         { x: wx - 120, z: 1500 },
-        { x: wx + 150, z: 1500 },
+        { x: wx + 6, z: 1500 },
       ],
       /water/i,
     );
@@ -316,5 +319,52 @@ describe('determinism with roads and zones', () => {
     };
     expect(loaded.dispatch(cmd).ok).toBe(sim.dispatch(cmd).ok);
     expect(loaded.hash()).toBe(sim.hash());
+  });
+});
+
+describe('bridges', () => {
+  it('cross water on a raised deck, cost more, and need land for their ramps', () => {
+    const sim = newSim();
+    sim.dispatch({ type: 'cheat', cheat: 'addMoney', amount: 200_000 });
+    let wx = -1;
+    for (let x = 900; x < 2000; x += 4)
+      if (sim.terrain.isWater(x, 1500)) {
+        wx = x;
+        break;
+      }
+    let ex = wx;
+    while (sim.terrain.isWater(ex, 1500)) ex += 4;
+    const span = ex - wx;
+    expect(span).toBeGreaterThan(20);
+    const across = [
+      { x: wx - 130, z: 1500 },
+      { x: ex + 130, z: 1500 },
+    ];
+    expect(sim.preview({ type: 'buildRoad', road: 'dirt', points: across }).ok).toBe(false);
+    const land = sim.preview({
+      type: 'buildRoad',
+      road: 'street',
+      points: [
+        { x: wx - 400, z: 1500 },
+        { x: wx - 130, z: 1500 },
+      ],
+    });
+    const r = sim.dispatch({ type: 'buildRoad', road: 'street', points: across });
+    expect(r.ok).toBe(true);
+    // Per metre, the bridge costs several times a road on land.
+    const len = across[1]!.x - across[0]!.x;
+    expect(r.ok && land.ok && r.cost / len).toBeGreaterThan(((land.ok ? land.cost : 0) / 270) * 1.8);
+    const seg = r.ok ? r.created![0]! : -1;
+    const deck = sim.deck(seg)!;
+    expect(deck).not.toBeNull();
+    expect(deck.overWater).toBeGreaterThan(span * 0.8);
+    // The deck clears the water in the middle and meets the ground at the ends.
+    const curve = sim.net.curve(seg);
+    const midS = (wx + ex) / 2 - across[0]!.x;
+    expect(deckAt(deck, midS)).toBeGreaterThan(4);
+    const a = curve.pointAt(0);
+    expect(Math.abs(deckAt(deck, 0) - sim.terrain.heightAt(a.x, a.z))).toBeLessThan(0.5);
+    // The river doesn't split towns any more: the bridge carries traffic like any road.
+    expect(sim.graph().segSeconds.get(seg)).toBeGreaterThan(0);
   });
 });

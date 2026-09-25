@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
-import { DENSITY_NAMES, INDUSTRY_TIER_NAMES, WEALTH_NAMES } from '../data/buildings';
+import { DENSITY_NAMES, INDUSTRY_TIER_NAMES, WEALTH_NAMES, ZONED_DEFS } from '../data/buildings';
+import { ROAD_TYPES } from '../data/roads';
 import type { BuildingDetails, CivicDetails } from '../sim/protocol';
 import { formatNumber, useGameUpdates } from './hooks';
 
@@ -22,6 +23,7 @@ function Mood({ value }: { value: number }) {
 export function Inspector() {
   const game = useGameUpdates(200);
   if (game.selected?.kind === 'civic') return <CivicInspector id={game.selected.id} />;
+  if (game.selected?.kind === 'car') return <CarInspector id={game.selected.id} />;
   return <BuildingInspector id={game.selected?.id ?? null} />;
 }
 
@@ -94,6 +96,72 @@ function needsOf(d: BuildingDetails): string[] {
     if (out.length >= 3) break;
   }
   return out;
+}
+
+const PURPOSE: Record<string, [string, string]> = {
+  work: ['Commuter', 'Driving to work'],
+  shop: ['Shopper', 'Off to the shops'],
+  freight: ['Delivery truck', 'Taking goods from industry to a shop'],
+  export: ['Export truck', 'Taking goods out to the region'],
+  import: ['Import truck', 'Bringing goods in from the region'],
+};
+
+/** A clicked car: where it's going and why (a real trip from the sim's assignment). */
+function CarInspector({ id }: { id: number }) {
+  const game = useGameUpdates(300);
+  const car = game.renderer.traffic.car(id);
+  const name = (bid: number) => {
+    if (!bid) return 'the regional highway';
+    const b = game.world.buildings.get(bid);
+    return b ? (ZONED_DEFS.get(b.def)?.name ?? 'a building') : 'a building (since demolished)';
+  };
+  if (!car)
+    return (
+      <aside class="inspector panel" data-testid="inspector">
+        <header>
+          <div>
+            <h2>Arrived</h2>
+            <div class="sub">This vehicle reached its destination.</div>
+          </div>
+          <button class="btn icon" aria-label="Close" onClick={() => game.select(null)}>
+            ×
+          </button>
+        </header>
+      </aside>
+    );
+  const [title, what] = PURPOSE[car.trip.purpose] ?? ['Vehicle', ''];
+  const forward = car.legs[0] === car.trip.legs[0];
+  const [from, to] = forward ? [car.trip.from, car.trip.to] : [car.trip.to, car.trip.from];
+  const home = car.trip.purpose === 'work' && !forward;
+  const leg = car.legs[car.leg];
+  const seg = leg ? game.world.netState.segments.get(leg.seg) : undefined;
+  const vc = leg ? game.world.segVC(leg.seg, 1) : 0;
+  const length = car.legs.reduce((s, l) => s + Math.abs(l.s1 - l.s0), 0);
+  return (
+    <aside class="inspector panel" data-testid="inspector">
+      <header>
+        <div>
+          <h2>{title}</h2>
+          <div class="sub">{home ? 'Heading home from work' : what}</div>
+        </div>
+        <button class="btn icon" aria-label="Close" onClick={() => game.select(null)}>
+          ×
+        </button>
+      </header>
+      <dl data-testid="car-trip">
+        <dt>From</dt>
+        <dd>{name(from)}</dd>
+        <dt>To</dt>
+        <dd>{name(to)}</dd>
+        <dt>Route</dt>
+        <dd>{(length / 1000).toFixed(1)} km</dd>
+        <dt>On</dt>
+        <dd>{seg ? ROAD_TYPES[seg.type].name : '—'}</dd>
+        <dt>Traffic here</dt>
+        <dd class={vc > 1 ? 'neg' : ''}>{vc > 1 ? 'Jammed at rush hour' : vc > 0.7 ? 'Busy' : 'Flowing'}</dd>
+      </dl>
+    </aside>
+  );
 }
 
 function CivicInspector({ id }: { id: number }) {

@@ -19,6 +19,7 @@ import {
   IconBook,
   IconTree,
   IconCurve,
+  IconUpgrade,
   IconEraser,
   IconFactory,
   IconFreeform,
@@ -187,6 +188,12 @@ export function Toolbar() {
               ],
               ['curve', IconCurve, 'Curve', 'Click the start, the bend, then the end.'],
               ['free', IconFreeform, 'Free-form', 'Press and draw any shape.'],
+              [
+                'upgrade',
+                IconUpgrade,
+                'Upgrade',
+                'Click a road to change it to the selected type. Buildings along it stay where they can.',
+              ],
             ] as [RoadMode, typeof IconCurve, string, string][]
           ).map(([m, Icon, name, how]) => (
             <ToolButton
@@ -457,9 +464,11 @@ export function MapLegend() {
   if (!game.overlay.active || !res) return null;
   const name = MAPS.find((m) => m.id === game.overlay.active)?.name ?? '';
   const grad =
-    res.ramp === 'diverging'
-      ? 'linear-gradient(90deg, #e34948, #f0efec, #2a78d6)'
-      : 'linear-gradient(90deg, #cde2fb, #9ec5f4, #6da7ec, #3987e5, #256abf, #184f95, #0d366b)';
+    res.ramp === 'traffic'
+      ? 'linear-gradient(90deg, #3a9e5c, #9cc24a, #e8b43a, #e0662f, #b3261e)'
+      : res.ramp === 'diverging'
+        ? 'linear-gradient(90deg, #e34948, #f0efec, #2a78d6)'
+        : 'linear-gradient(90deg, #cde2fb, #9ec5f4, #6da7ec, #3987e5, #256abf, #184f95, #0d366b)';
   return (
     <div class="legend panel" data-testid="map-legend">
       <div class="legend-head">

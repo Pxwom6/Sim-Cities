@@ -24,7 +24,7 @@ import type {
 import { checkInvariants } from './invariants';
 import { Network, type ZoneBlock } from './world/network';
 import { UNDO_LIMIT, type UndoRecord } from './undo';
-import { buildRoad, bulldoze, undoRoad } from './actions/roads';
+import { buildRoad, bulldoze, undoRoad, undoUpgrade, upgradeRoad } from './actions/roads';
 import { undoZone, zone } from './actions/zoning';
 import { v2 } from './geom';
 import { GRID_RES } from '../data/world';
@@ -46,6 +46,7 @@ import { updateLandValue, waterDistance } from './systems/landValue';
 import { growthPass, lifecycle } from './systems/growth';
 import { happinessFactors, updateHappiness } from './systems/happiness';
 import { runMatcher } from './systems/commute';
+import { deckProfile, type DeckProfile } from './world/bridge';
 import { congestedEdgeCosts, congestedSeconds, hourShare, segVC, type TripSample } from './systems/traffic';
 import { GROWTH, HAPPINESS } from '../data/balance';
 import { ZONE_R } from '../data/zones';
@@ -266,6 +267,20 @@ export class Sim {
     return this.congestedCache.costs;
   }
 
+  private deckCache = new Map<number, DeckProfile | null>();
+
+  /** Bridge deck profile of a segment (null on dry land). Segment geometry never changes per id. */
+  deck(segId: number): DeckProfile | null {
+    let d = this.deckCache.get(segId);
+    if (d === undefined) {
+      d = this.state.net.segments.has(segId)
+        ? deckProfile(this.net.curve(segId), (x, z) => this.terrain.heightAt(x, z))
+        : null;
+      this.deckCache.set(segId, d);
+    }
+    return d;
+  }
+
   /** New volumes and trip samples are ready for the client. */
   trafficChanged(): void {
     this.trafficDirty = true;
@@ -431,6 +446,21 @@ export class Sim {
     if (b) this.indexBuilding(b);
   }
 
+  /** Re-seat the buildings on a segment's blocks after its cell geometry changed. */
+  relocateBuildingsOn(segId: number): void {
+    const seg = this.state.net.segments.get(segId);
+    if (!seg) return;
+    const ids = new Set<number>();
+    for (const bid of [seg.left, seg.right]) {
+      const bl = bid ? this.state.net.blocks.get(bid) : undefined;
+      if (bl) for (const x of bl.bld) if (x) ids.add(x);
+    }
+    for (const id of [...ids].sort((a, b) => a - b)) {
+      const b = this.state.buildings.get(id);
+      if (b) this.buildingMoved(id, b.block, b.col);
+    }
+  }
+
   private buildingMoved(id: number, block: number, col: number): void {
     const b = this.state.buildings.get(id);
     if (!b) return;
@@ -497,6 +527,8 @@ export class Sim {
         return buildRoad(this, cmd.road, cmd.points, dryRun);
       case 'bulldoze':
         return bulldoze(this, cmd.target, dryRun);
+      case 'upgradeRoad':
+        return upgradeRoad(this, cmd.seg, cmd.road, dryRun);
       case 'zone':
         return zone(this, cmd.zone, cmd.area, dryRun, cmd.stroke);
       case 'undo':
@@ -526,6 +558,7 @@ export class Sim {
     if (!rec) return fail('Nothing to undo');
     let res: CommandResult;
     if (rec.kind === 'road') res = undoRoad(this, rec, dryRun);
+    else if (rec.kind === 'upgrade') res = undoUpgrade(this, rec, dryRun);
     else if (rec.kind === 'zone') res = undoZone(this, rec.cells, dryRun);
     else {
       if (!this.state.civics.has(rec.id)) return fail("Can't undo: that building is gone");

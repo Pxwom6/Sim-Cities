@@ -3,6 +3,7 @@ import { MAP_SIZE, SHORE_HEIGHT } from '../../data/world';
 import { Curve, angleDiff, angleOf, curveCrossings, dist, mid, splitBezier, v2, type Vec2 } from '../geom';
 import type { Terrain } from '../terrain/terrain';
 import type { Network } from './network';
+import { BRIDGE, deckAt, deckProfile, rampLength } from './bridge';
 
 /**
  * Road planning: turns a drawn path into validated pieces with automatic intersections.
@@ -29,6 +30,8 @@ export interface RoadPlan {
   at?: Vec2;
   type: RoadTypeId;
   cost: number;
+  /** Metres of the plan that cross water on bridges. */
+  bridgeLength: number;
   length: number;
   pieces: PlanPiece[];
   /** Existing segments that will be split, with the arc lengths (descending per segment). */
@@ -102,7 +105,7 @@ export function planRoad(
   treasury: number,
   sandbox: boolean,
 ): RoadPlan {
-  const plan: RoadPlan = { ok: true, type, cost: 0, length: 0, pieces: [], splits: [] };
+  const plan: RoadPlan = { ok: true, type, cost: 0, length: 0, bridgeLength: 0, pieces: [], splits: [] };
   const rt = ROAD_TYPES[type];
   if (!rt || !rt.buildable) return fail(plan, 'This road type cannot be built');
   const raw = parsePath(points);
@@ -227,15 +230,27 @@ export function planRoad(
       }
     }
     const curve = new Curve(p.a, p.c, p.b, 4);
+    const deck = deckProfile(curve, (x, z) => terrain.heightAt(x, z));
+    if (deck) {
+      const at = firstWet(curve, terrain);
+      if (type === 'dirt') return fail(plan, "Dirt roads can't cross water: use a street or wider", at);
+      if (deck.longestSpan > BRIDGE.maxSpan)
+        return fail(plan, `Too far for a bridge (${BRIDGE.maxSpan} m at most)`, at);
+      if (Math.min(deck.landA, deck.landB) < rampLength() - BRIDGE.step)
+        return fail(
+          plan,
+          `A bridge needs about ${Math.round(rampLength())} m of land on each side of the water for its ramps`,
+          at,
+        );
+      plan.bridgeLength += deck.overWater;
+    }
     const heights: number[] = [];
     for (let i = 0; i < curve.xs.length; i++) {
       const x = curve.xs[i]!;
       const z = curve.zs[i]!;
       if (x < 4 || z < 4 || x > MAP_SIZE - 4 || z > MAP_SIZE - 4)
         return fail(plan, 'Outside the city limits', v2(x, z));
-      const h = terrain.heightAt(x, z);
-      if (h < SHORE_HEIGHT) return fail(plan, "Can't build on water yet (bridges arrive later)", v2(x, z));
-      heights.push(h);
+      heights.push(deck ? deckAt(deck, curve.cum[i]!) : terrain.heightAt(x, z));
     }
     const win = Math.max(1, Math.round(ROAD_RULES.gradeWindow / 4));
     for (let i = 0; i + win < heights.length; i++) {
@@ -337,7 +352,9 @@ export function planRoad(
   }
 
   plan.length = finalPieces.reduce((s, p) => s + p.length, 0);
-  plan.cost = Math.round(plan.length * rt.costPerMetre);
+  plan.cost = Math.round(
+    plan.length * rt.costPerMetre + plan.bridgeLength * rt.costPerMetre * (BRIDGE.costFactor - 1),
+  );
   if (!sandbox && plan.cost > treasury) return fail(plan, 'Not enough money', finalPieces[0]!.b);
   return plan;
 }
@@ -442,4 +459,10 @@ export function applyRoadPlan(net: Network, plan: RoadPlan): RoadApplyResult {
     net.revalidate(box);
   }
   return result;
+}
+
+function firstWet(curve: Curve, terrain: Terrain): Vec2 {
+  for (let i = 0; i < curve.xs.length; i++)
+    if (terrain.heightAt(curve.xs[i]!, curve.zs[i]!) < SHORE_HEIGHT) return v2(curve.xs[i]!, curve.zs[i]!);
+  return v2(curve.xs[0]!, curve.zs[0]!);
 }

@@ -111,6 +111,64 @@ describe('traffic', () => {
     }
   });
 
+  it('upgrading a street keeps what is built along it, costs the difference and can be undone', () => {
+    const sim = newSim();
+    const town = buildTown(sim);
+    serveTown(sim);
+    sim.advance(TICKS_PER_MONTH * 2);
+    // The side street piece with the most buildings along it.
+    const onSeg = (id: number) => {
+      const seg = sim.state.net.segments.get(id)!;
+      const out = new Set<number>();
+      for (const bid of [seg.left, seg.right]) {
+        const bl = bid ? sim.state.net.blocks.get(bid) : undefined;
+        if (bl) for (const x of bl.bld) if (x) out.add(x);
+      }
+      return [...out];
+    };
+    const segId = [...town.streets]
+      .filter((id) => sim.state.net.segments.has(id))
+      .sort((a, b) => onSeg(b).length - onSeg(a).length)[0]!;
+    const before = onSeg(segId);
+    expect(before.length).toBeGreaterThan(4);
+    const curve = sim.net.curve(segId);
+    const dist = (id: number) => {
+      const b = sim.state.buildings.get(id)!;
+      return curve.project({ x: b.x, z: b.z }).d;
+    };
+    const d0 = new Map(before.map((id) => [id, dist(id)]));
+    const t0 = sim.state.treasury;
+    const preview = sim.preview({ type: 'upgradeRoad', seg: segId, road: 'avenue' });
+    expect(preview.ok).toBe(true);
+    const r = sim.dispatch({ type: 'upgradeRoad', seg: segId, road: 'avenue' });
+    expect(r.ok).toBe(true);
+    const expected = Math.round(
+      curve.length * (ROAD_TYPES.avenue.costPerMetre - ROAD_TYPES.street.costPerMetre),
+    );
+    expect(t0 - sim.state.treasury).toBe(expected);
+    expect(sim.state.net.segments.get(segId)!.type).toBe('avenue');
+    const kept = before.filter((id) => sim.state.buildings.has(id));
+    expect(kept.length).toBeGreaterThanOrEqual(Math.ceil(before.length * 0.6));
+    for (const id of kept) expect(dist(id)).toBeGreaterThan(d0.get(id)! + 3);
+    // Same type again is refused; undo restores the street and refunds.
+    expect(sim.dispatch({ type: 'upgradeRoad', seg: segId, road: 'avenue' }).ok).toBe(false);
+    expect(sim.dispatch({ type: 'undo' }).ok).toBe(true);
+    expect(sim.state.net.segments.get(segId)!.type).toBe('street');
+    expect(sim.state.treasury).toBe(t0);
+  });
+
+  it('upgrading the bottleneck relieves the jam', () => {
+    const sim = newSim();
+    const t = twoDistricts(sim, 'dirt');
+    sim.advance(TICKS_PER_MONTH * 5);
+    const jam = segVC(sim, t.link, 1);
+    const before = avgCommute(sim);
+    expect(sim.dispatch({ type: 'upgradeRoad', seg: t.link, road: 'avenue' }).ok).toBe(true);
+    sim.advance(TICKS_PER_MONTH * 2);
+    expect(segVC(sim, t.link, 1)).toBeLessThan(jam * 0.4);
+    expect(avgCommute(sim)).toBeLessThan(before * 0.6);
+  });
+
   it('saves keep the traffic exactly', () => {
     const sim = Sim.create({ seed: 'citybloom', preset: 'river' });
     sim.testMode = true;
