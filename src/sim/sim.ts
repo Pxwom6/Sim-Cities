@@ -47,6 +47,8 @@ import { updateLandValue, waterDistance } from './systems/landValue';
 import { growthPass, lifecycle } from './systems/growth';
 import { happinessFactors, updateHappiness } from './systems/happiness';
 import { runMatcher } from './systems/commute';
+import { advise } from './systems/advisors';
+import { thoughts } from './systems/thoughts';
 import { deckProfile, type DeckProfile } from './world/bridge';
 import {
   computeLines,
@@ -1018,6 +1020,10 @@ export class Sim {
         return computeOverlay(this, q.map);
       case 'coveragePreview':
         return coveragePreview(this, q.def, q.x, q.z, q.angle, q.side);
+      case 'advisors':
+        return advise(this);
+      case 'thoughts':
+        return thoughts(this, q.count ?? 6);
       case 'coverageRoads': {
         const cov = this.coverage.kinds[q.kind];
         const out: { seg: number; v: number[] }[] = [];

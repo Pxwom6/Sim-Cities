@@ -287,6 +287,8 @@ export type Query =
   | { type: 'civic'; id: number }
   | { type: 'overlay'; map: OverlayMap }
   | { type: 'coveragePreview'; def: string; x: number; z: number; angle: number; side: 1 | -1 }
+  | { type: 'advisors' }
+  | { type: 'thoughts'; count?: number }
   /** Coverage samples along every road for one service (for the coverage data maps). */
   | { type: 'coverageRoads'; kind: ServiceKind };
 

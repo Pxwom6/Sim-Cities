@@ -73,7 +73,13 @@ export function Toasts() {
   return (
     <div class={`toasts ${game.selected ? 'beside-panel' : ''}`} aria-live="polite">
       {game.toasts.map((t) => (
-        <div key={t.id} class={`toast ${t.tone}`} data-testid="toast">
+        <div
+          key={t.id}
+          class={`toast ${t.tone} ${t.at ? 'clickable' : ''}`}
+          data-testid="toast"
+          onClick={() => t.at && game.flyTo(t.at)}
+          title={t.at ? 'Show me' : undefined}
+        >
           {t.text}
         </div>
       ))}

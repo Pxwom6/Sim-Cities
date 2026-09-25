@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
 import { DENSITY_NAMES, INDUSTRY_TIER_NAMES, WEALTH_NAMES, ZONED_DEFS } from '../data/buildings';
-import { ROAD_TYPES } from '../data/roads';
 import type { BuildingDetails, CivicDetails } from '../sim/protocol';
 import { formatNumber, useGameUpdates } from './hooks';
 
@@ -159,7 +158,7 @@ function CarInspector({ id }: { id: number }) {
         <dt>Route</dt>
         <dd>{(length / 1000).toFixed(1)} km</dd>
         <dt>On</dt>
-        <dd>{seg ? ROAD_TYPES[seg.type].name : '—'}</dd>
+        <dd>{seg ? game.names.street(seg.id) : '—'}</dd>
         <dt>Traffic here</dt>
         <dd class={vc > 1 ? 'neg' : ''}>{vc > 1 ? 'Jammed at rush hour' : vc > 0.7 ? 'Busy' : 'Flowing'}</dd>
       </dl>
@@ -188,6 +187,12 @@ function CivicInspector({ id }: { id: number }) {
       <header>
         <div>
           <h2>{d.name}</h2>
+          <div class="sub address">
+            {(() => {
+              const c = game.world.civics.get(d.id);
+              return c ? game.names.address(c.x, c.z) : '';
+            })()}
+          </div>
           <div class="sub">{d.blurb}</div>
         </div>
         <button class="btn icon" aria-label="Close" onClick={() => game.select(null)}>
@@ -323,6 +328,12 @@ function BuildingInspector({ id }: { id: number | null }) {
           <h2>{d.name}</h2>
           <div class="sub">
             {kind} · Level {d.level}
+          </div>
+          <div class="sub address" data-testid="inspector-address">
+            {(() => {
+              const b = game.world.buildings.get(d.id);
+              return b ? game.names.address(b.x, b.z) : '';
+            })()}
           </div>
         </div>
         <button class="btn icon" aria-label="Close" onClick={() => game.select(null)}>

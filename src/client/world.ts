@@ -55,6 +55,8 @@ export class ClientWorld {
   /** Active service vehicles and the tick they were reported at (the renderer extrapolates). */
   vehicles: VehicleData[] = [];
   vehiclesTick = 0;
+  /** Bumped whenever the road network changes. */
+  netVersion = 0;
   /** Daily traffic per segment and sampled trips (updated every assignment round). */
   traffic = new Map<number, number>();
   trips: TripSample[] = [];
@@ -213,6 +215,7 @@ export class ClientWorld {
   }
 
   private applyNet(d: NetDiff): void {
+    this.netVersion++;
     const st = this.netState;
     const net = this.net;
     const ch: NetChanges = { segments: new Set(), nodes: new Set(), blocks: new Set() };

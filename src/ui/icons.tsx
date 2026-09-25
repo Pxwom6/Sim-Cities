@@ -173,3 +173,19 @@ export const IconBus = (p: P) => (
     <circle cx="16" cy="14" r="0.6" fill="currentColor" />
   </svg>
 );
+export const IconMoney = (p: P) => (
+  <svg {...base} {...p}>
+    <circle cx="12" cy="12" r="8" />
+    <path d="M14.5 9.5c-.5-1-1.5-1.5-2.5-1.5-1.5 0-2.5.8-2.5 2s1 1.6 2.5 2 2.5.9 2.5 2-1 2-2.5 2c-1.2 0-2.2-.6-2.6-1.5M12 6.5v11" />
+  </svg>
+);
+export const IconBell = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M6 16V11a6 6 0 0112 0v5l2 2H4zM10 20a2 2 0 004 0" />
+  </svg>
+);
+export const IconChat = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M4 5h16v11H9l-5 4z" />
+  </svg>
+);

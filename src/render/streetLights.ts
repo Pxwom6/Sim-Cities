@@ -1,0 +1,124 @@
+import {
+  AdditiveBlending,
+  BoxGeometry,
+  Color,
+  Group,
+  InstancedMesh,
+  Matrix4,
+  MeshBasicMaterial,
+  MeshLambertMaterial,
+  PlaneGeometry,
+  Quaternion,
+  ShaderMaterial,
+  Vector3,
+} from 'three';
+import type { ClientWorld } from '../client/world';
+import { ROAD_TYPES } from '../data/roads';
+
+const MAX = 6000;
+const SPACING = 34;
+
+/**
+ * Street lamps along every road (not dirt tracks or the highway): posts with lamp heads that glow
+ * at night, and soft pools of light on the road beneath them.
+ */
+export class StreetLightRenderer {
+  readonly group = new Group();
+  private posts: InstancedMesh;
+  private heads: InstancedMesh;
+  private pools: InstancedMesh;
+  private headMat = new MeshBasicMaterial({ color: new Color('#9aa0a6') });
+  private poolMat: ShaderMaterial;
+  private version = -1;
+  count = 0;
+
+  constructor(private world: ClientWorld) {
+    const post = new BoxGeometry(0.22, 7, 0.22).translate(0, 3.5, 0);
+    this.posts = new InstancedMesh(post, new MeshLambertMaterial({ color: new Color('#6f757c') }), MAX);
+    const head = new BoxGeometry(1.4, 0.25, 0.5).translate(0.6, 7.05, 0);
+    this.heads = new InstancedMesh(head, this.headMat, MAX);
+    this.poolMat = new ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: AdditiveBlending,
+      uniforms: { uNight: { value: 0 } },
+      vertexShader: /* glsl */ `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+        }`,
+      fragmentShader: /* glsl */ `
+        uniform float uNight;
+        varying vec2 vUv;
+        void main() {
+          float d = length(vUv - 0.5) * 2.0;
+          float a = smoothstep(1.0, 0.0, d);
+          a = a * a * uNight * 0.9;
+          gl_FragColor = vec4(vec3(1.0, 0.78, 0.45) * a, a);
+        }`,
+    });
+    const pool = new PlaneGeometry(20, 20).rotateX(-Math.PI / 2);
+    this.pools = new InstancedMesh(pool, this.poolMat, MAX);
+    this.pools.renderOrder = 3;
+    for (const m of [this.posts, this.heads, this.pools]) {
+      m.count = 0;
+      m.frustumCulled = false;
+      this.group.add(m);
+    }
+    this.posts.castShadow = true;
+    this.posts.name = 'street-lamps';
+  }
+
+  private rebuild(): void {
+    const w = this.world;
+    const m = new Matrix4();
+    const q = new Quaternion();
+    const p = new Vector3();
+    const s = new Vector3(1, 1, 1);
+    const up = new Vector3(0, 1, 0);
+    let n = 0;
+    for (const seg of [...w.netState.segments.values()].sort((a, b) => a.id - b.id)) {
+      const t = ROAD_TYPES[seg.type];
+      if (seg.type === 'highway' || seg.type === 'dirt') continue;
+      const curve = w.net.curve(seg.id);
+      const half = t.width / 2 + Math.min(1.2, t.sidewalk * 0.5);
+      let side = 1;
+      for (let d = 12; d < curve.length - 12 && n < MAX; d += SPACING) {
+        const pt = curve.pointAt(d);
+        const tan = curve.tangentAt(d);
+        const nx = tan.z * side;
+        const nz = -tan.x * side;
+        const x = pt.x + nx * half;
+        const z = pt.z + nz * half;
+        const y = w.roadHeight(seg.id, d, pt.x, pt.z);
+        // The arm points over the road.
+        q.setFromAxisAngle(up, Math.atan2(nz, -nx));
+        p.set(x, y, z);
+        m.compose(p, q, s);
+        this.posts.setMatrixAt(n, m);
+        this.heads.setMatrixAt(n, m);
+        p.set(pt.x + nx * (half - 3), y + 0.08, pt.z + nz * (half - 3));
+        m.compose(p, new Quaternion(), s);
+        this.pools.setMatrixAt(n, m);
+        n++;
+        side = -side;
+      }
+    }
+    this.count = n;
+    for (const mesh of [this.posts, this.heads, this.pools]) {
+      mesh.count = n;
+      mesh.instanceMatrix.needsUpdate = true;
+    }
+  }
+
+  update(night: number): void {
+    if (this.version !== this.world.netVersion) {
+      this.version = this.world.netVersion;
+      this.rebuild();
+    }
+    this.poolMat.uniforms.uNight!.value = night;
+    this.pools.visible = night > 0.05;
+    this.headMat.color.setRGB(0.6 + 0.4 * night, 0.62 + 0.28 * night, 0.65 - 0.05 * night);
+  }
+}

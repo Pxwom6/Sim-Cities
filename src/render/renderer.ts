@@ -28,6 +28,7 @@ import { EffectsRenderer } from './effects';
 import { RoadTint } from './roadTint';
 import { TrafficRenderer } from './traffic';
 import { TransitRenderer } from './transit';
+import { StreetLightRenderer } from './streetLights';
 
 export interface RenderStats {
   calls: number;
@@ -64,6 +65,7 @@ export class GameRenderer {
   readonly effects: EffectsRenderer;
   readonly traffic: TrafficRenderer;
   readonly transit: TransitRenderer;
+  readonly streetLights: StreetLightRenderer;
   /** Route of the selected car. */
   readonly routeTint: RoadTint;
   /** Road ribbons for the service coverage data maps. */
@@ -126,6 +128,8 @@ export class GameRenderer {
     this.scene.add(this.traffic.group);
     this.transit = new TransitRenderer(world, (seg, s, x, z) => world.roadHeight(seg, s, x, z));
     this.scene.add(this.transit.group);
+    this.streetLights = new StreetLightRenderer(world);
+    this.scene.add(this.streetLights.group);
     this.routeTint = new RoadTint((x, z) => world.heightAt(x, z), 'sequential', 0.7);
     this.scene.add(this.routeTint.group);
     this.ghost = new GhostRenderer((x, z) => world.heightAt(x, z));
@@ -246,15 +250,18 @@ export class GameRenderer {
     );
     l.fog.near = Math.max(900, this.controller.current.distance * 1.1);
     l.fog.far = Math.max(7500, this.controller.current.distance * 3.5);
-    this.renderer.toneMappingExposure = 1.0 + l.night * 0.35;
+    this.renderer.toneMappingExposure = 1.0 + l.night * 0.12;
     this.terrain.update(this.time);
     this.buildings.update(l.night);
     this.vehicles.update(this.world.displayTick);
+    this.traffic.night = l.night;
     this.traffic.update(this.world.displayTick);
+    this.streetLights.update(l.night);
     this.transit.update(this.world.displayTick);
     this.icons.update(this.time, this.buildings.heights);
     this.garbage.update();
     const bufH = this.renderer.getDrawingBufferSize(this.tmpSize).y;
+    this.traffic.setScale(bufH / (2 * Math.tan((this.camera.fov * Math.PI) / 360)));
     this.effects.update(
       this.time,
       bufH / (2 * Math.tan((this.camera.fov * Math.PI) / 360)),

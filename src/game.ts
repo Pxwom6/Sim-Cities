@@ -7,7 +7,10 @@ import type { WorkerPerf } from './sim/protocol';
 import { SPEED_TICKS_PER_SECOND, type Speed } from './sim/time';
 import { ToolManager } from './tools/manager';
 import { CIVIC } from './data/civic';
+import type { Advice } from './sim/systems/advisors';
 import { OverlayController } from './client/overlay';
+import { StreetNames } from './client/names';
+import { StreetLabels } from './client/labels';
 import type { ToolHint } from './tools/tool';
 
 /** Minimal audio interface (procedural audio arrives in M8). */
@@ -16,6 +19,19 @@ export interface AudioSink {
 }
 
 type Listener = () => void;
+
+/** An entry in the notification log. */
+export interface Notice {
+  id: number;
+  kind: string;
+  text: string;
+  tone: 'info' | 'ok' | 'bad';
+  at?: { x: number; z: number };
+  count: number;
+  /** performance.now() of the latest occurrence, and the sim tick. */
+  time: number;
+  tick: number;
+}
 
 /** Main-thread game glue: owns the client, mirror and renderer; the UI and tools talk to this. */
 export class Game {
@@ -26,10 +42,18 @@ export class Game {
   debugOpen = false;
   hint: ToolHint | null = null;
   /** Open side panel (budget, and later data maps, advisors...). */
-  panel: 'budget' | null = null;
+  panel: 'budget' | 'advisors' | 'notifications' | null = null;
+  /** Street and neighbourhood names, and their labels on the map. */
+  readonly names: StreetNames;
+  readonly labels: StreetLabels;
+  /** Latest advice from every advisor (refreshed every couple of seconds). */
+  advice: Advice[] = [];
   /** Currently inspected building. */
   selected: { kind: 'building' | 'civic' | 'car'; id: number } | null = null;
-  toasts: { id: number; text: string; tone: 'info' | 'ok' | 'bad' }[] = [];
+  toasts: { id: number; text: string; tone: 'info' | 'ok' | 'bad'; at?: { x: number; z: number } }[] = [];
+  /** Notification log, newest first (prioritised when shown). */
+  notifications: Notice[] = [];
+  private noticeId = 1;
   private toastId = 1;
   audio: AudioSink | null = null;
   readonly tools: ToolManager;
@@ -58,12 +82,16 @@ export class Game {
         this.world.displayTick = diff.tick;
       this.notify();
     });
+    this.names = new StreetNames(world);
+    this.labels = new StreetLabels(this);
     this.tools = new ToolManager(this);
     this.overlay = new OverlayController(this);
     renderer.controller.focus = () => {
       const hw = this.world.gen.params.highway;
       return { x: 260, z: hw.connectZ };
     };
+    void this.refreshAdvice();
+    setInterval(() => void this.refreshAdvice(), 2000);
   }
 
   subscribe(l: Listener): () => void {
@@ -111,9 +139,9 @@ export class Game {
     this.notify();
   }
 
-  toast(text: string, tone: 'info' | 'ok' | 'bad' = 'info', ms = 3500): void {
+  toast(text: string, tone: 'info' | 'ok' | 'bad' = 'info', ms = 3500, at?: { x: number; z: number }): void {
     const id = this.toastId++;
-    this.toasts = [...this.toasts, { id, text, tone }].slice(-4);
+    this.toasts = [...this.toasts, { id, text, tone, at }].slice(-4);
     this.notify();
     setTimeout(() => {
       this.toasts = this.toasts.filter((t) => t.id !== id);
@@ -123,29 +151,79 @@ export class Game {
 
   private lastAlert = new Map<string, number>();
 
-  /** Turn sim events into short alerts (rate-limited per kind; advisors arrive in M8). */
-  private onEvents(events: { kind: string; id: number }[]): void {
+  /** Where an event happened (its building or civic building), for flying the camera there. */
+  private placeOf(id: number): { x: number; z: number } | undefined {
+    const b = this.world.buildings.get(id) ?? this.world.civics.get(id);
+    return b ? { x: b.x, z: b.z } : undefined;
+  }
+
+  /** Log a notification (repeats of the same kind collapse) and toast it unless one just showed. */
+  notice(
+    kind: string,
+    text: string,
+    tone: 'info' | 'ok' | 'bad',
+    at?: { x: number; z: number },
+    toast = true,
+  ): void {
     const now = performance.now();
-    const alert = (key: string, text: string, tone: 'info' | 'ok' | 'bad') => {
-      if (now - (this.lastAlert.get(key) ?? -1e9) < 20_000) return;
-      this.lastAlert.set(key, now);
-      this.toast(text, tone, 5000);
-    };
-    for (const e of events) {
-      if (e.kind === 'closed')
-        alert('closed', 'A business closed: it has had no power or water for half a day.', 'bad');
-      else if (e.kind === 'abandoned')
-        alert('abandoned', 'A building was abandoned. Check the inspector to see why.', 'bad');
-      else if (e.kind === 'bankrupt') alert('bankrupt', 'The city is bankrupt.', 'bad');
-      else if (e.kind === 'moneyNegative') alert('money', 'The treasury is empty!', 'bad');
-      else if (e.kind === 'fire') {
-        alert('fire', 'Fire! A building is burning.', 'bad');
-        this.audio?.play('siren');
-      } else if (e.kind === 'destroyed') alert('destroyed', 'A building burned down.', 'bad');
-      else if (e.kind === 'fireOut') alert('fireOut', 'Firefighters put out a fire.', 'ok');
-      else if (e.kind === 'crime') alert('crime', 'A crime went unanswered. Police coverage is thin.', 'bad');
-      else if (e.kind === 'death') alert('death', 'An ambulance could not reach a patient in time.', 'bad');
+    const head = this.notifications.find((n) => n.kind === kind && now - n.time < 60_000);
+    if (head) {
+      head.count++;
+      head.time = now;
+      head.tick = this.world.stats.tick;
+      if (at) head.at = at;
+    } else {
+      this.notifications = [
+        { id: this.noticeId++, kind, text, tone, at, count: 1, time: now, tick: this.world.stats.tick },
+        ...this.notifications,
+      ].slice(0, 60);
     }
+    if (toast && now - (this.lastAlert.get(kind) ?? -1e9) >= 20_000) {
+      this.lastAlert.set(kind, now);
+      this.toast(text, tone, 5000, at);
+      if (tone === 'bad') this.audio?.play('alert');
+    }
+    this.notify();
+  }
+
+  private lastAdviceKeys = new Set<string>();
+
+  /** Turn sim events into notifications (DESIGN §5). */
+  private onEvents(events: { kind: string; id: number }[]): void {
+    for (const e of events) {
+      const at = this.placeOf(e.id);
+      if (e.kind === 'closed')
+        this.notice('closed', 'A business closed: no power or water for half a day.', 'bad', at);
+      else if (e.kind === 'abandoned')
+        this.notice('abandoned', 'A building was abandoned. Click it to see why.', 'bad', at);
+      else if (e.kind === 'bankrupt') this.notice('bankrupt', 'The city is bankrupt.', 'bad');
+      else if (e.kind === 'moneyNegative') this.notice('money', 'The treasury is empty!', 'bad');
+      else if (e.kind === 'fire') {
+        this.notice('fire', 'Fire! A building is burning.', 'bad', at);
+        this.audio?.play('siren');
+      } else if (e.kind === 'destroyed') this.notice('destroyed', 'A building burned down.', 'bad', at);
+      else if (e.kind === 'fireOut') this.notice('fireOut', 'Firefighters put out a fire.', 'ok', at);
+      else if (e.kind === 'crime')
+        this.notice('crime', 'A crime went unanswered. Police coverage is thin.', 'bad', at);
+      else if (e.kind === 'death')
+        this.notice('death', 'An ambulance could not reach a patient in time.', 'bad', at);
+      else if (e.kind === 'crimeStopped')
+        this.notice('crimeStopped', 'Police stopped a crime.', 'ok', at, false);
+      else if (e.kind === 'patientSaved')
+        this.notice('patientSaved', 'An ambulance got a patient to care.', 'ok', at, false);
+    }
+  }
+
+  /** Urgent advice becomes a notification the first time it appears. */
+  private adviceNotices(): void {
+    const keys = new Set<string>();
+    for (const a of this.advice) {
+      if (a.severity < 3) continue;
+      const key = `${a.advisor}:${a.title.replace(/[0-9,]+/g, '#')}`;
+      keys.add(key);
+      if (!this.lastAdviceKeys.has(key)) this.notice(key, `${a.title}. ${a.text}`, 'bad', a.at);
+    }
+    this.lastAdviceKeys = keys;
   }
 
   setHint(h: ToolHint | null): void {
@@ -164,6 +242,29 @@ export class Game {
   setSpeed(speed: Speed): void {
     this.speed = speed;
     this.client.setSpeed(speed);
+    this.notify();
+  }
+
+  /** Fly the camera to a spot (advisors, notifications), optionally opening a data map. */
+  flyTo(at: { x: number; z: number }, map?: string): void {
+    const cur = this.renderer.controller.goal;
+    this.renderer.controller.setPose(
+      {
+        x: at.x,
+        z: at.z,
+        distance: Math.min(Math.max(cur.distance, 180), 320),
+        yaw: cur.yaw,
+        tilt: cur.tilt,
+      },
+      false,
+    );
+    if (map) this.overlay.set(map as never);
+    this.notify();
+  }
+
+  async refreshAdvice(): Promise<void> {
+    this.advice = await this.client.query<Advice[]>({ type: 'advisors' });
+    this.adviceNotices();
     this.notify();
   }
 
@@ -189,6 +290,7 @@ export class Game {
       w.displayTick = Math.min(next, w.stats.tick + 8);
     }
     this.renderer.frame(dt);
+    this.labels.update();
     this.frameMs = this.frameMs * 0.9 + (performance.now() - t0) * 0.1;
   }
 }

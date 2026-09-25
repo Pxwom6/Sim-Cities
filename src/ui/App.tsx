@@ -8,6 +8,9 @@ import { Inspector } from './Inspector';
 import { Toasts } from './SystemMenu';
 import { formatMoney, useGameUpdates } from './hooks';
 import { BudgetPanel } from './Budget';
+import { AdvisorsPanel } from './Advisors';
+import { NotificationsPanel } from './Notifications';
+import { ThoughtsFeed } from './Thoughts';
 
 function Shortcuts({ game }: { game: Game }) {
   useEffect(() => {
@@ -22,6 +25,8 @@ function Shortcuts({ game }: { game: Game }) {
       else if (e.code === 'Digit2') game.setSpeed(2);
       else if (e.code === 'Digit3') game.setSpeed(3);
       else if (e.code === 'KeyM' && !e.ctrlKey && !e.metaKey) game.openPanel('budget');
+      else if (e.code === 'KeyJ' && !e.ctrlKey && !e.metaKey) game.openPanel('advisors');
+      else if (e.code === 'KeyN' && !e.ctrlKey && !e.metaKey) game.openPanel('notifications');
       else if (e.code === 'KeyL' && !e.ctrlKey && !e.metaKey)
         game.overlay.set(game.overlay.active ? null : 'power');
     };
@@ -42,6 +47,9 @@ export function App({ game }: { game: Game }) {
       <Inspector />
       <MapLegend />
       <BudgetPanel />
+      <AdvisorsPanel />
+      <NotificationsPanel />
+      <ThoughtsFeed />
       <MoneyBanner />
       <ToastLayer />
     </GameContext.Provider>

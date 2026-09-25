@@ -7,7 +7,10 @@ import {
   InstancedMesh,
   Matrix4,
   MeshLambertMaterial,
+  Points,
   Quaternion,
+  ShaderMaterial,
+  AdditiveBlending,
   Vector3,
 } from 'three';
 import type { ClientWorld } from '../client/world';
@@ -66,6 +69,7 @@ function truck(): ModelData {
 
 const MODELS = { sedan: sedan(), hatch: hatch(), van: van(), truck: truck() } as const;
 type ModelName = keyof typeof MODELS;
+const MAX_LIGHTS = 360 * 4;
 const PAINT = [
   '#d9d9d6',
   '#2b2d31',
@@ -130,10 +134,50 @@ export class TrafficRenderer {
   private speedCache = new Map<number, number>();
   private speedKey = '';
 
+  /** Head and tail lights at night: one additive point system (4 points per car). */
+  private lights: Points;
+  private lightPos = new Float32Array(MAX_LIGHTS * 3);
+  private lightCol = new Float32Array(MAX_LIGHTS * 3);
+  night = 0;
+
   constructor(
     private world: ClientWorld,
     private heightOn: (seg: number, s: number, x: number, z: number) => number,
   ) {
+    const lg = new BufferGeometry();
+    lg.setAttribute('position', new BufferAttribute(this.lightPos, 3));
+    lg.setAttribute('color', new BufferAttribute(this.lightCol, 3));
+    lg.setDrawRange(0, 0);
+    this.lights = new Points(
+      lg,
+      new ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        blending: AdditiveBlending,
+        vertexColors: true,
+        uniforms: { uScale: { value: 1 } },
+        vertexShader: /* glsl */ `
+          varying vec3 vCol;
+          uniform float uScale;
+          void main() {
+            vCol = color;
+            vec4 mv = modelViewMatrix * vec4(position, 1.0);
+            gl_Position = projectionMatrix * mv;
+            gl_PointSize = max(2.0, 0.9 * uScale / max(1.0, -mv.z));
+          }`,
+        fragmentShader: /* glsl */ `
+          varying vec3 vCol;
+          void main() {
+            float d = length(gl_PointCoord - 0.5);
+            if (d > 0.5) discard;
+            float a = smoothstep(0.5, 0.0, d);
+            gl_FragColor = vec4(vCol * a * 1.5, a);
+          }`,
+      }),
+    );
+    this.lights.frustumCulled = false;
+    this.lights.renderOrder = 9;
+    this.group.add(this.lights);
     const mat = new MeshLambertMaterial({ vertexColors: true });
     for (const [name, model] of Object.entries(MODELS) as [ModelName, ModelData][]) {
       const mesh = new InstancedMesh(toGeometry(model), mat, 512);
@@ -214,6 +258,11 @@ export class TrafficRenderer {
     });
   }
 
+  /** Pixels per metre at distance 1, for sizing the light sprites. */
+  setScale(pxPerMetre: number): void {
+    (this.lights.material as ShaderMaterial).uniforms.uScale!.value = pxPerMetre;
+  }
+
   update(displayTick: number): void {
     const dt = this.lastTick < 0 ? 0 : Math.max(0, Math.min(30, displayTick - this.lastTick));
     this.lastTick = displayTick;
@@ -287,6 +336,36 @@ export class TrafficRenderer {
       counts.set(c.model, i + 1);
     }
     this.cars = alive;
+    // Lights after dark.
+    let nl = 0;
+    if (this.night > 0.25) {
+      const k = Math.min(1, (this.night - 0.25) / 0.4);
+      for (const c of alive) {
+        if (nl + 4 > MAX_LIGHTS) break;
+        const len = c.model === 'truck' ? 4 : c.model === 'van' ? 2.4 : c.model === 'hatch' ? 1.8 : 2.2;
+        const hx = Math.cos(c.heading);
+        const hz = Math.sin(c.heading);
+        for (const [f, side, r, g, b] of [
+          [len, 0.6, 1, 0.92, 0.7],
+          [len, -0.6, 1, 0.92, 0.7],
+          [-len, 0.6, 0.9, 0.08, 0.05],
+          [-len, -0.6, 0.9, 0.08, 0.05],
+        ] as const) {
+          const i = nl * 3;
+          this.lightPos[i] = c.x + hx * f - hz * side;
+          this.lightPos[i + 1] = c.y + 0.7;
+          this.lightPos[i + 2] = c.z + hz * f + hx * side;
+          this.lightCol[i] = r * k;
+          this.lightCol[i + 1] = g * k;
+          this.lightCol[i + 2] = b * k;
+          nl++;
+        }
+      }
+    }
+    const lg = this.lights.geometry;
+    (lg.getAttribute('position') as BufferAttribute).needsUpdate = true;
+    (lg.getAttribute('color') as BufferAttribute).needsUpdate = true;
+    lg.setDrawRange(0, nl);
     for (const [name, mesh] of this.meshes) {
       mesh.count = counts.get(name) ?? 0;
       mesh.instanceMatrix.needsUpdate = true;

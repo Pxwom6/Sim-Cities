@@ -3,6 +3,8 @@ import { formatMoney, formatNumber, useGameUpdates } from './hooks';
 import { IconPause, IconSpeed1, IconSpeed2, IconSpeed3 } from './icons';
 import { Rci } from './Rci';
 import { SystemMenu } from './SystemMenu';
+import { AdvisorsButton } from './Advisors';
+import { NotificationsButton } from './Notifications';
 
 const SPEEDS: { s: Speed; label: string; Icon: typeof IconPause; key: string }[] = [
   { s: 0, label: 'Pause', Icon: IconPause, key: 'Space' },
@@ -53,6 +55,8 @@ export function TopBar() {
         </span>
       </div>
       <Rci />
+      <AdvisorsButton />
+      <NotificationsButton />
       <span class="divider" />
       <div class="stat">
         <span class="label">Date</span>
