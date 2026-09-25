@@ -49,9 +49,102 @@ function litFn(r: () => number, p: number): (i: number) => number {
   return () => (r() < p ? 0.6 + r() * 0.4 : 0);
 }
 
+const LEAVES = ['#6aa84f', '#8dbb4f', '#5a9a45', '#79b04e', '#9aa84a'].map(C);
+const TRUNK = C('#7a5a40');
+const CAR_COLOURS = ['#c94c4c', '#3f6fb5', '#e8e4dc', '#3b3f45', '#d9a441', '#5e8f6a', '#9aa3ad'].map(C);
+const CAR_GLASS = C('#2f3d4a');
+const WOOD = C('#a0724f');
+const BRICK = ['#a85a44', '#b86b4b', '#9c5540', '#c07a5a', '#8f4f3c'].map(C);
+const FENCE = C('#f4f1ea');
+const MODERN_WALLS = ['#f4f4f1', '#e6e7e4', '#d9dcdf', '#3f4448'].map(C);
+const CONTAINERS = ['#c0392b', '#2e86c1', '#d4ac0d', '#1e8449', '#7d3c98', '#d35400'].map(C);
+const TANK = C('#dcdad4');
+
+/** A small garden tree: trunk, tapered crown and a rounded top (about 60 triangles). */
+function yardTree(m: ModelBuilder, x: number, z: number, r: () => number): void {
+  const h = 1.5 + r() * 1.2;
+  const rad = 1.3 + r() * 1;
+  const col = pick(r, LEAVES);
+  m.cylinder(x, z, 0.2, 0, h, TRUNK, 5);
+  m.frustum(x, z, rad * 0.55, rad, h - 0.3, h + rad * 0.45, col, 7, false);
+  m.dome(x, z, rad, h + rad * 0.45, col, 2, 7);
+}
+
+/** A parked car, nose along x (or z). */
+function parkedCar(m: ModelBuilder, x: number, z: number, alongZ: boolean, col: Color): void {
+  const [hx, hz] = alongZ ? [0.9, 2.1] : [2.1, 0.9];
+  const [cx, cz] = alongZ ? [0.8, 1.1] : [1.1, 0.8];
+  m.box(x - hx, x + hx, 0.3, 1.0, z - hz, z + hz, col);
+  m.box(x - cx, x + cx, 1.0, 1.5, z - cz, z + cz, CAR_GLASS, col);
+}
+
+/** Garden trees in the back yard (behind z1), if there's room. */
+function backYard(m: ModelBuilder, W: number, D: number, z1: number, r: () => number, n: number): void {
+  const za = z1 + 1.8;
+  const zb = D / 2 - 1.8;
+  if (zb < za) return;
+  for (let k = 0; k < n; k++) yardTree(m, (r() - 0.5) * (W - 3.6), za + r() * (zb - za), r);
+}
+
+/** A low picket fence along the front, with a gap for the path at dx. */
+function frontFence(m: ModelBuilder, W: number, D: number, dx: number): void {
+  const z = -D / 2 + 0.45;
+  if (dx - 0.8 > -W / 2 + 0.4) m.box(-W / 2 + 0.3, dx - 0.8, 0, 0.8, z - 0.06, z + 0.06, FENCE);
+  if (dx + 0.8 < W / 2 - 0.4) m.box(dx + 0.8, W / 2 - 0.3, 0, 0.8, z - 0.06, z + 0.06, FENCE);
+}
+
+function door(m: ModelBuilder, dx: number, z0: number, col = DOOR, w = 0.5, h = 2.1): void {
+  m.quad([dx - w, 0, z0 - 0.05], [dx - w, h, z0 - 0.05], [dx + w, h, z0 - 0.05], [dx + w, 0, z0 - 0.05], col);
+}
+
+type HouseStyle = 'classic' | 'lshape' | 'modern' | 'cottage';
+
+function houseStyle(def: ZonedDef, W: number, r: () => number): HouseStyle {
+  const x = r();
+  if (def.wealth === 2 && x < 0.45) return 'modern';
+  if (def.wealth === 1 && x < 0.15) return 'modern';
+  if (def.level === 1 && x > 0.68) return 'cottage';
+  if (W >= 16 && x > 0.5) return 'lshape';
+  return 'classic';
+}
+
+/** Detached homes in four styles, with gardens, fences, trees and cars. */
 function house(m: ModelBuilder, def: ZonedDef, W: number, D: number, r: () => number): void {
-  const rich = def.wealth >= 1;
   lotBase(m, W, D, def.wealth === 2 ? GRASS_RICH : GRASS);
+  const style = houseStyle(def, W, r);
+  const { dx, z1, drive } =
+    style === 'modern'
+      ? modernHouse(m, def, W, D, r)
+      : style === 'lshape'
+        ? lHouse(m, def, W, D, r)
+        : style === 'cottage'
+          ? cottage(m, def, W, D, r)
+          : classicHouse(m, def, W, D, r);
+  // Path to the street.
+  m.ground(dx - 0.6, dx + 0.6, -D / 2 + 0.2, -D / 2 + 3.2, 0.08, PAVE);
+  if (drive !== null && r() < 0.75) parkedCar(m, drive, -D / 2 + 3, true, pick(r, CAR_COLOURS));
+  if (def.wealth === 0 && style !== 'modern' && r() < 0.5) frontFence(m, W, D, dx);
+  if (def.wealth >= 1 && style !== 'modern') {
+    // Hedges along the lot sides.
+    m.box(-W / 2 + 0.3, -W / 2 + 0.9, 0, 1.1, -D / 2 + 1.5, D / 2 - 0.3, HEDGE);
+    m.box(W / 2 - 0.9, W / 2 - 0.3, 0, 1.1, -D / 2 + 1.5, D / 2 - 0.3, HEDGE);
+  }
+  const pool = def.wealth === 2 && D / 2 - z1 > 6;
+  if (pool) m.ground(-2.5, 2.5, z1 + 1.2, Math.min(D / 2 - 1, z1 + 5), 0.1, POOL);
+  const trees = r() < 0.3 ? 0 : r() < 0.7 ? 1 : 2;
+  if (!pool) backYard(m, W, D, z1, r, trees);
+  else if (trees) yardTree(m, W / 2 - 2.2, D / 2 - 2.2, r);
+}
+
+interface HouseOut {
+  /** Front door x, back wall z, and the driveway x (null if none). */
+  dx: number;
+  z1: number;
+  drive: number | null;
+}
+
+function classicHouse(m: ModelBuilder, def: ZonedDef, W: number, D: number, r: () => number): HouseOut {
+  const rich = def.wealth >= 1;
   const wall = rich && r() < 0.5 ? pick(r, WALLS_R_RICH) : pick(r, WALLS_R);
   const roof = pick(r, ROOFS);
   const floors = def.level >= 2 ? 2 : 1;
@@ -69,26 +162,19 @@ function house(m: ModelBuilder, def: ZonedDef, W: number, D: number, r: () => nu
   m.windows('back', x0, x1, z0, z1, 0, floors, fh, { col: GLASS, lit, spacing: 3 });
   m.windows('left', x0, x1, z0, z1, 0, floors, fh, { col: GLASS, lit, spacing: 3.5 });
   m.windows('right', x0, x1, z0, z1, 0, floors, fh, { col: GLASS, lit, spacing: 3.5 });
-  // Door and a little porch roof.
   const dx = x0 + bw * (0.3 + r() * 0.4);
-  m.quad(
-    [dx - 0.5, 0, z0 - 0.05],
-    [dx - 0.5, 2.1, z0 - 0.05],
-    [dx + 0.5, 2.1, z0 - 0.05],
-    [dx + 0.5, 0, z0 - 0.05],
-    DOOR,
-  );
+  door(m, dx, z0);
   if (def.level >= 2 || rich) m.box(dx - 1.1, dx + 1.1, 2.4, 2.6, z0 - 1.3, z0, TRIM);
-  // Path to the street.
-  m.ground(dx - 0.6, dx + 0.6, -D / 2 + 0.2, z0, 0.08, PAVE);
+  m.ground(dx - 0.6, dx + 0.6, -D / 2 + 3.2, z0, 0.08, PAVE);
   if (def.level === 3 || r() < 0.4) m.hip(x0, x1, z0, z1, top, 1.8 + r() * 0.6, roof);
   else m.gable(x0, x1, z0, z1, top, 1.8 + r() * 0.8, roof, wall, bw >= bd);
   if (r() < 0.5) m.box(x1 - 1.4, x1 - 0.6, top, top + 2.8, z0 + bd * 0.6, z0 + bd * 0.6 + 0.8, C('#9c6b52'));
-  // Side wing or garage for bigger homes.
-  if (def.level >= 2 && W - bw > 5) {
+  // Side garage for bigger homes, or a driveway.
+  let drive: number | null = null;
+  if (def.level >= 2 && W / 2 - x1 > 3.4) {
     const gx0 = x1 + 0.2;
     const gx1 = Math.min(W / 2 - 0.8, gx0 + 3.6);
-    if (gx1 - gx0 > 2.5) {
+    if (gx1 - gx0 > 2.5 && r() < 0.6) {
       m.box(gx0, gx1, 0, 2.8, z0 + 0.5, z0 + 6, wall);
       m.quad(
         [gx0 + 0.3, 0, z0 + 0.45],
@@ -98,16 +184,142 @@ function house(m: ModelBuilder, def: ZonedDef, W: number, D: number, r: () => nu
         C('#e8e4dc'),
       );
       m.gable(gx0, gx1, z0 + 0.5, z0 + 6, 2.8, 1, roof, wall, false, 0.2);
-      m.ground(gx0 + 0.2, gx1 - 0.2, -D / 2 + 0.2, z0 + 0.5, 0.08, PAVE);
     }
+    const cx = (gx0 + Math.min(W / 2 - 0.8, gx0 + 3.6)) / 2;
+    m.ground(cx - 1.4, cx + 1.4, -D / 2 + 0.2, z0 + 0.5, 0.08, PAVE);
+    drive = cx;
   }
-  if (def.wealth >= 1) {
-    // Hedges along the lot sides.
-    m.box(-W / 2 + 0.3, -W / 2 + 0.9, 0, 1.1, -D / 2 + 1.5, D / 2 - 0.3, HEDGE);
-    m.box(W / 2 - 0.9, W / 2 - 0.3, 0, 1.1, -D / 2 + 1.5, D / 2 - 0.3, HEDGE);
+  return { dx, z1, drive };
+}
+
+/** An L-shaped home: a main range along the street and a wing running back. */
+function lHouse(m: ModelBuilder, def: ZonedDef, W: number, D: number, r: () => number): HouseOut {
+  const wall = pick(r, def.wealth ? WALLS_R_RICH : WALLS_R);
+  const roof = pick(r, ROOFS);
+  const floors = def.level >= 3 || r() < 0.4 ? 2 : 1;
+  const fh = 3;
+  const top = floors * fh;
+  const bw = Math.min(W - 5.5, 9 + r() * 2);
+  const x0 = -W / 2 + 1.2;
+  const x1 = x0 + bw;
+  const z0 = -D / 2 + 3.4 + r();
+  const zm = z0 + 6;
+  const left = r() < 0.5;
+  const wx0 = left ? x0 : x1 - 4.6;
+  const wx1 = wx0 + 4.6;
+  const wz1 = Math.min(D / 2 - 2.5, zm + 4 + r() * 3);
+  const lit = litFn(r, 0.55);
+  m.box(x0, x1, 0, top, z0, zm, wall);
+  m.box(wx0, wx1, 0, top, zm - 0.01, wz1, wall);
+  m.windows('front', x0, x1, z0, zm, 0, floors, fh, { col: GLASS, lit, spacing: 2.6 });
+  m.windows(left ? 'right' : 'left', wx0, wx1, zm, wz1, 0, floors, fh, { col: GLASS, lit, spacing: 3 });
+  m.windows('back', wx0, wx1, zm, wz1, 0, floors, fh, { col: GLASS, lit, spacing: 3 });
+  const h = 2 + r() * 0.6;
+  m.gable(x0, x1, z0, zm, top, h, roof, wall, true);
+  m.gable(wx0, wx1, zm, wz1, top, h * 0.8, roof, wall, false);
+  const dx = left ? x1 - 2.4 : x0 + 2.4;
+  door(m, dx, z0);
+  m.box(dx - 1.2, dx + 1.2, 2.4, 2.6, z0 - 1.4, z0, TRIM);
+  m.ground(dx - 0.6, dx + 0.6, -D / 2 + 3.2, z0, 0.08, PAVE);
+  // Driveway on the open side.
+  const cx = left ? x1 + (W / 2 - x1) / 2 : 0;
+  let drive: number | null = null;
+  if (W / 2 - x1 > 3) {
+    m.ground(cx - 1.4, cx + 1.4, -D / 2 + 0.2, z0 + 5, 0.08, PAVE);
+    drive = cx;
   }
-  if (def.wealth === 2 && D - (z1 + D / 2) > 5)
-    m.ground(-2.5, 2.5, z1 + 1.2, Math.min(D / 2 - 1, z1 + 5), 0.1, POOL);
+  return { dx, z1: wz1, drive };
+}
+
+/** A modern home: offset flat-roofed volumes, big glass and timber cladding. */
+function modernHouse(m: ModelBuilder, def: ZonedDef, W: number, D: number, r: () => number): HouseOut {
+  const wall = pick(r, MODERN_WALLS);
+  const trim = wall.getHex() === 0x3f4448 ? C('#e6e7e4') : C('#5a6066');
+  const fh = 3.1;
+  const bw = Math.min(W - 3, 7 + def.level * 1.8 + r() * 1.5);
+  const bd = Math.min(D - 7, 7 + def.level + r() * 1.5);
+  const x0 = -W / 2 + 1.5;
+  const x1 = x0 + bw;
+  const z0 = -D / 2 + 4 + r();
+  const z1 = z0 + bd;
+  const glass = pick(r, OFFICE_GLASS);
+  m.box(x0, x1, 0, fh, z0, z1, wall, trim);
+  m.windows('front', x0, x1, z0, z1, 0, 1, fh, { col: glass, lit: litFn(r, 0.6), band: true, height: 2.2 });
+  m.windows('back', x0, x1, z0, z1, 0, 1, fh, { col: glass, lit: litFn(r, 0.6), band: true, height: 2.2 });
+  m.parapet(x0, x1, z0, z1, fh, trim, 0.25, 0.2);
+  // Upper volume, shifted and cantilevered over the front.
+  const ux0 = r() < 0.5 ? x0 : x0 + bw * 0.35;
+  const ux1 = ux0 + bw * 0.65;
+  const uz0 = z0 - 1.2;
+  const uz1 = z1 - 1;
+  m.box(ux0, ux1, fh, fh * 2, uz0, uz1, wall, trim);
+  m.windows('front', ux0, ux1, uz0, uz1, fh, 1, fh, {
+    col: glass,
+    lit: litFn(r, 0.6),
+    band: true,
+    height: 1.6,
+  });
+  m.windows('left', ux0, ux1, uz0, uz1, fh, 1, fh, { col: glass, lit: litFn(r, 0.5), spacing: 3 });
+  m.windows('right', ux0, ux1, uz0, uz1, fh, 1, fh, { col: glass, lit: litFn(r, 0.5), spacing: 3 });
+  // Timber panel on part of the upper front.
+  m.quad(
+    [ux0 + 0.1, fh + 0.1, uz0 - 0.06],
+    [ux0 + 0.1, fh * 2 - 0.1, uz0 - 0.06],
+    [ux0 + (ux1 - ux0) * 0.3, fh * 2 - 0.1, uz0 - 0.06],
+    [ux0 + (ux1 - ux0) * 0.3, fh + 0.1, uz0 - 0.06],
+    WOOD,
+  );
+  m.parapet(ux0, ux1, uz0, uz1, fh * 2, trim, 0.25, 0.2);
+  const dx = ux0 > x0 ? x0 + 1.4 : x1 - 1.4;
+  door(m, dx, z0, WOOD, 0.6, 2.3);
+  m.ground(dx - 0.6, dx + 0.6, -D / 2 + 3.2, z0, 0.08, PAVE);
+  let drive: number | null = null;
+  if (W / 2 - x1 > 3.2) {
+    const cx = (x1 + W / 2) / 2;
+    m.ground(cx - 1.5, cx + 1.5, -D / 2 + 0.2, z0 + 4, 0.08, C('#b8b2a6'));
+    drive = cx;
+  }
+  return { dx, z1, drive };
+}
+
+/** A one-storey cottage with a steep roof, a dormer and a chimney. */
+function cottage(m: ModelBuilder, _def: ZonedDef, W: number, D: number, r: () => number): HouseOut {
+  const wall = r() < 0.35 ? C('#d8cbb3') : pick(r, WALLS_R);
+  const roof = pick(r, ROOFS);
+  const bw = Math.min(W - 2.4, 5.4 + r() * 0.8);
+  const bd = Math.min(D - 7, 6 + r());
+  const x0 = -bw / 2;
+  const x1 = bw / 2;
+  const z0 = -D / 2 + 3.6 + r();
+  const z1 = z0 + bd;
+  const top = 2.7;
+  const h = 2.8 + r() * 0.5;
+  m.box(x0, x1, 0, top, z0, z1, wall);
+  const lit = litFn(r, 0.55);
+  m.windows('front', x0, x1, z0, z1, 0, 1, top, { col: GLASS, lit, spacing: 2.4 });
+  m.windows('left', x0, x1, z0, z1, 0, 1, top, { col: GLASS, lit, spacing: 3 });
+  m.windows('right', x0, x1, z0, z1, 0, 1, top, { col: GLASS, lit, spacing: 3 });
+  m.gable(x0, x1, z0, z1, top, h, roof, wall, true, 0.45);
+  // Dormer on the front slope.
+  const zm = (z0 + z1) / 2;
+  const zf = z0 + bd * 0.22;
+  const dxm = (r() - 0.5) * (bw * 0.3);
+  const dt = top + h * 0.72;
+  m.box(dxm - 0.8, dxm + 0.8, top + 0.3, dt, zf, zm, wall);
+  m.quad(
+    [dxm - 0.45, dt - 1.1, zf - 0.05],
+    [dxm - 0.45, dt - 0.25, zf - 0.05],
+    [dxm + 0.45, dt - 0.25, zf - 0.05],
+    [dxm + 0.45, dt - 1.1, zf - 0.05],
+    GLASS,
+    lit(0),
+  );
+  m.gable(dxm - 0.8, dxm + 0.8, zf, zm, dt, 0.7, roof, wall, false, 0.12);
+  m.box(x0 + 0.5, x0 + 1.2, top + h * 0.4, top + h + 0.9, zm + 0.4, zm + 1.1, C('#9c6b52'));
+  const dx = x0 + bw * (0.25 + r() * 0.2);
+  door(m, dx, z0);
+  m.ground(dx - 0.6, dx + 0.6, -D / 2 + 3.2, z0, 0.08, PAVE);
+  return { dx, z1, drive: null };
 }
 
 function townhouses(m: ModelBuilder, _def: ZonedDef, W: number, D: number, r: () => number): void {
@@ -158,9 +370,12 @@ function apartments(m: ModelBuilder, def: ZonedDef, W: number, D: number, r: () 
   const x1 = W / 2 - 1.5;
   const z0 = -D / 2 + 2.5;
   const z1 = D / 2 - 2;
-  const wall = pick(r, def.wealth ? WALLS_R_RICH : WALLS_R);
-  const accent = pick(r, ROOFS);
+  const brick = def.wealth < 2 && r() < 0.45;
+  const wall = brick ? pick(r, BRICK) : pick(r, def.wealth ? WALLS_R_RICH : WALLS_R);
+  const accent = brick ? TRIM : pick(r, ROOFS);
   const top = floors * fh;
+  // Low brick walk-ups get a pitched roof; the rest are flat with a plant room.
+  const pitched = brick && floors <= 4;
   m.box(x0, x1, 0, top, z0, z1, wall, C('#9a958c'));
   const lit = litFn(r, 0.6);
   m.windows('front', x0, x1, z0, z1, 0, floors, fh, { col: GLASS, lit, spacing: 2.8 });
@@ -176,8 +391,16 @@ function apartments(m: ModelBuilder, def: ZonedDef, W: number, D: number, r: () 
       m.box(bx - 1.3, bx + 1.3, f * fh - 0.15, f * fh + 0.15, z0 - 1.1, z0, accent);
     }
   }
-  m.parapet(x0, x1, z0, z1, top, wall);
-  m.box(x0 + 1, x0 + 3.5, top, top + 2.2, z0 + 2, z0 + 4.5, C('#b0aba2'));
+  if (pitched) m.hip(x0, x1, z0, z1, top, 2.4, pick(r, ROOFS), 0.5);
+  else {
+    m.parapet(x0, x1, z0, z1, top, wall);
+    m.box(x0 + 1, x0 + 3.5, top, top + 2.2, z0 + 2, z0 + 4.5, C('#b0aba2'));
+    // Roof garden for the better-off.
+    if (def.wealth >= 1 && r() < 0.5) {
+      m.ground(x0 + 5, x1 - 1.5, z0 + 1.5, z1 - 1.5, top + 0.1, GRASS_RICH);
+      yardTree(m, x1 - 3, z1 - 3, r);
+    }
+  }
   // Entrance canopy.
   m.box(-1.8, 1.8, 2.6, 2.9, z0 - 1.6, z0, accent);
   m.quad(
@@ -249,14 +472,20 @@ function tower(
     m.box(-0.2, 0.2, y + 2.5, y + 2.5 + 6 + r() * 6, tz0 + td / 2 - 0.2, tz0 + td / 2 + 0.2, METAL);
 }
 
+type ShopStyle = 'store' | 'cafe' | 'market';
+
+/** Small shops: a corner store, a café with a terrace, or a mini-market behind its car park. */
 function shop(m: ModelBuilder, def: ZonedDef, W: number, D: number, r: () => number): void {
   lotBase(m, W, D, PAVE);
-  const floors = def.level >= 3 ? 2 : 1;
-  const fh = 3.8;
+  const x = r();
+  const style: ShopStyle = W >= 14 && D >= 14 && x < 0.4 ? 'market' : x > 0.7 ? 'cafe' : 'store';
+  const floors = def.level >= 3 && style !== 'market' ? 2 : 1;
+  const fh = style === 'market' ? 4.6 : 3.8;
   const x0 = -W / 2 + 0.8;
   const x1 = W / 2 - 0.8;
-  const z0 = -D / 2 + 2.2;
-  const z1 = Math.min(D / 2 - 0.8, z0 + Math.max(6, D - 4));
+  const setback = style === 'market' ? Math.min(8, D - 7) : style === 'cafe' ? Math.min(4.6, D - 5) : 2.2;
+  const z0 = -D / 2 + setback;
+  const z1 = Math.min(D / 2 - 0.8, z0 + Math.max(5, D - setback - 1.6));
   const wall = pick(r, WALLS_C);
   const top = floors * fh;
   m.box(x0, x1, 0, top, z0, z1, wall);
@@ -270,14 +499,16 @@ function shop(m: ModelBuilder, def: ZonedDef, W: number, D: number, r: () => num
     0.9,
   );
   if (floors > 1) m.windows('front', x0, x1, z0, z1, fh, floors - 1, fh, { col: GLASS, lit: litFn(r, 0.5) });
-  const awning = pick(r, AWNINGS);
-  m.quad(
-    [x0 + 0.3, 3.2, z0 - 1.8],
-    [x0 + 0.3, 3.6, z0],
-    [x1 - 0.3, 3.6, z0],
-    [x1 - 0.3, 3.2, z0 - 1.8],
-    awning,
-  );
+  if (style !== 'market') {
+    const awning = pick(r, AWNINGS);
+    m.quad(
+      [x0 + 0.3, 3.2, z0 - 1.8],
+      [x0 + 0.3, 3.6, z0],
+      [x1 - 0.3, 3.6, z0],
+      [x1 - 0.3, 3.2, z0 - 1.8],
+      awning,
+    );
+  }
   const sign = pick(r, SIGNS);
   m.box(
     (x0 + x1) / 2 - Math.min(2.5, (x1 - x0) / 3),
@@ -290,6 +521,25 @@ function shop(m: ModelBuilder, def: ZonedDef, W: number, D: number, r: () => num
   );
   m.parapet(x0, x1, z0, z1, top, wall, 0.5);
   if (r() < 0.6) m.box(x0 + 1, x0 + 2.4, top, top + 1, z1 - 3, z1 - 1.6, METAL);
+  if (style === 'cafe') {
+    // Terrace umbrellas.
+    const n = Math.max(1, Math.floor((x1 - x0) / 4));
+    const col = pick(r, AWNINGS);
+    for (let k = 0; k < n; k++) {
+      const ux = x0 + (k + 0.5) * ((x1 - x0) / n);
+      const uz = -D / 2 + 1.5;
+      m.cylinder(ux, uz, 0.06, 0, 2.3, METAL, 4);
+      m.frustum(ux, uz, 1.3, 0.08, 2.1, 2.7, k % 2 ? TRIM : col, 6, false);
+    }
+  } else if (style === 'market') {
+    // Car park in front with a few cars and a pole sign.
+    m.ground(x0, x1, -D / 2 + 0.3, z0 - 0.3, 0.08, ASPHALT_LOT);
+    const bays = Math.floor((x1 - x0) / 2.8);
+    for (let k = 0; k < bays; k++)
+      if (r() < 0.55) parkedCar(m, x0 + 1.4 + k * 2.8, z0 - 3, true, pick(r, CAR_COLOURS));
+    m.cylinder(x1 - 0.6, -D / 2 + 0.9, 0.12, 0, 5, METAL, 4);
+    m.box(x1 - 1.9, x1 + 0.3, 4.2, 5.6, -D / 2 + 0.75, -D / 2 + 1.05, sign);
+  }
 }
 
 function midCommercial(m: ModelBuilder, def: ZonedDef, W: number, D: number, r: () => number): void {
@@ -359,16 +609,24 @@ function industry(m: ModelBuilder, def: ZonedDef, W: number, D: number, r: () =>
         SOLAR,
       );
     m.parapet(x0, x1, z0, midZ, floors * fh, wall, 0.4);
+    // Some campuses get a glass drum at the entrance corner.
+    if (r() < 0.5) {
+      const cx = r() < 0.5 ? x0 + 2.8 : x1 - 2.8;
+      m.cylinder(cx, z0 + 1.6, 2.6, 0, floors * fh + 1.6, glass, 10, WHITE);
+    }
     return;
   }
   const wall = pick(r, WALLS_I);
   const h = 6 + def.level * 1.5 + tier * 1.5;
   const hallZ1 = z1 - (W > 20 ? 6 : 3);
-  m.box(x0, x1, 0, h, z0, hallZ1, wall, C('#8a8d91'));
+  // Heavy industry comes as saw-tooth sheds, barrel-roofed warehouses or tank farms.
+  const style = tier === 1 ? 'works' : r() < 0.4 ? 'sawtooth' : r() < 0.55 ? 'warehouse' : 'tanks';
+  const hx1 = style === 'tanks' && W >= 16 ? x0 + (x1 - x0) * 0.55 : x1;
+  m.box(x0, hx1, 0, h, z0, hallZ1, wall, C('#8a8d91'));
   // Loading doors on the front.
-  const doors = Math.max(1, Math.floor((x1 - x0) / 7));
+  const doors = Math.max(1, Math.floor((hx1 - x0) / 7));
   for (let k = 0; k < doors; k++) {
-    const cx = x0 + (k + 0.5) * ((x1 - x0) / doors);
+    const cx = x0 + (k + 0.5) * ((hx1 - x0) / doors);
     m.quad(
       [cx - 1.6, 0, z0 - 0.05],
       [cx - 1.6, 4, z0 - 0.05],
@@ -378,15 +636,20 @@ function industry(m: ModelBuilder, def: ZonedDef, W: number, D: number, r: () =>
     );
     m.box(cx - 2, cx + 2, 4.2, 4.5, z0 - 1.2, z0, YELLOW);
   }
-  m.windows('left', x0, x1, z0, hallZ1, 0, 1, h, { col: GLASS, lit: litFn(r, 0.4), band: true, height: 1.2 });
-  m.windows('right', x0, x1, z0, hallZ1, 0, 1, h, {
+  m.windows('left', x0, hx1, z0, hallZ1, 0, 1, h, {
     col: GLASS,
     lit: litFn(r, 0.4),
     band: true,
     height: 1.2,
   });
-  if (tier === 0) {
-    // Saw-tooth roof and a smokestack.
+  m.windows('right', x0, hx1, z0, hallZ1, 0, 1, h, {
+    col: GLASS,
+    lit: litFn(r, 0.4),
+    band: true,
+    height: 1.2,
+  });
+  const yard = hallZ1 < z1 - 2;
+  if (style === 'sawtooth') {
     const teeth = Math.max(2, Math.floor((hallZ1 - z0) / 4));
     const step = (hallZ1 - z0) / teeth;
     for (let k = 0; k < teeth; k++) {
@@ -395,15 +658,40 @@ function industry(m: ModelBuilder, def: ZonedDef, W: number, D: number, r: () =>
       m.quad([x0, h, za], [x0, h + 2.2, za], [x1, h + 2.2, za], [x1, h, za], GLASS, 0.3);
       m.quad([x1, h, zb], [x1, h + 2.2, za], [x0, h + 2.2, za], [x0, h, zb], C('#7b7f84'));
     }
-    if (def.level >= 2 || r() < 0.35) {
-      const sx = x1 - 2.5;
-      const sz = Math.min(hallZ1 + 2.5, D / 2 - 2);
-      const stackH = h + 5 + def.level * 2.5;
-      m.cylinder(sx, sz, 0.9, 0, stackH, RUST, 8);
-      m.cylinder(sx, sz, 0.95, stackH - 1.8, stackH - 0.9, WHITE, 8);
-    }
     if (W > 18) {
       m.cylinder(x0 + 3.5, Math.min(hallZ1 + 3, D / 2 - 3), 2.4, 0, 6, C('#c9c6bf'), 10, C('#a8a5a0'));
+    }
+  } else if (style === 'warehouse') {
+    // Barrel roof.
+    const segs = 6;
+    const hw = (hx1 - x0) / 2;
+    const xm = x0 + hw;
+    const rise = Math.min(3.2, hw * 0.4);
+    const roof = r() < 0.5 ? C('#8e969c') : C('#a0583a');
+    const pt = (k: number) => {
+      const a = Math.PI * (1 - k / segs);
+      return [xm + Math.cos(a) * hw, h + Math.sin(a) * rise] as const;
+    };
+    for (let k = 0; k < segs; k++) {
+      const [xa, ya] = pt(k);
+      const [xb, yb] = pt(k + 1);
+      m.quad([xa, ya, z0], [xa, ya, hallZ1], [xb, yb, hallZ1], [xb, yb, z0], roof);
+      m.tri([xm, h, z0], [xa, ya, z0], [xb, yb, z0], 0, 0, -1, wall);
+      m.tri([xm, h, hallZ1], [xb, yb, hallZ1], [xa, ya, hallZ1], 0, 0, 1, wall);
+    }
+  } else if (style === 'tanks') {
+    m.parapet(x0, hx1, z0, hallZ1, h, wall, 0.4);
+    const tx0 = hx1 + 1;
+    const R = Math.max(1.6, Math.min(3.2, (x1 - tx0) / 2 - 0.2));
+    const tx = W >= 16 ? tx0 + R : x1 - R - 0.5;
+    const n = Math.max(1, Math.floor((z1 - z0) / (2 * R + 1)));
+    const th = 5 + r() * 4;
+    for (let k = 0; k < n; k++) {
+      const tz = z0 + R + 0.5 + k * (2 * R + 1);
+      if (W < 16 && tz < hallZ1 + R) continue;
+      m.cylinder(tx, tz, R, 0, th, TANK, 10);
+      m.dome(tx, tz, R, th, TANK, 2, 10);
+      m.box(tx - R - 1.2, tx - R + 0.1, 2.2, 2.7, tz - 0.25, tz + 0.25, METAL);
     }
   } else {
     // Manufacturing: flat roof with vents and a front office.
@@ -417,8 +705,27 @@ function industry(m: ModelBuilder, def: ZonedDef, W: number, D: number, r: () =>
       band: true,
     });
   }
-  // Parked trucks area.
-  if (hallZ1 < z1 - 2) m.ground(x0, x1, hallZ1 + 0.3, z1, 0.08, ASPHALT_LOT);
+  if (style !== 'works' && style !== 'tanks' && (def.level >= 2 || r() < 0.35)) {
+    const sx = x1 - 2.5;
+    const sz = Math.min(hallZ1 + 2.5, D / 2 - 2);
+    const stackH = h + 5 + def.level * 2.5;
+    m.cylinder(sx, sz, 0.9, 0, stackH, RUST, 8);
+    m.cylinder(sx, sz, 0.95, stackH - 1.8, stackH - 0.9, WHITE, 8);
+  }
+  if (yard) {
+    // Yard behind the hall, with shipping containers now and then.
+    m.ground(x0, hx1, hallZ1 + 0.3, z1, 0.08, ASPHALT_LOT);
+    if ((style === 'warehouse' || style === 'works') && r() < 0.65) {
+      const zc = (hallZ1 + z1) / 2;
+      const n = Math.min(4, Math.floor((hx1 - x0 - 5) / 6.4));
+      for (let k = 0; k < n; k++) {
+        const cx0 = x0 + 1 + k * 6.4;
+        const stack = r() < 0.3 ? 2 : 1;
+        for (let l = 0; l < stack; l++)
+          m.box(cx0, cx0 + 6, l * 2.6, (l + 1) * 2.6, zc - 1.2, zc + 1.2, pick(r, CONTAINERS));
+      }
+    }
+  }
 }
 
 /** Build the procedural model for a zoned building on a w×d-cell lot. */

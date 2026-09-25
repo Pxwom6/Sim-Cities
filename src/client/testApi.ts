@@ -5,7 +5,9 @@ import type { Game } from '../game';
 import type { Command, CommandResult } from '../sim/commands';
 import type { CameraPose, CameraPresetName } from '../render/camera';
 import type { RenderStats } from '../render/renderer';
-import type { CityStats } from '../sim/protocol';
+import type { BuildingData, CityStats } from '../sim/protocol';
+import { ZONED_DEFS } from '../data/buildings';
+import { CELL } from '../data/zones';
 import { renderSounds, type SoundCheck } from '../audio/check';
 import type { AmbientMix } from '../audio/mix';
 
@@ -57,6 +59,11 @@ export interface TestApi {
   /** Resolves after n rendered frames (lets screenshots settle). */
   waitFrames(n: number): Promise<void>;
   errors: string[];
+  /**
+   * Dev gallery: show client-side copies of zoned buildings (no sim state) in rows from `at`, one
+   * row per def and `variants` columns. Screenshots only; the sim knows nothing about them.
+   */
+  showGallery(defs: string[], at: { x: number; z: number }, variants: number): void;
   /** Render every sound effect and the ambient bed offline, and measure them. */
   renderSounds(): Promise<SoundCheck[]>;
   /** Live audio state: context running, effects played, ambient mix and scheduled events. */
@@ -170,6 +177,44 @@ export function installTestApi(game: Game): TestApi {
       }),
     errors: [],
     renderSounds,
+    showGallery: (defs, at, variants) => {
+      const w = game.world;
+      const upserts: BuildingData[] = [];
+      let id = 9_000_000;
+      let z = at.z;
+      for (const key of defs) {
+        const def = ZONED_DEFS.get(key);
+        if (!def) continue;
+        const D = def.d * CELL;
+        let x = at.x;
+        for (let v = 0; v < variants; v++) {
+          const W = def.w * CELL;
+          upserts.push({
+            id: id++,
+            def: key,
+            zone: def.zone,
+            density: def.density,
+            wealth: def.wealth,
+            level: def.level,
+            x: x + W / 2,
+            z: z + D / 2,
+            y: Math.max(0, w.heightAt(x + W / 2, z + D / 2)),
+            angle: 0,
+            side: 1,
+            w: def.w,
+            d: def.d,
+            state: 1,
+            progress: 1,
+            variant: v,
+            flags: 0,
+            fire: 0,
+          });
+          x += W + 4;
+        }
+        z += D + 6;
+      }
+      w.applyFrame({ tick: w.stats.tick, stats: w.stats, buildings: { upserts, removed: [] } });
+    },
     getAudio: () => ({
       running: game.audio?.running ?? false,
       played: { ...game.audio?.played },
