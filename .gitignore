@@ -1,0 +1,9 @@
+node_modules
+dist
+dist-test
+test-results
+playwright-report
+.vite
+*.log
+bench-results
+balance-results

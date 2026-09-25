@@ -1,6 +1,6 @@
 # PROGRESS
 
-- [ ] M0 Foundation
+- [x] M0 Foundation
 - [ ] M1 Roads and zoning
 - [ ] M2 Growth
 - [ ] M3 Money
@@ -15,19 +15,23 @@
 - [ ] M12 Balance, performance and polish
 
 ## In progress
-M0: DESIGN.md written. Next: scaffold (Vite + TS + Three + Preact, Vitest, Playwright, ESLint, Prettier).
+M1 Roads and zoning (not started).
 
 ## Next tasks
-1. Scaffold + scripts, verify each script runs.
-2. Sim core: RNG, hash, time, commands, Sim class, worker + protocol, SimClient.
-3. Terrain generation (pure) + renderer (terrain, water, trees, sky, lighting, camera).
-4. Debug panel, window.__game, e2e smoke test with camera-preset screenshots.
+1. Road graph in the sim: nodes, quadratic-Bézier segments, road types in `src/data/roads.ts`, planning (snap, split, validate, cost) and `buildRoad` / `bulldoze` / `undo` commands.
+2. Highway connection segment at the west edge (connectZ from terrain params).
+3. Road rendering (ribbons + intersections draped on terrain), ghost preview with valid/invalid colour and cost label.
+4. Zone blocks and cells along both sides of each segment; `zone` command (brush + fill); zone rendering.
+5. Bottom toolbar with road/zone/bulldoze tools; e2e that builds straight + curved roads and zones them through the real UI.
 
 ## Known issues
-None yet.
+- Night lighting is serviceable but plain until M8 (lit windows, street lights).
+- Tree count is high in forests (~25k in-map); LOD switches to low-poly beyond 750 m.
 
-## Performance
-Not measured yet.
+## Performance (M0, cloud VM, SwiftShader)
+- Sim tick: negligible (no systems yet).
+- Overview preset: 108 draw calls, ~675k triangles (trees dominate). Street preset: ~40 calls, ~510k triangles.
+- Frame times on SwiftShader are meaningless (several seconds per frame).
 
 ## To check on the Mac
-Nothing yet.
+- Frame rate while panning the overview and street presets (expect 60 fps; M0 has no city yet).

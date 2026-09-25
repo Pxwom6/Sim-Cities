@@ -31,3 +31,11 @@ When `CLAUDE_CODE_REMOTE` is `true`, you're running in a cloud VM cloned fresh f
 
 ## Project notes
 _Maintained by Claude. Keep this brief: how to run, test and build; the folder layout; key conventions; gotchas learned the hard way._
+
+- **Run:** `npm run dev` (Vite, :5173). Query params: `?seed=…&preset=river|coast|lakes|highlands&paused=1`.
+- **Check everything:** `npm run typecheck && npm run lint && npm test && npm run e2e` (e2e builds `--mode test` into `dist-test/` and serves it on :4174).
+- **Screenshots while iterating:** `npm run build:test && node scripts/shots.mjs <outDir> overview,city,street@21` (`name@hour` fast-forwards to that hour first). SwiftShader takes 5–25 s per frame, so keep e2e lean and wait on `__game.waitFrames(n)`, not wall-clock time.
+- **Scripts in TS:** run with `npx tsx scripts/….ts` (vite-node does not work with Vite 8).
+- **Layout:** `src/sim` (pure, deterministic, runs in the worker; ESLint forbids DOM/Three/Math.random/Date there), `src/data` (balancing config), `src/client` (SimClient, ClientWorld mirror, test API), `src/render` (Three.js), `src/ui` (Preact + `styles/tokens.css`), `tests/` (Vitest), `e2e/` (Playwright).
+- **Gotchas:** `pkill -f <pattern>` can match and kill its own shell, so avoid it. Playwright is pinned to 1.56.1 to match the VM's Chromium 1194. TypeScript is pinned to 6.0 for typescript-eslint.
+

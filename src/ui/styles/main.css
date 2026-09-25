@@ -1,0 +1,215 @@
+@import './tokens.css';
+
+html {
+  font-size: calc(16px * var(--ui-scale));
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #b9d6ea;
+  font-family: var(--font-family);
+  font-weight: var(--font-weight-normal);
+  line-height: var(--line-height);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+#app {
+  position: fixed;
+  inset: 0;
+}
+#scene {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  outline: none;
+}
+#ui {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+#ui * {
+  box-sizing: border-box;
+}
+.boot {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: var(--font-size-lg);
+  color: var(--color-text-muted);
+  background: linear-gradient(#cfe4f2, #e9f1e0);
+  transition: opacity var(--duration-med) var(--ease-out);
+}
+.boot.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Generic surfaces */
+.panel {
+  pointer-events: auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(8px);
+}
+.btn {
+  appearance: none;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-strong);
+  color: var(--color-text);
+  border-radius: var(--radius-md);
+  padding: var(--space-1) var(--space-3);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+.btn:hover {
+  background: #fff;
+  border-color: var(--color-border-strong);
+}
+.btn:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 1px;
+}
+.btn.active {
+  background: var(--color-accent);
+  border-color: var(--color-accent-strong);
+  color: #fff;
+}
+.btn.icon {
+  display: inline-grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  padding: 0;
+}
+.btn.icon svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+/* Top bar */
+.topbar {
+  position: absolute;
+  top: var(--space-2);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  height: var(--topbar-height);
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-pill);
+  z-index: var(--z-hud);
+  white-space: nowrap;
+}
+.topbar .city {
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-md);
+}
+.topbar .stat {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+.topbar .stat .label {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.topbar .stat .value {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+.topbar .value.negative {
+  color: var(--color-negative);
+}
+.topbar .value.positive {
+  color: var(--color-positive);
+}
+.topbar .divider {
+  width: 1px;
+  align-self: stretch;
+  margin: var(--space-3) 0;
+  background: var(--color-border);
+}
+.speed {
+  display: flex;
+  gap: var(--space-1);
+}
+
+/* Debug panel */
+.debug {
+  position: absolute;
+  top: calc(var(--topbar-height) + var(--space-4));
+  left: var(--space-3);
+  width: 19rem;
+  padding: var(--space-3);
+  z-index: var(--z-panel);
+  font-size: var(--font-size-sm);
+  background: var(--color-surface-dark);
+  color: var(--color-text-inverse);
+  border-radius: var(--radius-md);
+  pointer-events: auto;
+  box-shadow: var(--shadow-lg);
+}
+.debug h3 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #9fb3c8;
+}
+.debug table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+}
+.debug td {
+  padding: 1px 0;
+}
+.debug td:last-child {
+  text-align: right;
+}
+.debug .row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+.debug .btn {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: var(--color-text-inverse);
+  font-size: var(--font-size-xs);
+  padding: 2px var(--space-2);
+}
+.debug .btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.hint {
+  position: absolute;
+  bottom: var(--space-3);
+  left: var(--space-3);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-inverse);
+  background: var(--color-overlay);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+}
