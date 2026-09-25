@@ -155,6 +155,11 @@ export interface BuildingDetails {
   coverage: { fire: number; police: number; health: number; education: number; park: number };
   crime: number;
   fire: number;
+  /** Residents: sick now, share of them in care, average education (0..3); air pollution here. */
+  sick: number;
+  treated: number;
+  edu: number;
+  air: number;
 }
 
 export interface NodeData {

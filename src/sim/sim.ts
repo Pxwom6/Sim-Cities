@@ -78,7 +78,8 @@ import { ignite, incidentsHour, incidentsTick } from './systems/incidents';
 import { decayCrime, splatField } from './systems/pollution';
 import type { ServiceKind } from '../data/civic';
 import { GARBAGE, UTILITIES, VEHICLE_SPEED_SCALE } from '../data/civic';
-import { fieldAt, updateGroundPollution } from './systems/pollution';
+import { fieldAt, updateAirPollution, updateGroundPollution } from './systems/pollution';
+import { healthHour } from './systems/health';
 import { rectsOverlap, type ORect } from './geom';
 import {
   book,
@@ -202,6 +203,7 @@ export class Sim {
       crime: new Float32Array(GRID_RES * GRID_RES),
       traffic: new Map(),
       transit: emptyTransit(),
+      airPollution: new Float32Array(GRID_RES * GRID_RES),
     };
     const sim = new Sim(state, terrain);
     sim.buildHighway();
@@ -654,11 +656,13 @@ export class Sim {
       updateUtilities(this);
       utilityConsequences(this);
       applyCoverage(this, this.coverage);
+      healthHour(this);
       this.refreshFlags();
       garbageHour(this);
       dispatchGarbage(this);
       if (t % (TICKS_PER_HOUR * 3) === 0) {
         updateGroundPollution(this, 3);
+        updateAirPollution(this, 3);
         decayCrime(this, 3);
       }
       if (t % (TICKS_PER_HOUR * 2) === 0) runMatcher(this);
@@ -1142,6 +1146,10 @@ export class Sim {
         park: b.covPark,
       },
       crime: Math.round(this.crimeAt(b.x, b.z) * 100) / 100,
+      sick: Math.round(b.sick),
+      treated: b.treated,
+      edu: Math.round(b.edu * 100) / 100,
+      air: Math.round(fieldAt(this.state.airPollution, b.x, b.z) * 100) / 100,
       fire: b.fire,
     };
   }

@@ -114,6 +114,7 @@ export function updateLandValue(sim: Sim, instant = false): void {
   }
   const ground = sim.state.groundPollution;
   const crime = sim.state.crime;
+  const air = sim.state.airPollution;
   // Average service coverage of nearby buildings (fire, police, health, education).
   const svcSum = new Float32Array(n);
   const svcW = new Float32Array(n);
@@ -139,6 +140,7 @@ export function updateLandValue(sim: Sim, instant = false): void {
     target -= 0.06 * Math.min(3, aband[k]!);
     target += civicEffect[k]!;
     target -= 0.2 * ground[k]!;
+    target -= 0.3 * Math.min(1, air[k]!);
     target -= 0.2 * Math.min(1, crime[k]!);
     if (svcWBlur[k]! > 0) target += 0.12 * (svcBlur[k]! / svcWBlur[k]!);
     target = Math.max(0, Math.min(1, target));

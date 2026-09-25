@@ -2,6 +2,7 @@ import { DEMAND } from '../../data/balance';
 import { ZONE_C, ZONE_I, ZONE_R } from '../../data/zones';
 import type { Sim } from '../sim';
 import { BState, buildingCapacity } from '../world/buildings';
+import { workforceEducation } from './health';
 
 /** City-wide totals, recomputed each hour and saved (they feed demand and the UI). */
 export interface CityTotals {
@@ -21,6 +22,8 @@ export interface CityTotals {
   abandoned: number;
   approval: number;
   highwayConnected: boolean;
+  /** Share of the employed educated to at least level 1 and level 2. */
+  eduWorkforce: [number, number];
 }
 
 export function emptyTotals(): CityTotals {
@@ -41,6 +44,7 @@ export function emptyTotals(): CityTotals {
     abandoned: 0,
     approval: DEMAND.appealNeutral,
     highwayConnected: false,
+    eduWorkforce: [0, 0],
   };
 }
 
@@ -87,5 +91,7 @@ export function computeTotals(sim: Sim): CityTotals {
   const biz = bizW > 0 ? bizH / bizW : res;
   t.approval = resW > 0 ? res * 0.85 + biz * 0.15 : DEMAND.appealNeutral;
   t.highwayConnected = sim.highwayConnectedBlocks() > 0;
+  const [e1, e2] = workforceEducation(sim);
+  t.eduWorkforce = [Math.round(e1 * 1000) / 1000, Math.round(e2 * 1000) / 1000];
   return t;
 }

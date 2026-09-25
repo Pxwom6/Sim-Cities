@@ -37,6 +37,9 @@ export function checkInvariants(sim: Sim): void {
       'z',
       'y',
       'progress',
+      'sick',
+      'treated',
+      'edu',
     ] as const) {
       const v = b[k];
       if (!Number.isFinite(v)) throw new InvariantError(`building ${b.id} ${k} is ${v}`);
@@ -49,6 +52,8 @@ export function checkInvariants(sim: Sim): void {
     if (b.employed > Math.max(b.pop, b.seekers))
       throw new InvariantError(`building ${b.id} employs more than live there`);
     if (!s.net.blocks.has(b.block)) throw new InvariantError(`building ${b.id} has no lot`);
+    if (b.sick > b.pop + 1e-6) throw new InvariantError(`building ${b.id} has more sick than residents`);
+    if (b.edu > 3 || b.treated > 1) throw new InvariantError(`building ${b.id} edu/treated out of range`);
   }
   const t = s.totals;
   for (const [k, v] of Object.entries(t)) {

@@ -59,6 +59,15 @@ export interface Building {
   covHealth: number;
   covEdu: number;
   covPark: number;
+  /** R: residents who are sick now, and the share of them in a hospital or clinic bed. */
+  sick: number;
+  treated: number;
+  /** R: average education of the residents, 0..3 (none, primary, high school, university). */
+  edu: number;
+  /** R: share of pupils seated at primary, high school and university level. */
+  seat1: number;
+  seat2: number;
+  seat3: number;
   /** Fire intensity 0..1, ticks burnt at full intensity, hours spent as rubble. */
   fire: number;
   burn: number;

@@ -78,4 +78,6 @@ export interface SimState {
   traffic: Map<number, number>;
   /** Bus stops and last round's ridership. */
   transit: TransitState;
+  /** Air pollution raster (GRID_RES²), 0..1, drifting with the wind. */
+  airPollution: Float32Array;
 }

@@ -1,10 +1,11 @@
-import { DEMAND, HAPPINESS } from '../../data/balance';
-import { ZONE_C, ZONE_R } from '../../data/zones';
+import { DEMAND, HAPPINESS, HEALTH } from '../../data/balance';
+import { ZONE_C, ZONE_I, ZONE_R } from '../../data/zones';
 import { GARBAGE, UTILITIES } from '../../data/civic';
 import type { Sim } from '../sim';
 import { BState, type Building } from '../world/buildings';
 import type { Factor } from './demand';
 import { landValueAt } from './landValue';
+import { fieldAt } from './pollution';
 
 const ZONE_LETTER = ['R', 'R', 'C', 'I'] as const;
 
@@ -61,6 +62,18 @@ export function happinessFactors(sim: Sim, b: Building): Factor[] {
       value: (b.zone === ZONE_R ? HAPPINESS.crime : HAPPINESS.crime * 0.7) * Math.min(1, crime),
     });
   if (b.fire > 0) f.push({ label: 'On fire!', value: -0.3 });
+  // Environment and health (DESIGN §3.11).
+  const air = fieldAt(sim.state.airPollution, b.x, b.z);
+  if (b.zone !== ZONE_I && air > 0.03)
+    f.push({
+      label: 'Polluted air',
+      value: HEALTH.airMood * air * (b.zone === ZONE_R ? HEALTH.airSensitivity[b.wealth]! : 0.5),
+    });
+  if (b.zone === ZONE_R && b.pop > 0 && b.sick > 0.05) {
+    const untreated = (b.sick * (1 - b.treated)) / b.pop;
+    if (untreated > 0.002)
+      f.push({ label: 'Sick residents without care', value: HEALTH.sickMood * untreated });
+  }
   const tax = sim.taxRate(ZONE_LETTER[b.zone]!, b.wealth);
   const taxTerm = HAPPINESS.taxPerPoint * (tax - DEMAND.neutralTax) * HAPPINESS.taxSensitivity[b.wealth]!;
   if (b.zone === ZONE_R) {

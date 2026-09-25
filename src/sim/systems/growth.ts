@@ -1,4 +1,4 @@
-import { GROWTH } from '../../data/balance';
+import { EDUCATION, GROWTH } from '../../data/balance';
 import {
   DENSITY_UNLOCK_POPULATION,
   ZONED_DEFS,
@@ -25,6 +25,7 @@ import {
 import type { ZoneBlock } from '../world/network';
 import { computeHappiness } from './happiness';
 import { landValueAt } from './landValue';
+import { educationCap, welcome } from './health';
 
 const ZONE_KEY = ['R', 'R', 'C', 'I'] as const;
 
@@ -145,6 +146,12 @@ export function createBuilding(sim: Sim, block: ZoneBlock, col: number, def: Zon
     fire: 0,
     burn: 0,
     rubbleH: 0,
+    sick: 0,
+    treated: 0,
+    edu: def.zone === ZONE_R ? EDUCATION.newcomer : 0,
+    seat1: 0,
+    seat2: 0,
+    seat3: 0,
     good: 0,
     variant: sim.rng.growth.int(1 << 16),
     born: s.tick,
@@ -180,9 +187,12 @@ export function growthPass(sim: Sim): void {
     if (b.zone !== ZONE_R || b.state !== BState.Active) continue;
     const target = Math.round(b.cap * Math.max(0, Math.min(1, 0.3 + b.happiness)));
     if (b.pop < target && s.demand.R > GROWTH.moveInMinDemand && sim.isBuildingConnected(b)) {
+      const before = b.pop;
       b.pop = Math.min(target, b.pop + Math.max(1, Math.ceil(b.cap * GROWTH.moveIn)));
+      welcome(b, before);
     } else if (b.pop > target) {
       b.pop = Math.max(target, b.pop - Math.max(1, Math.ceil(b.cap * GROWTH.moveOut)));
+      b.sick = Math.min(b.sick, b.pop);
     }
   }
 
@@ -209,12 +219,14 @@ export function growthPass(sim: Sim): void {
       if (!zone || !block.valid[i0] || block.bld[i0]) continue;
       const cell = sim.net.cellCenter(block.id, i0);
       const lv = landValueAt(sim, cell.x, cell.z);
+      // Industry's "wealth" is its tier, set by the workforce's education; offices need it too.
       let wealth: Wealth =
         zone === ZONE_I
-          ? 0
+          ? educationCap(sim, zone, lv)
           : (Math.min(
               wealthFromLandValue(lv),
               maxWealth(sim, block.seg, block.s0 + (c + 0.5) * CELL),
+              educationCap(sim, zone, lv),
             ) as Wealth);
       while (wealth > 0 && spawnDemand(sim, zone, wealth) <= 0) wealth = (wealth - 1) as Wealth;
       const demand = spawnDemand(sim, zone, wealth);
@@ -267,12 +279,21 @@ export function lifecycle(sim: Sim): void {
     if (b.distress >= GROWTH.abandonAt) {
       b.state = BState.Abandoned;
       b.pop = 0;
+      b.sick = 0;
       b.employed = 0;
       b.seekers = 0;
       b.good = 0;
       sim.markBuildingDirty(b.id);
       sim.events.push({ kind: 'abandoned', id: b.id });
       continue;
+    }
+    // Industry retools to the cleaner tier an educated workforce supports.
+    if (b.zone === ZONE_I && sim.rng.growth.chance(GROWTH.retoolChance)) {
+      const tier = educationCap(sim, ZONE_I, landValueAt(sim, b.x, b.z));
+      if (tier > b.wealth) {
+        upgradeBuilding(sim, b, zonedDef(ZONE_I, b.density, tier, b.level), b.w, b.d);
+        continue;
+      }
     }
     // Upgrades.
     const occupancy = b.cap > 0 ? b.pop / b.cap : 0;
@@ -290,10 +311,14 @@ export function lifecycle(sim: Sim): void {
     const lv = landValueAt(sim, b.x, b.z);
     const wealth: Wealth =
       b.zone === ZONE_I
-        ? b.wealth
+        ? (Math.max(b.wealth, educationCap(sim, b.zone, lv)) as Wealth)
         : (Math.max(
             b.wealth,
-            Math.min(wealthFromLandValue(lv), maxWealth(sim, block.seg, block.s0 + (b.col + b.w / 2) * CELL)),
+            Math.min(
+              wealthFromLandValue(lv),
+              maxWealth(sim, block.seg, block.s0 + (b.col + b.w / 2) * CELL),
+              educationCap(sim, b.zone, lv),
+            ),
           ) as Wealth);
     let next: ZonedDef | null = null;
     if (b.level < 3) next = zonedDef(b.zone, b.density, wealth, (b.level + 1) as Level);

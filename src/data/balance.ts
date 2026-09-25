@@ -44,6 +44,8 @@ export const GROWTH = {
   upgradeOccupancy: 0.88,
   upgradeChecks: 3,
   upgradeChance: 0.25,
+  /** Hourly chance an industrial building retools to a higher tier the workforce now supports. */
+  retoolChance: 0.02,
   /** Decline: distress per hour while unhappy; abandoned at `abandonAt`. */
   distressHappiness: 0.3,
   abandonAt: 48,
@@ -121,6 +123,56 @@ export const TRANSIT = {
   carPenalty: 300,
   /** A bus counts as this many cars on the road. */
   busPcu: 2.5,
+};
+
+/** Environment, health and education (DESIGN §3.11). */
+export const ENVIRONMENT = {
+  /** Air: cells the plume moves downwind per 3-hour update, diffusion, decay per update. */
+  windCells: 2.5,
+  airDiffusion: 0.22,
+  airDecay: 0.95,
+  /** Emission per lot cell per 3 h for heavy, manufacturing and high-tech industry. */
+  industryAir: [0.03, 0.01, 0.0015],
+  /** Emission per 3 h per unit of a plant's airPollution rating. */
+  plantAir: 1.1,
+  /** Emission per metre of road per 3 h per daily PCU. */
+  trafficAir: 3e-7,
+  /** Share of air pollution a fully wooded cell absorbs per update; parks absorb this within reach. */
+  treeAbsorb: 0.3,
+  parkAbsorb: 0.5,
+};
+
+export const HEALTH = {
+  /** New cases per resident per hour. */
+  baseRate: 0.0004,
+  airRate: 0.015,
+  groundRate: 0.003,
+  waterRate: 0.004,
+  garbageRate: 0.002,
+  /** Share of the sick who recover per hour, untreated and in a hospital or clinic bed. */
+  recoverUntreated: 0.05,
+  recoverTreated: 0.25,
+  /** Share of untreated sick who die (leave the city) per hour. */
+  deathRate: 0.004,
+  /** Mood: per unit share of untreated sick residents. */
+  sickMood: -1.5,
+  /** Mood: per unit of air pollution (× wealth sensitivity). */
+  airMood: -0.2,
+  airSensitivity: [0.8, 1.0, 1.4],
+};
+
+export const EDUCATION = {
+  /** Share of residents who are pupils at each level: primary, high school, university. */
+  pupils: [0.1, 0.06, 0.04],
+  /** How fast a home's education moves towards what its schooling supports, per hour. */
+  learnRate: 0.004,
+  /** Education of newcomers. */
+  newcomer: 0.5,
+  /** Workforce thresholds for industry tiers: share at level ≥ 1 for manufacturing, ≥ 2 for high-tech. */
+  manufacturing: 0.4,
+  highTech: 0.3,
+  /** Offices (high-wealth commerce) need this share of the workforce at level ≥ 2. */
+  offices: 0.2,
 };
 
 export const HAPPINESS = {

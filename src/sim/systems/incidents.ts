@@ -6,7 +6,8 @@ import { BState, footprint, type Building } from '../world/buildings';
 import { civicDef } from '../world/civic';
 import { attachmentOf } from './commute';
 import { Dijkstra } from './graph';
-import { fieldAt } from './pollution';
+import { sicknessRate } from './health';
+import { HEALTH } from '../../data/balance';
 import {
   despawnVehicle,
   registerVehicleKind,
@@ -134,11 +135,16 @@ export function incidentsHour(sim: Sim): void {
         if (v) inc.responder = v.id;
       }
     }
+    // Emergencies: a small base rate plus a share of new sickness (so pollution brings ambulances).
     if (
       b.zone === ZONE_R &&
       b.pop > 0 &&
       rng.chance(
-        Math.min(0.2, SERVICES.emergencyRate * b.pop * (1 + 2 * fieldAt(s.groundPollution, b.x, b.z))),
+        Math.min(
+          0.3,
+          SERVICES.emergencyRate * b.pop +
+            SERVICES.emergencyPerCase * (b.pop - b.sick) * (sicknessRate(sim, b) - HEALTH.baseRate),
+        ),
       )
     ) {
       const inc: Incident = {
@@ -201,6 +207,7 @@ export function incidentsTick(sim: Sim): void {
         sim.events.push({ kind: 'crime', id: b.id });
       } else {
         b.pop = Math.max(0, b.pop - 1);
+        b.sick = Math.min(b.sick, b.pop);
         sim.events.push({ kind: 'death', id: b.id });
       }
       const v = inc.responder ? s.vehicles.get(inc.responder) : undefined;
@@ -214,6 +221,7 @@ export function toRubble(sim: Sim, b: Building): void {
   b.fire = 0;
   b.burn = 0;
   b.pop = 0;
+  b.sick = 0;
   b.employed = 0;
   b.seekers = 0;
   b.rubbleH = 0;

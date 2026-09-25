@@ -464,6 +464,8 @@ export const SERVICES = {
   /** Emergencies per resident per hour. */
   emergencyRate: 0.00004,
   emergencyWindow: 600,
+  /** Share of new pollution-driven sickness cases that need an ambulance. */
+  emergencyPerCase: 0.15,
   /** Rubble is cleared automatically after this many hours. */
   rubbleClearHours: 36,
 };

@@ -3,7 +3,7 @@ import { canonicalStringify, decodeValue, encodeValue } from './serialize';
 import type { SimState } from './state';
 
 /** Bump when the saved state shape changes, and add a migration from the previous version. */
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 7;
 export const SAVE_FORMAT = 'citybloom-save';
 
 export interface SaveMeta {
@@ -102,6 +102,14 @@ export const migrations: Record<number, (state: Record<string, unknown>) => Reco
   4: (s) => ({ ...s, traffic: { $m: [] } }),
   // v5 → v6 (M6): bus stops and ridership.
   5: (s) => ({ ...s, transit: { stops: { $m: [] }, riders: { $m: [] }, load: { $m: [] } } }),
+  // v6 → v7 (M7): air pollution, sickness and education.
+  6: (s) => {
+    const blds = s.buildings as { $m: [number, Record<string, unknown>][] };
+    for (const [, b] of blds.$m)
+      Object.assign(b, { sick: 0, treated: 0, edu: b.zone === 1 ? 0.5 : 0, seat1: 0, seat2: 0, seat3: 0 });
+    const totals = { ...(s.totals as Record<string, unknown>), eduWorkforce: [0.5, 0] };
+    return { ...s, totals, airPollution: encodeValue(new Float32Array(128 * 128)) };
+  },
 };
 
 export function encodeState(state: SimState): unknown {

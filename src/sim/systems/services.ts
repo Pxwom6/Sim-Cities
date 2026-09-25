@@ -1,4 +1,5 @@
 import { CIVIC, SERVICES, SERVICE_KINDS, type ServiceKind } from '../../data/civic';
+import { EDUCATION } from '../../data/balance';
 import { ROAD_TYPES } from '../../data/roads';
 import { ZONE_R } from '../../data/zones';
 import type { Sim } from '../sim';
@@ -143,42 +144,35 @@ export function applyCoverage(sim: Sim, cov: Coverage): void {
   const g = cov.graph;
   sim.schoolUse.clear();
   const civics = [...sim.state.civics.values()].sort((a, b) => a.id - b.id);
-  // Seats: each school fills its nearest students first.
-  const students = new Map<number, number>();
-  const seated = new Map<number, number>();
-  const attach = new Map<number, number>();
-  for (const b of sim.state.buildings.values()) {
-    const att = b.state !== BState.Rubble ? attachmentOf(sim, g, b) : null;
-    if (att) attach.set(b.id, att.node);
-    if (b.zone === ZONE_R && b.state === BState.Active && b.pop > 0)
-      students.set(b.id, Math.round(b.pop * 0.2));
-  }
   const byNode = new Map<number, Building[]>();
+  const homes: Building[] = [];
   for (const b of sim.state.buildings.values()) {
-    const n = attach.get(b.id);
-    if (n === undefined || !students.get(b.id)) continue;
-    const list = byNode.get(n) ?? [];
+    if (b.zone !== ZONE_R || b.state !== BState.Active || b.pop <= 0) continue;
+    const att = attachmentOf(sim, g, b);
+    if (!att) continue;
+    homes.push(b);
+    const list = byNode.get(att.node) ?? [];
     list.push(b);
-    byNode.set(n, list);
+    byNode.set(att.node, list);
+  }
+  // Seats per school level and hospital beds, each filled nearest-first from its building.
+  const want = [new Map<number, number>(), new Map<number, number>(), new Map<number, number>()];
+  const got = [new Map<number, number>(), new Map<number, number>(), new Map<number, number>()];
+  const sick = new Map<number, number>();
+  const beds = new Map<number, number>();
+  for (const b of homes) {
+    for (let l = 0; l < 3; l++) want[l]!.set(b.id, b.pop * EDUCATION.pupils[l]!);
+    if (b.sick > 0) sick.set(b.id, b.sick);
   }
   for (const c of civics) {
     const def = civicDef(c);
     const svc = def.service;
-    if (!svc || svc.kind !== 'education' || !svc.capacity) continue;
-    const total = Math.round(svc.capacity * Math.min(1.25, sim.fundingEff(def.dept)));
-    let seats = total;
-    dijkstra.run(g, civicStart(sim, g, c), svc.range, (node) => {
-      for (const b of byNode.get(node) ?? []) {
-        const want = (students.get(b.id) ?? 0) - (seated.get(b.id) ?? 0);
-        if (want <= 0) continue;
-        const take = Math.min(want, seats);
-        seated.set(b.id, (seated.get(b.id) ?? 0) + take);
-        seats -= take;
-        if (seats <= 0) return false;
-      }
-      return true;
-    });
-    sim.schoolUse.set(c.id, total - seats);
+    if (!svc?.capacity || (svc.kind !== 'education' && svc.kind !== 'health')) continue;
+    const total = svc.capacity * Math.min(1.25, sim.fundingEff(def.dept));
+    const [need, have] =
+      svc.kind === 'health' ? [sick, beds] : [want[(svc.level ?? 1) - 1]!, got[(svc.level ?? 1) - 1]!];
+    const used = fill(sim, g, c, svc.range, total, byNode, need, have);
+    if (svc.kind === 'education') sim.schoolUse.set(c.id, Math.round(used));
   }
   for (const b of sim.state.buildings.values()) {
     const acc = b.state !== BState.Rubble ? sim.buildingAccess(b) : null;
@@ -189,9 +183,52 @@ export function applyCoverage(sim: Sim, cov: Coverage): void {
     b.covHealth = at('health');
     b.covPark = at('park');
     const edu = at('education');
-    const st = students.get(b.id) ?? 0;
-    b.covEdu = !acc ? 0 : st > 0 ? round(((seated.get(b.id) ?? 0) / st) * Math.max(0.5, edu)) : edu;
+    if (b.zone !== ZONE_R) {
+      b.covEdu = edu;
+      continue;
+    }
+    const share = (l: number) => {
+      const w = want[l]!.get(b.id) ?? 0;
+      return w > 0 ? round(Math.min(1, (got[l]!.get(b.id) ?? 0) / w)) : 0;
+    };
+    b.seat1 = share(0);
+    b.seat2 = share(1);
+    b.seat3 = share(2);
+    let w = 0;
+    let h = 0;
+    for (let l = 0; l < 3; l++) {
+      w += want[l]!.get(b.id) ?? 0;
+      h += got[l]!.get(b.id) ?? 0;
+    }
+    b.covEdu = !acc ? 0 : w > 0 ? round((h / w) * Math.max(0.5, edu)) : edu;
+    b.treated = b.sick > 0 ? round(Math.min(1, (beds.get(b.id) ?? 0) / b.sick)) : 0;
   }
+}
+
+/** Fill `need` from one building's capacity, nearest homes first; returns the capacity used. */
+function fill(
+  sim: Sim,
+  g: RoadGraph,
+  c: Civic,
+  range: number,
+  capacity: number,
+  byNode: Map<number, Building[]>,
+  need: Map<number, number>,
+  have: Map<number, number>,
+): number {
+  let left = capacity;
+  dijkstra.run(g, civicStart(sim, g, c), range, (node) => {
+    for (const b of byNode.get(node) ?? []) {
+      const want = (need.get(b.id) ?? 0) - (have.get(b.id) ?? 0);
+      if (want <= 0) continue;
+      const take = Math.min(want, left);
+      have.set(b.id, (have.get(b.id) ?? 0) + take);
+      left -= take;
+      if (left <= 0) return false;
+    }
+    return true;
+  });
+  return capacity - left;
 }
 
 function round(v: number): number {

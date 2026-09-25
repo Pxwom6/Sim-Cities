@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { Sim } from '../src/sim/sim';
 import { BState, type Building } from '../src/sim/world/buildings';
 import { TICKS_PER_HOUR, TICKS_PER_MONTH } from '../src/sim/time';
-import { HAPPINESS } from '../src/data/balance';
+import { EDUCATION, HAPPINESS } from '../src/data/balance';
+import { CIVIC } from '../src/data/civic';
 import { ZONE_R } from '../src/data/zones';
 import { landValueAt } from '../src/sim/systems/landValue';
 import { maxWealth } from '../src/sim/systems/growth';
@@ -80,6 +81,7 @@ describe('service coverage', () => {
     const sim = newSim();
     buildTown(sim);
     serveTown(sim);
+    sim.dispatch({ type: 'setFunding', dept: 'education', pct: 50 });
     sim.advance(TICKS_PER_MONTH * 4);
     const school = [...sim.state.civics.values()].find((c) => c.def === 'primary')!;
     const homes = active(sim)
@@ -87,8 +89,9 @@ describe('service coverage', () => {
       .sort(
         (a, b) => Math.hypot(a.x - school.x, a.z - school.z) - Math.hypot(b.x - school.x, b.z - school.z),
       );
-    const students = homes.reduce((s, b) => s + Math.round(b.pop * 0.2), 0);
-    expect(students).toBeGreaterThan(300); // more children than seats
+    // More primary pupils than the (half-funded) school has seats.
+    const pupils = homes.reduce((s, b) => s + b.pop * EDUCATION.pupils[0]!, 0);
+    expect(pupils).toBeGreaterThan(CIVIC.get('primary')!.service!.capacity! * sim.fundingEff('education'));
     const avg = (xs: Building[]) => xs.reduce((s, b) => s + b.covEdu, 0) / xs.length;
     const k = Math.floor(homes.length / 4);
     expect(avg(homes.slice(0, k))).toBeGreaterThan(avg(homes.slice(-k)) + 0.2);
