@@ -71,7 +71,7 @@ export function SystemMenu() {
 export function Toasts() {
   const game = useGame();
   return (
-    <div class="toasts" aria-live="polite">
+    <div class={`toasts ${game.selected ? 'beside-panel' : ''}`} aria-live="polite">
       {game.toasts.map((t) => (
         <div key={t.id} class={`toast ${t.tone}`} data-testid="toast">
           {t.text}

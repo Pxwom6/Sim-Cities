@@ -102,6 +102,14 @@ export function stationCoverage(
   }
 }
 
+/** Value at distance s along a segment of length len from its evenly spaced samples. */
+export function sampleAt(arr: Float32Array, s: number, len: number): number {
+  const f = Math.max(0, Math.min(1, s / Math.max(1e-6, len))) * (arr.length - 1);
+  const i = Math.min(arr.length - 2, Math.floor(f));
+  const k = f - i;
+  return arr[i]! * (1 - k) + arr[i + 1]! * k;
+}
+
 /** Coverage at distance s along a segment, interpolated between samples. */
 export function coverageOnSegment(
   cov: Coverage,
@@ -111,11 +119,7 @@ export function coverageOnSegment(
   len: number,
 ): number {
   const arr = cov.kinds[kind].get(seg);
-  if (!arr) return 0;
-  const f = Math.max(0, Math.min(1, s / Math.max(1e-6, len))) * (arr.length - 1);
-  const i = Math.min(arr.length - 2, Math.floor(f));
-  const k = f - i;
-  return arr[i]! * (1 - k) + arr[i + 1]! * k;
+  return arr ? sampleAt(arr, s, len) : 0;
 }
 
 /**
@@ -137,6 +141,7 @@ export function computeCoverage(sim: Sim): Coverage {
 /** Hourly: buildings read coverage at their road node; schools fill their nearest seats first. */
 export function applyCoverage(sim: Sim, cov: Coverage): void {
   const g = cov.graph;
+  sim.schoolUse.clear();
   const civics = [...sim.state.civics.values()].sort((a, b) => a.id - b.id);
   // Seats: each school fills its nearest students first.
   const students = new Map<number, number>();
@@ -160,7 +165,8 @@ export function applyCoverage(sim: Sim, cov: Coverage): void {
     const def = civicDef(c);
     const svc = def.service;
     if (!svc || svc.kind !== 'education' || !svc.capacity) continue;
-    let seats = Math.round(svc.capacity * Math.min(1.25, sim.fundingEff(def.dept)));
+    const total = Math.round(svc.capacity * Math.min(1.25, sim.fundingEff(def.dept)));
+    let seats = total;
     dijkstra.run(g, civicStart(sim, g, c), svc.range, (node) => {
       for (const b of byNode.get(node) ?? []) {
         const want = (students.get(b.id) ?? 0) - (seated.get(b.id) ?? 0);
@@ -172,6 +178,7 @@ export function applyCoverage(sim: Sim, cov: Coverage): void {
       }
       return true;
     });
+    sim.schoolUse.set(c.id, total - seats);
   }
   for (const b of sim.state.buildings.values()) {
     const acc = b.state !== BState.Rubble ? sim.buildingAccess(b) : null;

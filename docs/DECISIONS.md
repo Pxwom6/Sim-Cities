@@ -62,3 +62,19 @@ One line each: what was decided and why. Newest at the bottom of each section.
 - Bulldozing a civic building refunds 25 %; undo refunds 100 %.
 - Data maps mute the scene and paint values with the reference data-viz ramps: diverging red–grey–blue for supply (bad→good), sequential blue for amounts. A legend names both ends.
 - Problem icons are one Points draw call with a canvas-drawn atlas; one icon per building, most urgent first.
+
+## M5
+- Coverage is sampled every 24 m along each road (not only at junctions), so it fades smoothly along long streets; buildings read it at their frontage and the data maps tint the roads themselves.
+- Service ranges are travel seconds at free-flow speed: a fire station fully covers ~300 m of street and fades out by ~600 m, so a mid-sized town needs several stations. Parks reach only a block or two.
+- The coverage table is cached and dropped whenever roads, service buildings or funding change, keeping it a pure function of saved state (exact reloads mid-hour).
+- Buildings without power or water (below half) now gain distress whatever their mood: services had made towns happy enough to shrug off a blackout, which isn't believable.
+- In-place upgrades don't use up new-building construction slots; otherwise a happy town stopped spreading while it upgraded.
+- Garbage trucks carry 90 units (was 60): one landfill now serves about 2,500 residents.
+- Fire engines lower intensity by 0.012 per tick at the scene, so a fire caught early is out in about an hour; unanswered fires burn for ~16 hours before collapsing into rubble, which clears after 36 hours.
+- Crimes and emergencies are incidents with a response window (7 h and 10 h); only unanswered ones raise the crime map or cost a life, so police and ambulances matter through response time.
+- Health capacity (beds) is shown only once sickness exists (M7); in M5 clinics and hospitals provide coverage and ambulances.
+- Wealth level 2 needs fire, police and health coverage ≥ 0.4 at the lot; wealthier homes weigh missing services 1.5× (low wealth 0.6×).
+- The inspector lists up to three "would help" suggestions drawn from a building's worst mood factors.
+- A debug/test `ignite` cheat starts a fire in a building; M9's disasters menu builds on it.
+- Toasts move left of the inspector while it's open so they never cover it.
+- Data maps are lit as midday whatever the clock, so they stay readable at night.

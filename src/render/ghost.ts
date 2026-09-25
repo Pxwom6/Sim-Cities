@@ -12,6 +12,7 @@ import type { RoadTypeId } from '../data/roads';
 import { Curve, v2, type Vec2 } from '../sim/geom';
 import { GeoBuffer, mergeChunks } from './geoBuffer';
 import { ROAD_STYLES } from './roadStyle';
+import { RoadTint, type RoadTintPiece } from './roadTint';
 
 const OK = new Color('#3fa7ff');
 const BAD = new Color('#ff4d4d');
@@ -40,11 +41,14 @@ export class GhostRenderer {
     polygonOffsetFactor: -4,
     polygonOffsetUnits: -8,
   });
+  private coverage: RoadTint;
   private brush: Mesh;
   private snap: Mesh;
   private marker: Mesh;
 
   constructor(private heightAt: (x: number, z: number) => number) {
+    this.coverage = new RoadTint(heightAt, 'sequential', 0.8, 0.01);
+    this.group.add(this.coverage.group);
     const ringMat = (c: Color, o: number): Material =>
       new MeshBasicMaterial({
         color: c,
@@ -215,6 +219,15 @@ export class GhostRenderer {
     this.group.add(this.footprint);
   }
 
+  /** Coverage preview for a service building: road ribbons shaded by coverage (0..1 samples). */
+  showCoverage(list: RoadTintPiece[] | null): void {
+    this.coverage.show(list);
+  }
+
+  get coveragePieces(): number {
+    return this.coverage.pieces;
+  }
+
   showBrush(p: Vec2 | null, radius: number, color = '#ffffff'): void {
     this.brush.visible = !!p;
     if (!p) return;
@@ -236,6 +249,7 @@ export class GhostRenderer {
   clear(): void {
     this.showRoad(null, 'street', 'ok');
     this.showFootprint(null, 'ok');
+    this.showCoverage(null);
     this.highlightSegment(null, 0);
     this.showBrush(null, 1);
     this.showSnap(null);

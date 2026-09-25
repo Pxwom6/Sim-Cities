@@ -12,7 +12,7 @@ import type { ToolHint } from './tools/tool';
 
 /** Minimal audio interface (procedural audio arrives in M8). */
 export interface AudioSink {
-  play(name: 'build' | 'zone' | 'bulldoze' | 'error' | 'click' | 'alert'): void;
+  play(name: 'build' | 'zone' | 'bulldoze' | 'error' | 'click' | 'alert' | 'siren'): void;
 }
 
 type Listener = () => void;
@@ -126,6 +126,13 @@ export class Game {
         alert('abandoned', 'A building was abandoned. Check the inspector to see why.', 'bad');
       else if (e.kind === 'bankrupt') alert('bankrupt', 'The city is bankrupt.', 'bad');
       else if (e.kind === 'moneyNegative') alert('money', 'The treasury is empty!', 'bad');
+      else if (e.kind === 'fire') {
+        alert('fire', 'Fire! A building is burning.', 'bad');
+        this.audio?.play('siren');
+      } else if (e.kind === 'destroyed') alert('destroyed', 'A building burned down.', 'bad');
+      else if (e.kind === 'fireOut') alert('fireOut', 'Firefighters put out a fire.', 'ok');
+      else if (e.kind === 'crime') alert('crime', 'A crime went unanswered. Police coverage is thin.', 'bad');
+      else if (e.kind === 'death') alert('death', 'An ambulance could not reach a patient in time.', 'bad');
     }
   }
 

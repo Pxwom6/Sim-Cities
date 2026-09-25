@@ -18,16 +18,23 @@ export interface TestApi {
       segments: number;
       nodes: number;
       zoned: { R: number; C: number; I: number };
+      /** Roads shaded by the service placement preview / the coverage data map. */
+      coveragePreview: number;
+      coverageMap: number;
     }
   >;
   /** Place a civic building beside any road that has room (test helper). Returns its id or null. */
   placeCivic(def: string, near?: { x: number; z: number }): Promise<number | null>;
   /** Id of the first civic building with this def, or null. */
   findCivic(def: string): number | null;
+  /** Civic buildings on the client mirror. */
+  getCivics(): { id: number; def: string; x: number; z: number; angle: number }[];
+  /** Vehicles as last drawn. */
+  getVehicles(): { id: number; kind: string; phase: string; x: number; z: number }[];
   /** Show a data map (or null to hide). */
   setOverlay(map: string | null): Promise<void>;
   /** Render-side building list (id, position, state). */
-  getBuildings(): { id: number; x: number; z: number; state: number; zone: number }[];
+  getBuildings(): { id: number; x: number; z: number; state: number; zone: number; fire: number }[];
   /** Client (CSS pixel) coordinates of a world point on the ground. */
   worldToScreen(x: number, z: number): { x: number; y: number };
   advance(ticks: number): Promise<number>;
@@ -60,6 +67,8 @@ export function installTestApi(game: Game): TestApi {
         segments: w.netState.segments.size,
         nodes: w.netState.nodes.size,
         zoned: countZones(game),
+        coveragePreview: game.renderer.ghost.coveragePieces,
+        coverageMap: game.renderer.coverageMap.pieces,
       };
     },
     advance: async (ticks) => {
@@ -94,6 +103,16 @@ export function installTestApi(game: Game): TestApi {
       return null;
     },
     findCivic: (def) => [...game.world.civics.values()].find((c) => c.def === def)?.id ?? null,
+    getCivics: () =>
+      [...game.world.civics.values()].map((c) => ({ id: c.id, def: c.def, x: c.x, z: c.z, angle: c.angle })),
+    getVehicles: () =>
+      [...game.renderer.vehicles.positions].map(([id, v]) => ({
+        id,
+        kind: v.kind,
+        phase: v.phase,
+        x: v.x,
+        z: v.z,
+      })),
     setOverlay: async (map) => {
       game.overlay.set(map as never);
       if (map) await game.overlay.refresh();
@@ -105,6 +124,7 @@ export function installTestApi(game: Game): TestApi {
         z: b.z,
         state: b.state,
         zone: b.zone,
+        fire: b.fire,
       })),
     worldToScreen: (x, z) => {
       const v = new Vector3(x, Math.max(0, game.world.heightAt(x, z)), z).project(game.renderer.camera);

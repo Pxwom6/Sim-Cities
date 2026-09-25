@@ -130,3 +130,32 @@ export const IconLayers = (p: P) => (
     <path d="M12 3l9 5-9 5-9-5zM3 13l9 5 9-5M3 17l9 5 9-5" />
   </svg>
 );
+export const IconFlame = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M12 3c1 4 5 6 5 11a5 5 0 01-10 0c0-3 2-4 2-7 1.5 1 2.5 2.5 3 4 .5-3 0-5.5 0-8z" />
+  </svg>
+);
+export const IconShield = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M12 3l7 3v5c0 5-3 8.5-7 10-4-1.5-7-5-7-10V6z" />
+    <path d="M9.5 12l2 2 3.5-4" />
+  </svg>
+);
+export const IconHealth = (p: P) => (
+  <svg {...base} {...p}>
+    <rect x="4" y="4" width="16" height="16" rx="4" />
+    <path d="M12 8v8M8 12h8" />
+  </svg>
+);
+export const IconBook = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M3 6l9-3 9 3-9 3z" />
+    <path d="M7 8v5c0 1.5 2.5 3 5 3s5-1.5 5-3V8M21 6v6" />
+  </svg>
+);
+export const IconTree = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M12 3l6 8h-3l4 6H5l4-6H6z" />
+    <path d="M12 17v4" />
+  </svg>
+);

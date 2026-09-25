@@ -255,11 +255,13 @@ term to the spawn probability of that wealth level (§3.4), so taxing the rich o
 - **Occupancy (R).** Each pass residents move toward `target = capacity · clamp(0.3 + happiness, 0, 1)`
   (only moving in while R demand > −0.2). Move-in ≤ 10 % capacity per pass, move-out ≤ 5 %.
 - **Jobs (C/I).** `jobs` is capacity; `workers` comes from the matcher (§3.8).
-- **Upgrade.** Active, happiness ≥ 0.7 and occupancy ≥ 90 % for 3 consecutive hourly checks, level < 3:
+- **Upgrade.** Active, happiness ≥ 0.66 and occupancy ≥ 88 % for 3 consecutive hourly checks, level < 3:
   chance per check → rebuild in place at level+1 (bigger model and capacity). If the road now allows a
-  higher density and it's unlocked: redevelop to the next density on a larger lot.
-- **Decline.** `distress += 1/h` while happiness < 0.3 or a critical need is unmet (no power/water
-  > 12 h, no road access), else `distress −= 2/h`. `distress ≥ 48` ⇒ **abandoned** (occupants leave, jobs 0,
+  higher density and it's unlocked: redevelop to the next density on a larger lot. In-place upgrades
+  keep their occupants and don't count against `maxConstructions` (only new buildings do).
+- **Decline.** `distress += 1/h` while happiness < 0.3 or power or water is below half, `+2/h`
+  without a road link to the highway, else `distress −= 2/h`. (A pleasant neighbourhood can't
+  outweigh having no power or water.) `distress ≥ 48` ⇒ **abandoned** (occupants leave, jobs 0,
   −0.15 land value within 64 m, 4× fire risk). Abandoned buildings re-occupy if their would-be happiness
   stays > 0.5 for 24 h. Businesses **close** (jobs 0) after 12 h without power or water, before abandoning.
 
@@ -315,22 +317,32 @@ of the network first — readable on the data map. `served_b ∈ [0, 1]`.
 ### 3.7 Service coverage and incidents
 
 - **Coverage** of a service building: bounded Dijkstra from its access point in travel **time** over
-  the road graph using current congested speeds; coverage at time `t` is
-  `eff(funding) · clamp((T_max − t) / (0.5·T_max), 0, 1)` (full within half the range).
-  T_max: fire 90 s, police 100 s, clinic 80 s, hospital 150 s, schools 60–120 s, parks 45 s.
-  A building's coverage is the max over stations of that type. The data map rasterizes per-segment
-  coverage, so coverage visibly follows the roads.
-- **Capacity**: vehicles (fire/police/ambulance/garbage), beds (health), seats (education). Seats and
-  beds are allocated nearest-first by the same Dijkstra (like jobs).
-- **Incidents**, rolled hourly per building:
-  - Fire: `p = FIRE_BASE[kind] · (1 − 0.75·fireCov) · policy · (abandoned ? 4 : 1)`. Intensity grows
-    0 → 1 over ~50 ticks, spreads to buildings within 16 m (`p = 0.05·intensity` every 10 ticks), and
-    destroys the building after 120 ticks at full intensity (→ rubble). The nearest station with a free
-    engine dispatches it along the shortest path; on arrival it lowers intensity until out.
-  - Crime: `rate = CRIME_BASE · (1 + 2·unemployment + 0.5·[low wealth] + 1.5·max(0, 0.5 − H)) ·
-    (1 − 0.8·policeCov)`. A patrol car is dispatched; if it arrives within 20 game minutes the crime is
-    stopped, otherwise the crime grid rises around the building.
-  - Sickness and emergencies: see §3.11; ambulances are dispatched for emergencies.
+  the road graph (free-flow speeds until M6 adds congestion). Each road touching a reached junction is
+  then **sampled every 24 m** at `t(s) = min(t_a + s/v, t_b + (len − s)/v, |s − s_access|/v on its own
+  road)`, and coverage is `min(1, eff) · clamp((T − t) / (T − 0.5·T), 0, 1)` (full within half the
+  range), with `T = range · (0.85 + 0.15·eff)` and `eff` the department's funding effect. A road's
+  coverage is the max over stations of that kind. Ranges (s): fire 55, police 60, clinic 45, hospital
+  100, primary 45, high school 80, library 50, university 240, pocket park 16, plaza 20, city park 32
+  (a street is 11 m/s, so a fire station fully covers ~300 m of street and fades out by ~600 m).
+  Buildings read the value at their frontage (`seg`, `s`); the data maps tint the roads themselves
+  with these samples, so coverage visibly follows the roads.
+- The coverage table is a pure function of roads, service buildings and funding. The sim caches it and
+  drops the cache whenever one of those changes, so a reload mid-hour computes the same numbers.
+- **Capacity**: vehicles per station (scaled by funding). School seats: children = 20 % of residents;
+  each school's Dijkstra fills the nearest homes first, and `covEdu = seated share · max(0.5, roadCov)`.
+  Hospital beds arrive with sickness in M7.
+- **Incidents**, rolled hourly per building (probabilities per hour):
+  - Fire: `p = 0.00012 · (1 − 0.75·fireCov) · (abandoned ? 4 : 1) · (industry ? 1.5 : 1)`. Intensity
+    starts at 0.05 and grows 0.004/tick; above 0.5 it spreads every 30 ticks to buildings within 14 m
+    (`p = 0.06 · intensity · (1 − 0.5·theirCov)`); after 700 ticks at full intensity the building
+    collapses to **rubble**, which clears after 36 h so the lot can regrow. The nearest station (by road
+    time from the fire) with an engine at home dispatches it; at the scene it lowers intensity by
+    `0.012·eff` per tick until the fire is out. Fires still unanswered are re-dispatched hourly.
+  - Crime: `p = 0.0015 · (1 + 2·unemployment + 0.5·[low wealth] + 1.5·max(0, 0.5 − H)) ·
+    (1 − 0.8·policeCov) · occupancy`. The nearest free patrol car is sent; if nobody arrives within
+    420 ticks the crime raster rises around the building (+0.12, decaying every 3 h).
+  - Emergencies: `p = 0.00004 · residents · (1 + 2·groundPollution)`; an ambulance is sent; if none
+    arrives within 600 ticks a resident dies. Sickness proper arrives in M7.
 - Service vehicles are sim entities with a route of road legs and progress, moving each tick at the
   segment's congested speed — traffic delays response. The renderer extrapolates them between frames.
 - **Vehicle time.** One tick is a game minute, so a truck driving at real speed would cross the map in
@@ -373,7 +385,7 @@ factor for the inspector (e.g. "No water: −30 %").
 
 | Factor | Residential contribution |
 |---|---|
-| Power / water / sewage | −0.30 / −0.30 / −0.15 · (1 − served); polluted water −0.10 |
+| Power / water / sewage | −0.28 / −0.28 / −0.15 · (1 − served); polluted water −0.10 |
 | Garbage | −0.15 · clamp((garbage − 10) / 30, 0, 1) |
 | Fire / police / health / education | +0.05·cov − 0.06·(1 − cov)·expect[w] each |
 | Parks & amenities | +0.10 · parkCov (+ landmarks, policies) |
@@ -381,13 +393,15 @@ factor for the inspector (e.g. "No water: −30 %").
 | Jobs | −0.15 · unemploymentRate(b) |
 | Shopping | +0.04·shopAccess − 0.06·(1 − shopAccess) |
 | Air / ground pollution | −0.20·air·sens[w] / −0.10·ground |
-| Crime | −0.15 · crime |
+| Crime | −0.15 · crime (businesses ×0.7) |
+| On fire | −0.30 |
 | Taxes | −0.015 · (rateR[w] − 9) · taxSens[w] |
 | Sickness | −0.20 · sickFraction |
 
 `expect = [0.6, 1.0, 1.5]`, `sens = [0.8, 1.0, 1.4]`, `taxSens = [1.4, 1.0, 0.8]` (low/med/high).
-Wealthier residents pay more and expect more: that's the core tension. Commercial: utilities,
-customers, workers, goods, crime, fire, taxes. Industrial: utilities, workers, freight access, fire,
+Wealthier residents pay more and expect more: that's the core tension. Businesses weigh fire and
+police at `+0.03·cov − 0.04·(1 − cov)·expect[w]`; shops like parks at half the residential effect.
+Commercial: utilities, customers, workers, goods, crime, fire, taxes. Industrial: utilities, workers, freight access, fire,
 taxes. **Approval** = 85 % resident-weighted residential H + 15 % job-weighted business H.
 
 ### 3.10 Land value and wealth
@@ -395,10 +409,12 @@ taxes. **Approval** = 85 % resident-weighted residential H + 15 % job-weighted b
 Raster (16 m), recomputed every 3 h and eased (`LV += 0.25·(target − LV)`), then 3×3 blurred:
 
 ```
-target = 0.35 + 0.12·waterfront + 0.05·elevationView + 0.15·park + 0.10·avgServiceCov
-       + 0.05·trees + 0.10·(neighbourHappiness − 0.5) + landmarks + 0.05·roadClass
-       − 0.30·air − 0.20·ground − 0.20·crime − 0.15·abandonedNearby − 0.10·industryNuisance
+target = 0.30 + 0.15·waterfront + 0.07·view + 0.05·trees + 0.20·(neighbourHappiness − 0.5)
+       + civic effects (parks +0.12…0.20 within 110–240 m, library +0.06; plants, landfills negative)
+       + 0.12·avgServiceCoverage (blurred)
+       − 0.08·industryNuisance − 0.06·abandonedNearby − 0.20·ground − 0.20·crime
 ```
+(Air pollution joins in M7.)
 
 Wealth that moves in: `LV < 0.40` low, `< 0.70` medium, else high. Happy buildings in a higher-LV
 area redevelop to the higher wealth (gentrification); decline lowers it.

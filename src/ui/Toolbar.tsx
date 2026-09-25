@@ -5,7 +5,7 @@ import type { ZoneLetter } from '../data/zones';
 import type { RoadMode } from '../tools/roadTool';
 import type { ToolId } from '../tools/manager';
 import { useGameUpdates } from './hooks';
-import { CIVIC_DEFS, type CivicCategory } from '../data/civic';
+import { CIVIC_DEFS, type CivicCategory, type CivicDef } from '../data/civic';
 import { MAPS } from '../client/overlay';
 import {
   IconBolt,
@@ -13,6 +13,11 @@ import {
   IconDrop,
   IconLayers,
   IconTrash,
+  IconFlame,
+  IconShield,
+  IconHealth,
+  IconBook,
+  IconTree,
   IconCurve,
   IconEraser,
   IconFactory,
@@ -262,6 +267,7 @@ export function Toolbar() {
                     `$${d.cost.toLocaleString('en-US')} to build · $${d.upkeep.toLocaleString('en-US')}/month upkeep`,
                     ...out,
                     ...(d.garbage ? [`${d.garbage.trucks} trucks`] : []),
+                    ...(d.service ? [serviceLine(d.service)] : []),
                     d.blurb,
                     ...(locked ? [`Unlocks at ${d.unlockPopulation.toLocaleString('en-US')} residents`] : []),
                   ],
@@ -318,6 +324,16 @@ export function Toolbar() {
               'Pumps bring water in; outflows or treatment plants take sewage away.',
             ],
             ['garbage', IconTrash, 'Garbage', 'Trucks collect garbage from buildings in reach.'],
+            ['fire', IconFlame, 'Fire', 'Fire stations cover what their engines can reach quickly by road.'],
+            ['police', IconShield, 'Police', 'Police stations deter crime and answer calls along the roads.'],
+            ['health', IconHealth, 'Health', 'Clinics and hospitals treat the sick and run ambulances.'],
+            [
+              'education',
+              IconBook,
+              'Education',
+              'Schools seat the children of nearby homes; libraries help too.',
+            ],
+            ['parks', IconTree, 'Parks and plazas', 'Lift moods and land value in the streets around them.'],
           ] as [CivicCategory, typeof IconBolt, string, string][]
         ).map(([cat, Icon, name, blurb]) => (
           <ToolButton
@@ -374,6 +390,17 @@ export function Toolbar() {
       </div>
     </div>
   );
+}
+
+function serviceLine(svc: NonNullable<CivicDef['service']>): string {
+  const reach = `Reaches about ${Math.round((svc.range * 40) / 3.6 / 10) * 10} m of street`;
+  const parts = [reach];
+  if (svc.vehicles)
+    parts.push(
+      `${svc.vehicles} ${svc.vehicle === 'ambulance' ? 'ambulances' : svc.vehicle === 'police' ? 'patrol cars' : 'engines'}`,
+    );
+  if (svc.capacity && svc.kind === 'education') parts.push(`${svc.capacity.toLocaleString('en-US')} seats`);
+  return parts.join(' · ');
 }
 
 export function ToolHintLabel() {

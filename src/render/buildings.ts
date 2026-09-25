@@ -18,6 +18,7 @@ const CHUNK = 128;
 const MAX_CHUNK_REBUILDS_PER_FRAME = 3;
 const STATE_CONSTRUCTION = 0;
 const STATE_ABANDONED = 2;
+const STATE_RUBBLE = 3;
 const SCAFFOLD = new Color('#c98b4a');
 const WINDOW_LIGHT = new Color('#ffd49a');
 
@@ -151,12 +152,14 @@ export class BuildingRenderer {
   }
 
   model(b: BuildingData): ModelData {
+    if (b.state === STATE_RUBBLE) return assets.rubble(b.w, b.d, b.variant);
     return assets.zoned(b.def, b.w, b.d, b.variant);
   }
 
   /** Append a building's model, transformed into world space, to the arrays. */
   private append(b: BuildingData, m: ModelData, out: Arrays, clipTo?: number): void {
-    appendModel(out, m, b.x, b.y, b.z, buildingYaw(b), b.state === STATE_ABANDONED, clipTo);
+    const look = b.fire > 0 ? Math.min(1, b.fire * 1.2) : b.state === STATE_ABANDONED;
+    appendModel(out, m, b.x, b.y, b.z, buildingYaw(b), look, clipTo);
   }
 
   private rebuildChunk(k: number): void {
@@ -344,9 +347,11 @@ export function appendModel(
   y: number,
   z: number,
   yaw: number,
-  abandoned = false,
+  abandoned: boolean | number = false,
   clipTo?: number,
 ): void {
+  // true = abandoned (greyed, dark windows); a number = charred by fire to that degree (0..1).
+  const char = typeof abandoned === 'number' ? abandoned : 0;
   const c = Math.cos(yaw);
   const s = Math.sin(yaw);
   const n = m.pos.length / 3;
@@ -367,7 +372,12 @@ export function appendModel(
     let r = m.col[i * 3]!;
     let g = m.col[i * 3 + 1]!;
     let bl = m.col[i * 3 + 2]!;
-    if (abandoned) {
+    if (char > 0) {
+      const k = 1 - 0.75 * char;
+      r *= k;
+      g *= k * 0.92;
+      bl *= k * 0.85;
+    } else if (abandoned) {
       const grey = (r + g + bl) / 3;
       r = (r * 0.35 + grey * 0.65) * 0.62;
       g = (g * 0.35 + grey * 0.65) * 0.6;
@@ -376,7 +386,7 @@ export function appendModel(
     out.col[o] = r;
     out.col[o + 1] = g;
     out.col[o + 2] = bl;
-    out.emi[out.n] = abandoned ? 0 : m.emi[i]!;
+    out.emi[out.n] = abandoned === true || char > 0.3 ? 0 : m.emi[i]!;
     if (out.clip) out.clip[out.n] = clipTo ?? 1e6;
     out.n++;
   }

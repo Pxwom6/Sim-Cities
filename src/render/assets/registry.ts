@@ -1,7 +1,7 @@
 import { ZONED_DEFS } from '../../data/buildings';
 import type { ModelData } from './builder';
 import { buildZonedModel } from './models';
-import { buildCivicModel } from './civicModels';
+import { buildCivicModel, buildRubbleModel } from './civicModels';
 import { CIVIC } from '../../data/civic';
 
 /** Number of visual variants per archetype and lot size. */
@@ -44,6 +44,17 @@ export class AssetRegistry {
     if (!m) {
       const o = this.overrides.get(def);
       m = o ? o() : buildCivicModel(CIVIC.get(def)!, variant % 4, q / 4);
+      this.cache.set(k, m);
+    }
+    return m;
+  }
+
+  /** Burned-out lot: a pile of charred debris. */
+  rubble(w: number, d: number, variant: number): ModelData {
+    const k = `rubble|${w}x${d}|${variant % 4}`;
+    let m = this.cache.get(k);
+    if (!m) {
+      m = buildRubbleModel(w, d, variant % 4);
       this.cache.set(k, m);
     }
     return m;

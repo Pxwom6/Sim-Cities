@@ -643,6 +643,46 @@ body {
   color: var(--color-text-muted);
 }
 
+.warn.fire {
+  background: rgba(227, 73, 72, 0.14);
+  color: #9b2322;
+  font-weight: var(--font-weight-bold);
+}
+.coverage {
+  list-style: none;
+  margin: var(--space-2) 0 var(--space-1);
+  padding: 0;
+}
+.coverage li {
+  display: grid;
+  grid-template-columns: 6.5rem 1fr 2.6rem;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px 0;
+}
+.coverage li span:last-child {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.needs {
+  margin-top: var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-sunken);
+  font-size: var(--font-size-xs);
+}
+.needs h4 {
+  margin: 0 0 var(--space-1);
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+.needs ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
 /* Toasts */
 .toasts {
   position: absolute;
@@ -652,6 +692,10 @@ body {
   flex-direction: column;
   gap: var(--space-2);
   z-index: var(--z-toast);
+}
+.toasts.beside-panel {
+  /* Keep clear of the inspector on the right. */
+  right: calc(20rem + var(--space-3) * 2);
 }
 .toast {
   padding: var(--space-2) var(--space-3);

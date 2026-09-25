@@ -215,7 +215,10 @@ describe('happiness, land value and wealth', () => {
     expect(good.lv).toBeGreaterThan(bad.lv);
     // No top-wealth homes where fire, police and health can't reach.
     expect(bad.list.filter((b) => b.wealth === 2).length).toBe(0);
-    for (const b of bad.list.slice(0, 20)) expect(maxWealth(bad.sim, b.x, b.z)).toBeLessThan(2);
+    for (const b of bad.list.slice(0, 20)) {
+      const acc = bad.sim.buildingAccess(b)!;
+      expect(maxWealth(bad.sim, acc.seg, acc.s)).toBeLessThan(2);
+    }
     const d = bad.sim.buildingDetails(bad.list[0]!.id)!;
     expect(d.factors.some((f) => /no fire station/i.test(f.label))).toBe(true);
     expect(d.factors.some((f) => /no police/i.test(f.label))).toBe(true);

@@ -8,6 +8,7 @@ import type { RoadTypeId } from '../data/roads';
 import type { Factor } from './systems/demand';
 import type { UtilityStats } from './systems/utilities';
 import type { OverlayMap } from './systems/overlays';
+import type { ServiceKind } from '../data/civic';
 
 export interface CityStats {
   tick: number;
@@ -53,6 +54,17 @@ export interface CivicDetails {
     storage: number;
     processedToday: number;
     process: number;
+  } | null;
+  service: {
+    kind: string;
+    /** Vehicles the station can run at current funding, and how many are out now. */
+    vehicles: number;
+    out: number;
+    /** Occupied buildings this building covers well (≥ 50%). */
+    reach: number;
+    /** Schools: seats at current funding and seats filled. */
+    seats: number;
+    used: number;
   } | null;
   refund: number;
 }
@@ -239,7 +251,9 @@ export type Query =
   | { type: 'budget' }
   | { type: 'civic'; id: number }
   | { type: 'overlay'; map: OverlayMap }
-  | { type: 'coveragePreview'; def: string; x: number; z: number; angle: number; side: 1 | -1 };
+  | { type: 'coveragePreview'; def: string; x: number; z: number; angle: number; side: 1 | -1 }
+  /** Coverage samples along every road for one service (for the coverage data maps). */
+  | { type: 'coverageRoads'; kind: ServiceKind };
 
 export type MainToWorker =
   | { type: 'init'; options: Partial<GameOptions>; testMode?: boolean }

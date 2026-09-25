@@ -4,6 +4,7 @@ import {
   PerspectiveCamera,
   SRGBColorSpace,
   Scene,
+  Vector2,
   Vector3,
   WebGLRenderer,
 } from 'three';
@@ -22,6 +23,8 @@ import { CivicRenderer } from './civics';
 import { VehicleRenderer } from './vehicles';
 import { IconRenderer } from './icons';
 import { GarbageProps } from './props';
+import { EffectsRenderer } from './effects';
+import { RoadTint } from './roadTint';
 
 export interface RenderStats {
   calls: number;
@@ -31,6 +34,7 @@ export interface RenderStats {
   trees: number;
   icons: number;
   vehicles: number;
+  fires: number;
 }
 
 /** Owns the Three.js scene. Reads ClientWorld; never mutates the simulation. */
@@ -51,7 +55,11 @@ export class GameRenderer {
   readonly vehicles: VehicleRenderer;
   readonly icons: IconRenderer;
   readonly garbage: GarbageProps;
+  readonly effects: EffectsRenderer;
+  /** Road ribbons for the service coverage data maps. */
+  readonly coverageMap: RoadTint;
   private time = 0;
+  private tmpSize = new Vector2();
   private treePoints: { x: number; z: number }[] = [];
   private treeRebuildAt = 0;
   lastStats: RenderStats = {
@@ -62,6 +70,7 @@ export class GameRenderer {
     trees: 0,
     icons: 0,
     vehicles: 0,
+    fires: 0,
   };
 
   constructor(
@@ -96,6 +105,10 @@ export class GameRenderer {
     this.scene.add(this.icons.points);
     this.garbage = new GarbageProps(world);
     this.scene.add(this.garbage.mesh);
+    this.effects = new EffectsRenderer(world, this.vehicles, this.buildings.heights);
+    this.scene.add(this.effects.group);
+    this.coverageMap = new RoadTint((x, z) => world.heightAt(x, z), 'diverging', 0.85);
+    this.scene.add(this.coverageMap.group);
     this.ghost = new GhostRenderer((x, z) => world.heightAt(x, z));
     this.scene.add(this.ghost.group);
     this.trees = new TreeRenderer(world);
@@ -198,7 +211,8 @@ export class GameRenderer {
   frame(dt: number): void {
     this.time += dt;
     this.controller.update(dt);
-    const hour = hourOfDay(this.world.displayTick);
+    // Data maps are read in flat daylight, whatever the time.
+    const hour = this.terrain.uniforms.uOverlayOn.value > 0.5 ? 13 : hourOfDay(this.world.displayTick);
     const l = this.lighting;
     l.update(hour);
     l.follow(
@@ -215,6 +229,8 @@ export class GameRenderer {
     this.vehicles.update(this.world.displayTick);
     this.icons.update(this.time, this.buildings.heights);
     this.garbage.update();
+    const bufH = this.renderer.getDrawingBufferSize(this.tmpSize).y;
+    this.effects.update(this.time, bufH / (2 * Math.tan((this.camera.fov * Math.PI) / 360)));
     // Trees under new buildings: rebuilt at most twice a second.
     if (this.treePoints.length && this.time - this.treeRebuildAt > 0.5) {
       this.treeRebuildAt = this.time;
@@ -240,6 +256,7 @@ export class GameRenderer {
       trees: this.trees.instanceCount,
       icons: this.icons.count,
       vehicles: this.vehicles.positions.size,
+      fires: this.effects.fires,
     };
   }
 }

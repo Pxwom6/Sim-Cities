@@ -1,6 +1,8 @@
 import { Color } from 'three';
 import type { Game } from '../game';
 import type { OverlayMap, OverlayResult } from '../sim/systems/overlays';
+import { SERVICE_KINDS, type ServiceKind } from '../data/civic';
+import { ROAD_TYPES } from '../data/roads';
 
 /** Colour ramps for data maps (see the data-viz reference palette). */
 const SEQUENTIAL = ['#cde2fb', '#9ec5f4', '#6da7ec', '#3987e5', '#256abf', '#184f95', '#0d366b'].map(
@@ -26,7 +28,15 @@ export const MAPS: { id: OverlayMap; name: string; group: string }[] = [
   { id: 'water', name: 'Water', group: 'Utilities' },
   { id: 'sewage', name: 'Sewage', group: 'Utilities' },
   { id: 'garbage', name: 'Garbage', group: 'Utilities' },
+  { id: 'fire', name: 'Fire', group: 'Services' },
+  { id: 'police', name: 'Police', group: 'Services' },
+  { id: 'health', name: 'Health care', group: 'Services' },
+  { id: 'education', name: 'Education', group: 'Services' },
+  { id: 'park', name: 'Parks', group: 'Services' },
+  { id: 'happiness', name: 'Happiness', group: 'City' },
   { id: 'landValue', name: 'Land value', group: 'City' },
+  { id: 'wealth', name: 'Wealth', group: 'City' },
+  { id: 'crime', name: 'Crime', group: 'City' },
   { id: 'groundPollution', name: 'Ground pollution', group: 'Environment' },
   { id: 'groundwater', name: 'Groundwater', group: 'Resources' },
   { id: 'resources', name: 'Ore and oil', group: 'Resources' },
@@ -45,6 +55,10 @@ export class OverlayController {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
     const u = this.game.renderer.terrain.uniforms;
+    this.game.renderer.coverageMap.show(null);
+    this.roadsKey = '';
+    // Zone paint would hide the data underneath.
+    this.game.renderer.zones.group.visible = !map;
     if (!map) {
       u.uOverlayOn.value = 0;
       this.last = null;
@@ -79,6 +93,28 @@ export class OverlayController {
     }
     tex.needsUpdate = true;
     u.uOverlayOn.value = 1;
+    if ((SERVICE_KINDS as readonly string[]).includes(map)) await this.refreshRoads(map as ServiceKind);
     this.game.notify();
+  }
+
+  private roadsKey = '';
+
+  /** Service maps also tint the roads themselves, so coverage visibly follows them. */
+  private async refreshRoads(kind: ServiceKind): Promise<void> {
+    const res = await this.game.client.query<{ seg: number; v: number[] }[]>({ type: 'coverageRoads', kind });
+    if (this.active !== kind) return;
+    const key = JSON.stringify(res);
+    if (key === this.roadsKey) return;
+    this.roadsKey = key;
+    const net = this.game.world.net;
+    this.game.renderer.coverageMap.show(
+      res
+        .filter((r) => net.st.segments.has(r.seg))
+        .map((r) => ({
+          curve: net.curve(r.seg),
+          v: r.v,
+          half: ROAD_TYPES[net.segment(r.seg).type].width / 2 + 0.5,
+        })),
+    );
   }
 }

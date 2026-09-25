@@ -2,6 +2,7 @@
 // Usage: npx tsx scripts/bench.ts [months] [gridSize]
 import { Sim } from '../src/sim/sim';
 import { TICKS_PER_MONTH } from '../src/sim/time';
+import { placeAlong } from '../tests/helpers';
 
 const months = Number(process.argv[2] ?? 12);
 const cells = Number(process.argv[3] ?? 9);
@@ -44,7 +45,55 @@ for (let j = 0; j < cells; j++) {
     });
   }
 }
-console.log(`roads built ${built}, failed ${failed}, segments ${sim.state.net.segments.size}`);
+// Utilities and services along the north-south avenues, spread over the grid.
+sim.dispatch({ type: 'cheat', cheat: 'unlockAll' });
+const avenues = [...sim.state.net.segments.values()].filter((s) => s.type === 'avenue').map((s) => s.id);
+const kit = [
+  'coal',
+  'pump',
+  'pump',
+  'treatment',
+  'landfill',
+  'firestation',
+  'police',
+  'clinic',
+  'primary',
+  'park_small',
+];
+let civics = 0;
+for (let k = 0; k < avenues.length; k++) {
+  const def = kit[k % kit.length]!;
+  try {
+    placeAlong(sim, def, avenues[k]!);
+    civics++;
+  } catch {
+    /* no room on this piece */
+  }
+}
+for (const def of [
+  'coal',
+  'coal',
+  'pump',
+  'pump',
+  'treatment',
+  'landfill',
+  'firestation',
+  'police',
+  'hospital',
+  'highschool',
+])
+  for (let k = avenues.length - 1; k >= 0; k--) {
+    try {
+      placeAlong(sim, def, avenues[k]!);
+      civics++;
+      break;
+    } catch {
+      /* try another piece */
+    }
+  }
+console.log(
+  `roads built ${built}, failed ${failed}, segments ${sim.state.net.segments.size}, civics ${civics}`,
+);
 const t0 = performance.now();
 let worst = 0;
 for (let m = 1; m <= months; m++) {

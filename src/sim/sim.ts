@@ -58,6 +58,8 @@ import {
   computeCoverage,
   coverageNear,
   coveragePreview,
+  sampleAt,
+  stationCoverage,
   type Coverage,
 } from './systems/services';
 import { ignite, incidentsHour, incidentsTick } from './systems/incidents';
@@ -858,6 +860,16 @@ export class Sim {
         return computeOverlay(this, q.map);
       case 'coveragePreview':
         return coveragePreview(this, q.def, q.x, q.z, q.angle, q.side);
+      case 'coverageRoads': {
+        const cov = this.coverage.kinds[q.kind];
+        const out: { seg: number; v: number[] }[] = [];
+        for (const seg of this.state.net.segments.values()) {
+          if (seg.type === 'highway') continue;
+          const arr = cov.get(seg.id);
+          out.push({ seg: seg.id, v: arr ? [...arr].map((x) => Math.round(x * 100) / 100) : [0, 0] });
+        }
+        return out;
+      }
     }
   }
 
@@ -893,7 +905,35 @@ export class Sim {
             process: d.garbage.process ?? 0,
           }
         : null,
+      service: d.service ? this.serviceDetails(c) : null,
       refund: Math.round(c.cost * 0.25),
+    };
+  }
+
+  /** Seats filled per school at the last hourly coverage pass (UI only; not saved). */
+  schoolUse = new Map<number, number>();
+
+  private serviceDetails(c: Civic): NonNullable<CivicDetails['service']> {
+    const d = civicDef(c);
+    const svc = d.service!;
+    const eff = Math.min(1.25, this.fundingEff(d.dept));
+    const mine = new Map<number, Float32Array>();
+    stationCoverage(this, this.graph(), c, mine);
+    let reach = 0;
+    for (const b of this.state.buildings.values()) {
+      if (b.state !== BState.Active) continue;
+      const acc = this.buildingAccess(b);
+      if (!acc) continue;
+      const arr = mine.get(acc.seg);
+      if (arr && sampleAt(arr, acc.s, this.net.curve(acc.seg).length) >= 0.5) reach++;
+    }
+    return {
+      kind: svc.kind,
+      vehicles: svc.vehicles ? Math.max(0, Math.round(svc.vehicles * eff)) : 0,
+      out: [...this.state.vehicles.values()].filter((v) => v.home === c.id).length,
+      reach,
+      seats: svc.capacity && svc.kind === 'education' ? Math.round(svc.capacity * eff) : 0,
+      used: this.schoolUse.get(c.id) ?? 0,
     };
   }
 

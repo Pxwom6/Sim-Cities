@@ -12,6 +12,7 @@ import { ROAD_TYPES } from '../../data/roads';
 import { CELL, ROWS, ZONE_I, ZONE_R, type ZoneCode } from '../../data/zones';
 import { angleDiff } from '../geom';
 import type { Sim } from '../sim';
+import { coverageOnSegment } from './services';
 import {
   BState,
   buildingCapacity,
@@ -31,9 +32,16 @@ export function wealthFromLandValue(lv: number): Wealth {
   return lv < 0.4 ? 0 : lv < 0.7 ? 1 : 2;
 }
 
-/** High wealth only moves where fire, police and health care all reach (DESIGN §3.4). */
-export function maxWealth(sim: Sim, x: number, z: number): Wealth {
-  const ok = (['fire', 'police', 'health'] as const).every((k) => sim.serviceCoverageNear(x, z, k) >= 0.4);
+/**
+ * High wealth only moves where fire, police and health care all reach (DESIGN §3.4). Reads the
+ * coverage at distance `s` along the lot's own road `seg`.
+ */
+export function maxWealth(sim: Sim, seg: number, s: number): Wealth {
+  const cov = sim.coverage;
+  const len = sim.net.curve(seg).length;
+  const ok = (['fire', 'police', 'health'] as const).every(
+    (k) => coverageOnSegment(cov, k, seg, s, len) >= 0.4,
+  );
   return ok ? 2 : 1;
 }
 
@@ -202,7 +210,12 @@ export function growthPass(sim: Sim): void {
       const cell = sim.net.cellCenter(block.id, i0);
       const lv = landValueAt(sim, cell.x, cell.z);
       let wealth: Wealth =
-        zone === ZONE_I ? 0 : (Math.min(wealthFromLandValue(lv), maxWealth(sim, cell.x, cell.z)) as Wealth);
+        zone === ZONE_I
+          ? 0
+          : (Math.min(
+              wealthFromLandValue(lv),
+              maxWealth(sim, block.seg, block.s0 + (c + 0.5) * CELL),
+            ) as Wealth);
       while (wealth > 0 && spawnDemand(sim, zone, wealth) <= 0) wealth = (wealth - 1) as Wealth;
       const demand = spawnDemand(sim, zone, wealth);
       if (demand <= 0) continue;
@@ -278,7 +291,10 @@ export function lifecycle(sim: Sim): void {
     const wealth: Wealth =
       b.zone === ZONE_I
         ? b.wealth
-        : (Math.max(b.wealth, Math.min(wealthFromLandValue(lv), maxWealth(sim, b.x, b.z))) as Wealth);
+        : (Math.max(
+            b.wealth,
+            Math.min(wealthFromLandValue(lv), maxWealth(sim, block.seg, block.s0 + (b.col + b.w / 2) * CELL)),
+          ) as Wealth);
     let next: ZonedDef | null = null;
     if (b.level < 3) next = zonedDef(b.zone, b.density, wealth, (b.level + 1) as Level);
     else if (b.density < Math.min(roadDensity, dens))

@@ -18,6 +18,9 @@ export class PlaceTool implements Tool {
   private seq = 0;
   private last: { seq: number; res: CommandResult } | null = null;
   private pointer = { x: 0, y: 0 };
+  /** Coverage preview: last requested pose key and whether a request is in flight. */
+  private covKey = '';
+  private covBusy = false;
 
   constructor(private game: Game) {}
 
@@ -25,7 +28,9 @@ export class PlaceTool implements Tool {
 
   deactivate(): void {
     this.pose = null;
+    this.covKey = '';
     this.game.renderer.ghost.showFootprint(null, 'ok');
+    this.game.renderer.ghost.showCoverage(null);
     this.game.setHint(null);
   }
 
@@ -87,6 +92,7 @@ export class PlaceTool implements Tool {
         tone: 'ok',
       });
     } else this.game.setHint({ ...this.pointer, text: res.reason, tone: 'bad' });
+    this.previewCoverage();
     const seq = ++this.seq;
     void this.game.client.preview(cmd).then((r) => {
       if (seq !== this.seq) return;
@@ -102,6 +108,38 @@ export class PlaceTool implements Tool {
         });
       } else this.game.setHint({ ...this.pointer, text: r.reason, tone: 'bad' });
     });
+  }
+
+  /** Ask the sim what a service building here would cover and shade those roads (throttled). */
+  private previewCoverage(): void {
+    const def = CIVIC.get(this.def)!;
+    const pose = this.pose;
+    const g = this.game.renderer.ghost;
+    if (!def.service || !pose) {
+      g.showCoverage(null);
+      this.covKey = '';
+      return;
+    }
+    const key = `${def.id}:${Math.round(pose.x / 4)}:${Math.round(pose.z / 4)}:${pose.side}`;
+    if (key === this.covKey || this.covBusy) return;
+    this.covKey = key;
+    this.covBusy = true;
+    void this.game.client
+      .query<{ seg: number; v: number[] }[]>({ type: 'coveragePreview', def: def.id, ...pose })
+      .then((res) => {
+        this.covBusy = false;
+        if (this.game.tools.activeId !== 'place' || this.def !== def.id) return;
+        const net = this.game.world.net;
+        const list = res
+          .filter((r) => net.st.segments.has(r.seg))
+          .map((r) => {
+            const seg = net.segment(r.seg);
+            return { curve: net.curve(r.seg), v: r.v, half: ROAD_TYPES[seg.type].width / 2 + 1 };
+          });
+        g.showCoverage(list);
+        // The cursor may have moved on while we waited.
+        if (this.pose && this.pose !== pose) this.previewCoverage();
+      });
   }
 
   pointerMove(p: ToolPointer): void {

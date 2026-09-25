@@ -66,7 +66,10 @@ export class VehicleRenderer {
   private s = new Vector3(1, 1, 1);
   private up = new Vector3(0, 1, 0);
   /** Latest positions (for picking and tests). */
-  readonly positions = new Map<number, { x: number; z: number; kind: string }>();
+  readonly positions = new Map<
+    number,
+    { x: number; y: number; z: number; kind: string; phase: VehicleData['phase']; heading: number }
+  >();
 
   constructor(private world: ClientWorld) {
     const mat = new MeshLambertMaterial({ vertexColors: true });
@@ -137,7 +140,14 @@ export class VehicleRenderer {
       this.m.compose(this.p, this.q, this.s);
       mesh.setMatrixAt(i, this.m);
       counts.set(v.kind, i + 1);
-      this.positions.set(v.id, { x: at.x, z: at.z, kind: v.kind });
+      this.positions.set(v.id, {
+        x: at.x,
+        y: this.p.y,
+        z: at.z,
+        kind: v.kind,
+        phase: v.phase,
+        heading: at.heading,
+      });
     }
     for (const [kind, mesh] of this.meshes) {
       mesh.count = counts.get(kind) ?? 0;

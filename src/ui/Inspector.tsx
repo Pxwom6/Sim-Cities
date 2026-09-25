@@ -36,6 +36,66 @@ function Supply({ label, v }: { label: string; v: number }) {
   );
 }
 
+const VEHICLE_NAMES: Record<string, string> = {
+  fire: 'Fire engines',
+  police: 'Patrol cars',
+  health: 'Ambulances',
+};
+
+const SERVICE_ROWS = [
+  ['fire', 'Fire'],
+  ['police', 'Police'],
+  ['health', 'Health care'],
+  ['education', 'Education'],
+  ['park', 'Parks'],
+] as const;
+
+function Coverage({ label, v }: { label: string; v: number }) {
+  const tone = v >= 0.65 ? 'good' : v >= 0.3 ? 'ok' : 'bad';
+  return (
+    <li class="cov">
+      <span>{label}</span>
+      <div class="mood-track">
+        <div class={`mood-fill ${tone}`} style={{ width: `${Math.round(v * 100)}%` }} />
+      </div>
+      <span>{Math.round(v * 100)}%</span>
+    </li>
+  );
+}
+
+/** What would help most: the biggest negative mood factors, as suggestions. */
+const NEEDS: [RegExp, string][] = [
+  [/no power|power shortage/i, 'Power: build or expand a power plant within reach'],
+  [/no water|water shortage/i, 'Water: add a pump connected by road'],
+  [/sewage/i, 'Sewage: build an outflow or treatment plant'],
+  [/polluted tap water/i, 'Clean water: move pumps away from pollution'],
+  [/garbage/i, 'Garbage collection: a landfill with free trucks nearby'],
+  [/no fire station/i, 'A fire station within reach'],
+  [/no police/i, 'A police station within reach'],
+  [/no health care/i, 'A clinic or hospital within reach'],
+  [/no school/i, 'School seats nearby'],
+  [/crime/i, 'Police patrols to bring crime down'],
+  [/without jobs/i, 'Jobs: zone commercial or industry'],
+  [/long commute/i, 'Jobs closer to home, or faster roads'],
+  [/few shops/i, 'Shops nearby: zone commercial'],
+  [/too few customers/i, 'More homes nearby to shop here'],
+  [/not enough workers/i, 'More homes within commuting distance'],
+  [/taxes are high/i, 'Lower taxes'],
+  [/highway/i, 'A road link to the highway'],
+  [/neighbourhood/i, 'Parks and services to raise land value'],
+];
+
+function needsOf(d: BuildingDetails): string[] {
+  const out: string[] = [];
+  for (const f of [...d.factors].sort((a, b) => a.value - b.value)) {
+    if (f.value > -0.02) break;
+    const hit = NEEDS.find(([re]) => re.test(f.label));
+    if (hit && !out.includes(hit[1])) out.push(hit[1]);
+    if (out.length >= 3) break;
+  }
+  return out;
+}
+
 function CivicInspector({ id }: { id: number }) {
   const game = useGameUpdates(200);
   const [d, setD] = useState<CivicDetails | null>(null);
@@ -101,6 +161,28 @@ function CivicInspector({ id }: { id: number }) {
             )}
           </>
         )}
+        {d.service && (
+          <>
+            {d.service.vehicles > 0 && (
+              <>
+                <dt>{VEHICLE_NAMES[d.service.kind] ?? 'Vehicles'} out</dt>
+                <dd data-testid="civic-vehicles">
+                  {d.service.out} / {d.service.vehicles}
+                </dd>
+              </>
+            )}
+            {d.service.seats > 0 && (
+              <>
+                <dt>Seats filled</dt>
+                <dd class={d.service.used >= d.service.seats ? 'neg' : ''}>
+                  {d.service.used.toLocaleString('en-US')} / {d.service.seats.toLocaleString('en-US')}
+                </dd>
+              </>
+            )}
+            <dt>Buildings covered</dt>
+            <dd data-testid="civic-reach">{d.service.reach.toLocaleString('en-US')}</dd>
+          </>
+        )}
         <dt>Upkeep</dt>
         <dd>
           ${d.upkeep.toLocaleString('en-US')}/month ({d.funding}% funding)
@@ -164,6 +246,13 @@ function BuildingInspector({ id }: { id: number | null }) {
         {d.state === 0 ? ` · ${Math.round(d.progress * 100)}%` : ''}
       </div>
       {!d.connected && <div class="warn">No road link to the highway: nobody can reach this building.</div>}
+      {d.fire > 0 && (
+        <div class="warn fire" data-testid="inspector-fire">
+          On fire ({Math.round(d.fire * 100)}%).{' '}
+          {d.coverage.fire > 0 ? 'Fire engines are on their way.' : 'No fire station can reach it quickly.'}
+        </div>
+      )}
+      {d.state === 3 && <div class="warn">Burned down. The rubble is cleared after a day or so.</div>}
       <dl>
         <dt>{people}</dt>
         <dd data-testid="inspector-pop">
@@ -213,12 +302,35 @@ function BuildingInspector({ id }: { id: number | null }) {
               </li>
             ))}
           </ul>
+          {needsOf(d).length > 0 && (
+            <div class="needs" data-testid="inspector-needs">
+              <h4>Would help</h4>
+              <ul>
+                {needsOf(d).map((n) => (
+                  <li key={n}>{n}</li>
+                ))}
+              </ul>
+            </div>
+          )}
           {d.distress > 0 && d.state === 1 && (
             <div class="warn">
               Unhappy: {d.isResidential ? 'residents will move out' : 'the business will close'} in about{' '}
               {Math.max(1, Math.round(left))} hours if nothing changes.
             </div>
           )}
+        </section>
+      )}
+      {d.state === 1 && (
+        <section>
+          <h3>Services</h3>
+          <ul class="coverage" data-testid="inspector-coverage">
+            {SERVICE_ROWS.filter(([k]) => d.isResidential || (k !== 'education' && k !== 'health')).map(
+              ([k, label]) => (
+                <Coverage key={k} label={label} v={d.coverage[k]} />
+              ),
+            )}
+          </ul>
+          <div class="sub">Crime nearby: {d.crime < 0.05 ? 'low' : d.crime < 0.3 ? 'some' : 'high'}</div>
         </section>
       )}
       <footer>
