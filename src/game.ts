@@ -18,6 +18,12 @@ import { loadSettings, saveSettings, type Settings } from './client/settings';
 
 type Listener = () => void;
 
+/** Something the player has clicked on and is inspecting. */
+export interface Selection {
+  kind: 'building' | 'civic' | 'car' | 'walker';
+  id: number;
+}
+
 /** An entry in the notification log. */
 export interface Notice {
   id: number;
@@ -47,7 +53,7 @@ export class Game {
   /** Latest advice from every advisor (refreshed every couple of seconds). */
   advice: Advice[] = [];
   /** Currently inspected building. */
-  selected: { kind: 'building' | 'civic' | 'car'; id: number } | null = null;
+  selected: Selection | null = null;
   toasts: { id: number; text: string; tone: 'info' | 'ok' | 'bad'; at?: { x: number; z: number } }[] = [];
   /** Notification log, newest first (prioritised when shown). */
   notifications: Notice[] = [];
@@ -113,11 +119,16 @@ export class Game {
     this.notify();
   }
 
-  select(sel: { kind: 'building' | 'civic' | 'car'; id: number } | null): void {
+  select(sel: Selection | null): void {
     this.selected = sel;
     let rect: { x: number; z: number; hw: number; hd: number; angle: number } | null = null;
     // A selected car shows its whole route; a selected depot shows its bus loop.
-    const car = sel?.kind === 'car' ? this.renderer.traffic.car(sel.id) : undefined;
+    const car =
+      sel?.kind === 'car'
+        ? this.renderer.traffic.car(sel.id)
+        : sel?.kind === 'walker'
+          ? this.renderer.pedestrians.walker(sel.id)
+          : undefined;
     const line = sel?.kind === 'civic' ? this.world.lines.find((l) => l.depot === sel.id) : undefined;
     const legs = car?.legs ?? line?.legs;
     const net = this.world.net;

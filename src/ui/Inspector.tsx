@@ -24,6 +24,7 @@ export function Inspector() {
   const game = useGameUpdates(200);
   if (game.selected?.kind === 'civic') return <CivicInspector id={game.selected.id} />;
   if (game.selected?.kind === 'car') return <CarInspector id={game.selected.id} />;
+  if (game.selected?.kind === 'walker') return <CarInspector id={game.selected.id} walker />;
   return <BuildingInspector id={game.selected?.id ?? null} />;
 }
 
@@ -108,10 +109,15 @@ const PURPOSE: Record<string, [string, string]> = {
   import: ['Import truck', 'Bringing goods in from the region'],
 };
 
-/** A clicked car: where it's going and why (a real trip from the sim's assignment). */
-function CarInspector({ id }: { id: number }) {
+const WALKING: Record<string, [string, string]> = {
+  work: ['Pedestrian', 'Walking to work'],
+  shop: ['Pedestrian', 'Walking to the shops'],
+};
+
+/** A clicked car or walker: where it's going and why (a real trip from the sim's assignment). */
+function CarInspector({ id, walker = false }: { id: number; walker?: boolean }) {
   const game = useGameUpdates(300);
-  const car = game.renderer.traffic.car(id);
+  const car = walker ? game.renderer.pedestrians.walker(id) : game.renderer.traffic.car(id);
   const name = (bid: number) => {
     if (!bid) return 'the regional highway';
     const b = game.world.buildings.get(bid);
@@ -123,7 +129,7 @@ function CarInspector({ id }: { id: number }) {
         <header>
           <div>
             <h2>Arrived</h2>
-            <div class="sub">This vehicle reached its destination.</div>
+            <div class="sub">{walker ? 'They reached' : 'This vehicle reached'} its destination.</div>
           </div>
           <button class="btn icon" aria-label="Close" onClick={() => game.select(null)}>
             ×
@@ -131,7 +137,7 @@ function CarInspector({ id }: { id: number }) {
         </header>
       </aside>
     );
-  const [title, what] = PURPOSE[car.trip.purpose] ?? ['Vehicle', ''];
+  const [title, what] = (walker ? WALKING : PURPOSE)[car.trip.purpose] ?? ['Vehicle', ''];
   const forward = car.legs[0] === car.trip.legs[0];
   const [from, to] = forward ? [car.trip.from, car.trip.to] : [car.trip.to, car.trip.from];
   const home = car.trip.purpose === 'work' && !forward;
@@ -144,7 +150,9 @@ function CarInspector({ id }: { id: number }) {
       <header>
         <div>
           <h2>{title}</h2>
-          <div class="sub">{home ? 'Heading home from work' : what}</div>
+          <div class="sub">
+            {home ? (walker ? 'Walking home from work' : 'Heading home from work') : what}
+          </div>
         </div>
         <button class="btn icon" aria-label="Close" onClick={() => game.select(null)}>
           ×
@@ -159,8 +167,19 @@ function CarInspector({ id }: { id: number }) {
         <dd>{(length / 1000).toFixed(1)} km</dd>
         <dt>On</dt>
         <dd>{seg ? game.names.street(seg.id) : '—'}</dd>
-        <dt>Traffic here</dt>
-        <dd class={vc > 1 ? 'neg' : ''}>{vc > 1 ? 'Jammed at rush hour' : vc > 0.7 ? 'Busy' : 'Flowing'}</dd>
+        {walker ? (
+          <>
+            <dt>On foot</dt>
+            <dd>About {Math.max(1, Math.round(length / 1.4 / 60))} min</dd>
+          </>
+        ) : (
+          <>
+            <dt>Traffic here</dt>
+            <dd class={vc > 1 ? 'neg' : ''}>
+              {vc > 1 ? 'Jammed at rush hour' : vc > 0.7 ? 'Busy' : 'Flowing'}
+            </dd>
+          </>
+        )}
       </dl>
     </aside>
   );

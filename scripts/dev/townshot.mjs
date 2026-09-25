@@ -74,6 +74,22 @@ try {
     await page.evaluate(() => window.__game.waitFrames(2));
     await page.screenshot({ path: `${out}/${name}${hour ? '-' + hour : ''}.png` });
   }
+  if (process.env.WALK) {
+    await page.evaluate(() => window.__game.setCamera({ x: 150, z: 0, distance: 110, yaw: 0.8, tilt: 0 }));
+    await page.evaluate((p) => window.__game.setCamera(p), shots[1][1]);
+    await page.evaluate(() => window.__game.waitFrames(40));
+    const w = await page.evaluate(() => window.__game.getWalkers());
+    const by = {};
+    for (const x of w) by[x.purpose] = (by[x.purpose] ?? 0) + 1;
+    console.log(
+      'walkers',
+      w.length,
+      JSON.stringify(by),
+      'mean route',
+      Math.round(w.reduce((s, x) => s + x.route, 0) / Math.max(1, w.length)),
+    );
+    await page.screenshot({ path: `${out}/walkers${hour ? '-' + hour : ''}.png` });
+  }
   const r = await page.evaluate(() => window.__game.getState());
   console.log('calls', r.renderStats.calls, 'tris', r.renderStats.triangles);
   if (errors.length) console.log('ERRORS:\n' + errors.join('\n'));

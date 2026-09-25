@@ -29,6 +29,7 @@ import { RoadTint } from './roadTint';
 import { TrafficRenderer } from './traffic';
 import { TransitRenderer } from './transit';
 import { StreetLightRenderer } from './streetLights';
+import { PedestrianRenderer } from './pedestrians';
 
 export interface RenderStats {
   calls: number;
@@ -40,6 +41,7 @@ export interface RenderStats {
   vehicles: number;
   fires: number;
   cars: number;
+  walkers: number;
   buses: number;
   smoke: number;
 }
@@ -66,6 +68,7 @@ export class GameRenderer {
   readonly traffic: TrafficRenderer;
   readonly transit: TransitRenderer;
   readonly streetLights: StreetLightRenderer;
+  readonly pedestrians: PedestrianRenderer;
   /** Route of the selected car. */
   readonly routeTint: RoadTint;
   /** Road ribbons for the service coverage data maps. */
@@ -84,6 +87,7 @@ export class GameRenderer {
     vehicles: 0,
     fires: 0,
     cars: 0,
+    walkers: 0,
     buses: 0,
     smoke: 0,
   };
@@ -126,6 +130,8 @@ export class GameRenderer {
     this.scene.add(this.coverageMap.group);
     this.traffic = new TrafficRenderer(world, (seg, s, x, z) => world.roadHeight(seg, s, x, z));
     this.scene.add(this.traffic.group);
+    this.pedestrians = new PedestrianRenderer(world, (seg, s, x, z) => world.roadHeight(seg, s, x, z));
+    this.scene.add(this.pedestrians.group);
     this.transit = new TransitRenderer(world, (seg, s, x, z) => world.roadHeight(seg, s, x, z));
     this.scene.add(this.transit.group);
     this.streetLights = new StreetLightRenderer(world);
@@ -175,9 +181,14 @@ export class GameRenderer {
   }
 
   /** Car, zoned or civic building under a screen position. */
-  pick(clientX: number, clientY: number): { kind: 'building' | 'civic' | 'car'; id: number } | null {
+  pick(
+    clientX: number,
+    clientY: number,
+  ): { kind: 'building' | 'civic' | 'car' | 'walker'; id: number } | null {
     const ground = this.controller.screenToGround(clientX, clientY);
     if (ground) {
+      const walker = this.pedestrians.walkerAt(ground.x, ground.z, 1.4);
+      if (walker) return { kind: 'walker', id: walker.id };
       const car = this.traffic.carAt(ground.x, ground.z, 3.5);
       if (car) return { kind: 'car', id: car.id };
     }
@@ -256,6 +267,7 @@ export class GameRenderer {
     this.vehicles.update(this.world.displayTick);
     this.traffic.night = l.night;
     this.traffic.update(this.world.displayTick);
+    this.pedestrians.update(this.world.displayTick, this.controller.current);
     this.streetLights.update(l.night);
     this.transit.update(this.world.displayTick);
     this.icons.update(this.time, this.buildings.heights);
@@ -294,6 +306,7 @@ export class GameRenderer {
       vehicles: this.vehicles.positions.size,
       fires: this.effects.fires,
       cars: this.traffic.count,
+      walkers: this.pedestrians.count,
       buses: this.transit.busCount,
       smoke: this.effects.smokeParticles,
     };

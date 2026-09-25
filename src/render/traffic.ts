@@ -100,7 +100,7 @@ interface Car {
   heading: number;
 }
 
-function toGeometry(m: ModelData): BufferGeometry {
+export function toGeometry(m: ModelData): BufferGeometry {
   const g = new BufferGeometry();
   g.setAttribute('position', new BufferAttribute(m.pos, 3));
   g.setAttribute('normal', new BufferAttribute(m.nrm, 3));

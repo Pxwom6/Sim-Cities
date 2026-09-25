@@ -41,6 +41,8 @@ export interface TestApi {
   segVC(id: number): number;
   /** Visible cars (id and position). */
   getCars(): { id: number; x: number; z: number }[];
+  /** Pedestrians on screen (close zoom only), with their trip purpose and route length. */
+  getWalkers(): { id: number; x: number; z: number; purpose: string; route: number }[];
   /** Bus stops and lines on the client mirror. */
   getTransit(): { stops: number; lines: number[] };
   /** Terrain height (water below 0.6). */
@@ -136,6 +138,14 @@ export function installTestApi(game: Game): TestApi {
     },
     segVC: (id) => game.world.segVC(id, 1),
     getCars: () => game.renderer.traffic.cars.map((c) => ({ id: c.id, x: c.x, z: c.z })),
+    getWalkers: () =>
+      game.renderer.pedestrians.walkers.map((w) => ({
+        id: w.id,
+        x: w.x,
+        z: w.z,
+        purpose: w.trip.purpose,
+        route: w.legs.reduce((s, l) => s + Math.abs(l.s1 - l.s0), 0),
+      })),
     getTransit: () => ({ stops: game.world.stops.size, lines: game.world.lines.map((l) => l.stops.length) }),
     findCivic: (def) => [...game.world.civics.values()].find((c) => c.def === def)?.id ?? null,
     getCivics: () =>

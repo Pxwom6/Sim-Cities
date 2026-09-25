@@ -28,8 +28,7 @@ export class BulldozeTool implements Tool {
 
   private pick(p: ToolPointer): BulldozeTarget | null {
     const hitB = this.game.renderer.pick(p.clientX, p.clientY);
-    if (hitB && hitB.kind !== 'car')
-      return hitB.kind === 'civic' ? { kind: 'civic', id: hitB.id } : { kind: 'building', id: hitB.id };
+    if (hitB?.kind === 'civic' || hitB?.kind === 'building') return { kind: hitB.kind, id: hitB.id };
     if (!p.ground) return null;
     const stop = this.game.world.stopAt(p.ground.x, p.ground.z, 8);
     if (stop) return { kind: 'stop', id: stop.id };
