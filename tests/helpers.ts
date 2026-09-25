@@ -4,6 +4,7 @@ import type { Vec2 } from '../src/sim/geom';
 import { rectsOverlap } from '../src/sim/geom';
 import { ROWS } from '../src/data/zones';
 import type { CommandOk, CommandResult } from '../src/sim/commands';
+import { CIVIC } from '../src/data/civic';
 
 export function newSim(opts: Parameters<typeof Sim.create>[0] = {}): Sim {
   const sim = Sim.create({ seed: 'citybloom', preset: 'river', ...opts });
@@ -146,4 +147,93 @@ export function countBuildings(
   let n = 0;
   for (const b of sim.state.buildings.values()) if (pred(b)) n++;
   return n;
+}
+
+/** Centre, angle and side for a civic building of depth `d` standing beside a segment at arc length s. */
+export function roadsidePose(sim: Sim, segId: number, s: number, side: 1 | -1, d: number) {
+  const curve = sim.net.curve(segId);
+  const p = curve.pointAt(s);
+  const t = curve.tangentAt(s);
+  const hw = sim.net.halfWidth(segId);
+  const away = { x: t.z * side, z: -t.x * side };
+  const off = hw + d / 2 + 0.5;
+  return { x: p.x + away.x * off, z: p.z + away.z * off, angle: Math.atan2(t.z, t.x), side };
+}
+
+/** Place a civic building somewhere along a segment (tries positions and both sides). */
+export function placeAlong(sim: Sim, def: string, segId: number): number {
+  const d = CIVIC.get(def)!;
+  const len = sim.net.curve(segId).length;
+  for (let s = d.w / 2 + 12; s < len - d.w / 2 - 12; s += 6) {
+    for (const side of [1, -1] as const) {
+      const pose = roadsidePose(sim, segId, s, side, d.d);
+      const r = sim.dispatch({ type: 'placeBuilding', def, ...pose });
+      if (r.ok) return r.created![0]!;
+    }
+  }
+  throw new Error(`could not place ${def} along segment ${segId}`);
+}
+
+/**
+ * A utility street west–east south of the town: coal power, groundwater pumps, a sewage
+ * treatment plant and a landfill (unlock thresholds lifted with the debug cheat).
+ */
+export function serveTown(sim: Sim): { street: number; civics: number[] } {
+  sim.dispatch({ type: 'cheat', cheat: 'unlockAll' });
+  sim.dispatch({ type: 'cheat', cheat: 'addMoney', amount: 80_000 });
+  const c = connectPoint(sim);
+  let pts: Vec2[] | null = null;
+  for (const dz of [230, 250, 270, 210, 290]) {
+    const cand = [
+      { x: c.x + 30, z: c.z + dz },
+      { x: c.x + 470, z: c.z + dz },
+    ];
+    if (sim.preview({ type: 'buildRoad', road: 'street', points: cand }).ok) {
+      pts = cand;
+      break;
+    }
+  }
+  if (!pts) throw new Error('no room for the utility street');
+  const r = road(sim, pts, 'street');
+  // Link it to the town through the side streets that end at z+160.
+  for (const seg of [...sim.state.net.segments.values()]) {
+    if (seg.type !== 'street') continue;
+    const na = sim.state.net.nodes.get(seg.a)!;
+    const nb = sim.state.net.nodes.get(seg.b)!;
+    for (const n of [na, nb]) {
+      if (Math.abs(n.z - (c.z + 160)) < 1 && sim.net.segmentsAt(n.id).length === 1) {
+        sim.dispatch({
+          type: 'buildRoad',
+          road: 'street',
+          points: [
+            { x: n.x, z: n.z },
+            { x: n.x, z: pts[0]!.z },
+          ],
+        });
+      }
+    }
+  }
+  const streetSegs = [...sim.state.net.segments.values()].filter(
+    (s) => Math.abs(sim.net.curve(s.id).pointAt(sim.net.curve(s.id).length / 2).z - pts![0]!.z) < 1,
+  );
+  const civics: number[] = [];
+  const order = ['coal', 'pump', 'pump', 'treatment', 'landfill', 'pump'];
+  // Prefer the utility street; fall back to any road in town.
+  const others = [...sim.state.net.segments.values()].filter(
+    (s) => !streetSegs.includes(s) && s.type !== 'highway',
+  );
+  for (const def of order) {
+    let placed = false;
+    for (const seg of [...streetSegs, ...others]) {
+      try {
+        civics.push(placeAlong(sim, def, seg.id));
+        placed = true;
+        break;
+      } catch {
+        /* try the next piece of the street */
+      }
+    }
+    if (!placed) throw new Error(`could not place ${def}`);
+  }
+  return { street: r.created![0]!, civics };
 }

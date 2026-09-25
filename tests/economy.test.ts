@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Sim } from '../src/sim/sim';
 import { TICKS_PER_MONTH } from '../src/sim/time';
 import { annuity } from '../src/sim/systems/economy';
-import { buildTown, connectPoint, newSim, road } from './helpers';
+import { buildTown, connectPoint, newSim, road, serveTown } from './helpers';
 
 const sum = (r: Record<string, number>) => Object.values(r).reduce((a, b) => a + b, 0);
 
@@ -50,6 +50,7 @@ describe('taxes', () => {
     const run = (rate: number) => {
       const sim = newSim();
       buildTown(sim);
+      serveTown(sim);
       sim.dispatch({ type: 'setTax', zone: 'R', wealth: 'all', rate });
       sim.advance(TICKS_PER_MONTH * 2);
       return {
@@ -179,7 +180,8 @@ describe('save migrations', () => {
     const loaded = Sim.fromSave(save as never);
     loaded.testMode = true;
     expect(loaded.state.economy.taxes.R).toEqual([9, 9, 9]);
-    expect(loaded.state.version).toBe(2);
+    expect(loaded.state.version).toBe(3);
+    expect(loaded.state.civics.size).toBe(0);
     loaded.advance(TICKS_PER_MONTH);
     expect(loaded.state.economy.history.length).toBeGreaterThan(0);
   });

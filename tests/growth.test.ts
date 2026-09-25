@@ -3,7 +3,7 @@ import { Sim } from '../src/sim/sim';
 import { BState } from '../src/sim/world/buildings';
 import { TICKS_PER_MONTH } from '../src/sim/time';
 import { ZONE_C, ZONE_I, ZONE_R } from '../src/data/zones';
-import { buildTown, connectPoint, countBuildings, newSim, road } from './helpers';
+import { buildTown, connectPoint, countBuildings, newSim, road, serveTown } from './helpers';
 
 describe('demand', () => {
   it('starts with residential and industrial demand and explains it', () => {
@@ -22,6 +22,7 @@ describe('growth', () => {
   it('a town grows from nothing in response to zoning', () => {
     const sim = newSim();
     buildTown(sim);
+    serveTown(sim);
     sim.advance(TICKS_PER_MONTH * 2);
     const t = sim.state.totals;
     expect(t.population).toBeGreaterThan(300);
@@ -62,6 +63,7 @@ describe('growth', () => {
   it('buildings upgrade when happy and the city wants more', () => {
     const sim = newSim();
     buildTown(sim);
+    serveTown(sim);
     sim.advance(TICKS_PER_MONTH * 4);
     expect(countBuildings(sim, (b) => b.level > 1 || b.density > 0)).toBeGreaterThan(10);
   });
@@ -69,6 +71,7 @@ describe('growth', () => {
   it('cutting the highway link leads to abandonment, and reconnecting brings people back', () => {
     const sim = newSim();
     buildTown(sim);
+    serveTown(sim);
     sim.advance(TICKS_PER_MONTH * 2);
     const pop = sim.state.totals.population;
     expect(pop).toBeGreaterThan(200);

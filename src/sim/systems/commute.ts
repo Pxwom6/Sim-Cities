@@ -65,7 +65,7 @@ export function runMatcher(sim: Sim): void {
     } else if (b.zone === ZONE_C || b.zone === ZONE_I) {
       b.pop = 0;
       if (b.zone === ZONE_C) b.shop = 0;
-      if (!att) continue;
+      if (!att || b.closed) continue;
       const list = jobsAt.get(att.node) ?? [];
       list.push({ b, att, open: b.cap });
       jobsAt.set(att.node, list);

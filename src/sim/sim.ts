@@ -7,6 +7,9 @@ import { SAVE_VERSION, makeSaveFile, readSaveFile, stateToCanonicalJson, type Sa
 import type {
   BlockData,
   BudgetReport,
+  CivicData,
+  CivicDetails,
+  VehicleData,
   BuildingData,
   CityStats,
   FrameDiff,
@@ -26,6 +29,7 @@ import { v2 } from './geom';
 import { GRID_RES } from '../data/world';
 import {
   BState,
+  accessOf,
   buildingCapacity,
   defOf,
   footprint,
@@ -44,6 +48,13 @@ import { runMatcher } from './systems/commute';
 import { GROWTH, HAPPINESS } from '../data/balance';
 import { ZONE_R } from '../data/zones';
 import { TICKS_PER_HOUR, dateOf, isMonthStart } from './time';
+import { bulldozeCivic, civicDef, civicRect, findAccess, placeCivic, type Civic } from './world/civic';
+import { civicOutput, emptyUtilityStats, updateUtilities, utilityConsequences } from './systems/utilities';
+import { dispatchGarbage, garbageHour } from './systems/garbage';
+import { segSpeed, stepVehicles } from './systems/vehicles';
+import { GARBAGE, UTILITIES, VEHICLE_SPEED_SCALE } from '../data/civic';
+import { fieldAt, updateGroundPollution } from './systems/pollution';
+import { rectsOverlap, type ORect } from './geom';
 import {
   book,
   closeMonth,
@@ -63,7 +74,17 @@ const SANDBOX_FUNDS = 999_999_999;
 export const HIGHWAY_CONNECT_X = 24;
 
 export type SimEvent = {
-  kind: 'built' | 'abandoned' | 'upgrading' | 'demolished' | 'loanRepaid' | 'moneyNegative' | 'bankrupt';
+  kind:
+    | 'built'
+    | 'abandoned'
+    | 'upgrading'
+    | 'demolished'
+    | 'loanRepaid'
+    | 'moneyNegative'
+    | 'bankrupt'
+    | 'closed'
+    | 'civicBuilt'
+    | 'civicRemoved';
   id: number;
 };
 
@@ -91,6 +112,11 @@ export class Sim {
   private highwayComponent = -1;
   private waterDistCache: Float32Array | null = null;
   readonly bldHash = new SpatialHash(32);
+  readonly civHash = new SpatialHash(64);
+  private vehiclesDirty = true;
+  private flagCache = new Map<number, number>();
+  private dirtyCivics = new Set<number>();
+  private removedCivics = new Set<number>();
 
   private constructor(state: SimState, terrain: Terrain) {
     this.state = state;
@@ -99,11 +125,12 @@ export class Sim {
     for (const s of RNG_STREAMS) this.rng[s] = new Rng(state.rng[s]);
     this.net = new Network(state.net, terrain, {
       nextId: () => this.state.nextId++,
-      footprintBlocked: () => false,
+      footprintBlocked: (rect) => this.civicBlocks(rect),
       buildingMoved: (id, block, col) => this.buildingMoved(id, block, col),
       buildingLost: (id) => this.removeBuilding(id),
     });
     for (const b of state.buildings.values()) this.indexBuilding(b);
+    for (const c of state.civics.values()) this.indexCivic(c);
   }
 
   static create(opts: Partial<GameOptions> = {}): Sim {
@@ -129,6 +156,11 @@ export class Sim {
       landValue: new Float32Array(GRID_RES * GRID_RES),
       cursors: { growth: 0, matchRound: 0 },
       economy: defaultEconomy(options.sandbox ? SANDBOX_FUNDS : STARTING_FUNDS[options.difficulty]),
+      civics: new Map(),
+      vehicles: new Map(),
+      groundPollution: new Float32Array(GRID_RES * GRID_RES),
+      utilityStats: emptyUtilityStats(),
+      unlockAll: false,
     };
     const sim = new Sim(state, terrain);
     sim.buildHighway();
@@ -178,9 +210,23 @@ export class Sim {
     return this.state.economy.taxes[zone][wealth] ?? 9;
   }
 
-  /** Monthly upkeep at 100 % funding of every department's buildings (services arrive in M4/M5). */
+  /** Monthly upkeep at 100 % funding of every department's civic buildings. */
   departmentUpkeep(): Partial<Record<Dept, number>> {
-    return {};
+    const out: Partial<Record<Dept, number>> = {};
+    for (const c of this.state.civics.values()) {
+      const d = civicDef(c);
+      out[d.dept] = (out[d.dept] ?? 0) + d.upkeep;
+    }
+    return out;
+  }
+
+  /** Travel-time multiplier on a segment from congestion and road maintenance (traffic in M6). */
+  congestionFactor(_segId: number): number {
+    return 0.8 + 0.2 * Math.min(1, this.fundingEff('roads'));
+  }
+
+  groundPollutionAt(x: number, z: number): number {
+    return fieldAt(this.state.groundPollution, x, z);
   }
 
   /** Effectiveness (0..1.25) of a department at its current funding. */
@@ -233,6 +279,63 @@ export class Sim {
   markNetworkChanged(): void {
     this.graphCache = null;
     this.blockOrderCache = null;
+    // Civic buildings re-attach to whatever road now runs past their front.
+    for (const c of this.state.civics.values()) {
+      const acc = findAccess(this, c);
+      const changed = (acc?.seg ?? -1) !== (c.access?.seg ?? -1);
+      c.access = acc;
+      if (changed) this.dirtyCivics.add(c.id);
+    }
+  }
+
+  // ---------------------------------------------------------------- civic buildings
+
+  private indexCivic(c: Civic): void {
+    const r = civicRect(c);
+    const rad = Math.hypot(r.hw, r.hd);
+    this.civHash.insert(c.id, { minX: c.x - rad, minZ: c.z - rad, maxX: c.x + rad, maxZ: c.z + rad });
+  }
+
+  private civicBlocks(rect: ORect): boolean {
+    for (const id of this.civHash.queryPoint(rect.x, rect.z, 8)) {
+      const c = this.state.civics.get(id);
+      if (c && rectsOverlap(rect, civicRect(c, 0.3))) return true;
+    }
+    return false;
+  }
+
+  addCivic(c: Civic): void {
+    this.state.civics.set(c.id, c);
+    this.indexCivic(c);
+    this.dirtyCivics.add(c.id);
+    const r = civicRect(c);
+    const pad = Math.hypot(r.hw, r.hd) + 40;
+    this.net.revalidate({ minX: c.x - pad, minZ: c.z - pad, maxX: c.x + pad, maxZ: c.z + pad });
+    this.events.push({ kind: 'civicBuilt', id: c.id });
+  }
+
+  removeCivic(id: number): void {
+    const c = this.state.civics.get(id);
+    if (!c) return;
+    for (const v of [...this.state.vehicles.values()]) if (v.home === id) this.state.vehicles.delete(v.id);
+    this.state.civics.delete(id);
+    this.civHash.remove(id);
+    this.dirtyCivics.delete(id);
+    this.removedCivics.add(id);
+    this.vehiclesDirty = true;
+    const r = civicRect(c);
+    const pad = Math.hypot(r.hw, r.hd) + 40;
+    this.net.revalidate({ minX: c.x - pad, minZ: c.z - pad, maxX: c.x + pad, maxZ: c.z + pad });
+    this.events.push({ kind: 'civicRemoved', id });
+  }
+
+  markVehiclesDirty(): void {
+    this.vehiclesDirty = true;
+  }
+
+  /** Where a zoned building meets the road. */
+  buildingAccess(b: Building): { seg: number; s: number } | null {
+    return accessOf(this, b);
   }
 
   // ---------------------------------------------------------------- buildings
@@ -287,10 +390,16 @@ export class Sim {
     if (this.state.economy.bankrupt && cmd.type !== 'cheat') return fail('The city is bankrupt');
     switch (cmd.type) {
       case 'cheat': {
+        if (cmd.cheat === 'unlockAll') {
+          if (!dryRun) this.state.unlockAll = true;
+          return ok(0);
+        }
         if (!Number.isFinite(cmd.amount)) return fail('Invalid amount');
         if (!dryRun) this.earn(cmd.amount, 'cheats');
         return ok(0);
       }
+      case 'placeBuilding':
+        return placeCivic(this, cmd.def, cmd.x, cmd.z, cmd.angle, cmd.side, dryRun);
       case 'renameCity': {
         const name = cmd.name.trim().slice(0, 40);
         if (!name) return fail('Name cannot be empty');
@@ -328,7 +437,13 @@ export class Sim {
   private undo(dryRun: boolean): CommandResult {
     const rec = this.state.undo[this.state.undo.length - 1];
     if (!rec) return fail('Nothing to undo');
-    const res = rec.kind === 'road' ? undoRoad(this, rec, dryRun) : undoZone(this, rec.cells, dryRun);
+    let res: CommandResult;
+    if (rec.kind === 'road') res = undoRoad(this, rec, dryRun);
+    else if (rec.kind === 'zone') res = undoZone(this, rec.cells, dryRun);
+    else {
+      if (!this.state.civics.has(rec.id)) return fail("Can't undo: that building is gone");
+      res = bulldozeCivic(this, rec.id, dryRun, 1);
+    }
     if (!dryRun) this.state.undo.pop();
     return res;
   }
@@ -343,9 +458,22 @@ export class Sim {
       if (this.testMode) checkInvariants(this);
       return;
     }
-    if (isMonthStart(t)) closeMonth(this, dateOf(t).totalMonths - 1);
+    if (isMonthStart(t)) {
+      closeMonth(this, dateOf(t).totalMonths - 1);
+      for (const c of s.civics.values()) {
+        c.lastDay = c.processedToday;
+        c.processedToday = 0;
+      }
+    }
+    stepVehicles(this);
     if (t % GROWTH.passInterval === 0) growthPass(this);
     if (t % TICKS_PER_HOUR === 0) {
+      updateUtilities(this);
+      utilityConsequences(this);
+      this.refreshFlags();
+      garbageHour(this);
+      dispatchGarbage(this);
+      if (t % (TICKS_PER_HOUR * 3) === 0) updateGroundPollution(this, 3);
       if (t % (TICKS_PER_HOUR * 2) === 0) runMatcher(this);
       updateHappiness(this);
       lifecycle(this);
@@ -414,6 +542,9 @@ export class Sim {
       loans: this.state.economy.loans.length,
       bankrupt: this.state.economy.bankrupt,
       negativeHours: this.state.economy.negativeHours,
+      utilities: this.state.utilityStats,
+      civics: this.state.civics.size,
+      vehicles: this.state.vehicles.size,
     };
   }
 
@@ -472,8 +603,11 @@ export class Sim {
       r.blocks,
       this.dirtyBuildings,
       this.removedBuildings,
+      this.dirtyCivics,
+      this.removedCivics,
     ])
       set.clear();
+    this.vehiclesDirty = false;
     this.events = [];
     return {
       options: { ...this.state.options },
@@ -487,7 +621,62 @@ export class Sim {
       net: this.netData(),
       highway: { ...this.state.highway },
       buildings: [...this.state.buildings.values()].map((b) => this.buildingData(b)),
+      civics: [...this.state.civics.values()].map((c) => this.civicData(c)),
+      vehicles: this.vehicleData(),
     };
+  }
+
+  /** Problem flags shown as icons: see BuildingData.flags. */
+  buildingFlags(b: Building): number {
+    let f = this.isBuildingConnected(b) ? 0 : 1;
+    if (b.state === BState.Active) {
+      if (b.power < 0.99) f |= 2;
+      if (b.water < 0.99) f |= 4;
+      if (b.sewage < 0.99) f |= 8;
+      if (b.garbage >= GARBAGE.visible) f |= 16;
+      if (b.closed) f |= 32;
+      if (b.polluted > 0.2) f |= 64;
+    }
+    return f;
+  }
+
+  /** Mark buildings whose problem flags changed so the renderer updates their icons. */
+  private refreshFlags(): void {
+    for (const b of this.state.buildings.values()) {
+      const f = this.buildingFlags(b);
+      if (this.flagCache.get(b.id) !== f) {
+        this.flagCache.set(b.id, f);
+        this.dirtyBuildings.add(b.id);
+      }
+    }
+  }
+
+  civicData(c: Civic): CivicData {
+    const d = civicDef(c);
+    return {
+      id: c.id,
+      def: c.def,
+      x: c.x,
+      z: c.z,
+      y: c.y,
+      angle: c.angle,
+      side: c.side,
+      access: !!c.access,
+      fill: d.garbage?.storage ? c.stored / d.garbage.storage : 0,
+      out: c.out,
+      variant: c.variant,
+    };
+  }
+
+  private vehicleData(): VehicleData[] {
+    return [...this.state.vehicles.values()].map((v) => ({
+      id: v.id,
+      kind: v.kind,
+      phase: v.phase,
+      leg: v.leg,
+      t: v.t,
+      legs: v.legs.map((l) => ({ ...l, v: VEHICLE_SPEED_SCALE * segSpeed(this, l.seg) })),
+    }));
   }
 
   buildingData(b: Building): BuildingData {
@@ -508,7 +697,7 @@ export class Sim {
       state: b.state,
       progress: b.progress,
       variant: b.variant,
-      flags: this.isBuildingConnected(b) ? 0 : 1,
+      flags: this.buildingFlags(b),
     };
   }
 
@@ -562,6 +751,21 @@ export class Sim {
       this.dirtyBuildings.clear();
       this.removedBuildings.clear();
     }
+    if (this.dirtyCivics.size || this.removedCivics.size) {
+      frame.civics = {
+        upserts: [...this.dirtyCivics]
+          .filter((id) => this.state.civics.has(id))
+          .sort((a, b) => a - b)
+          .map((id) => this.civicData(this.state.civics.get(id)!)),
+        removed: [...this.removedCivics].sort((a, b) => a - b),
+      };
+      this.dirtyCivics.clear();
+      this.removedCivics.clear();
+    }
+    if (this.vehiclesDirty) {
+      frame.vehicles = this.vehicleData();
+      this.vehiclesDirty = false;
+    }
     if (this.events.length) {
       frame.events = this.events;
       this.events = [];
@@ -585,7 +789,45 @@ export class Sim {
         return this.buildingDetails(q.id);
       case 'budget':
         return this.budget();
+      case 'civic':
+        return this.civicDetails(q.id);
     }
+  }
+
+  civicDetails(id: number): CivicDetails | null {
+    const c = this.state.civics.get(id);
+    if (!c) return null;
+    const d = civicDef(c);
+    const produces: { utility: string; output: number }[] = [];
+    for (const u of ['power', 'water', 'sewage'] as const) {
+      const out = civicOutput(this, c, u);
+      if (out > 0) produces.push({ utility: u, output: Math.round(out) });
+    }
+    return {
+      id: c.id,
+      def: c.def,
+      name: d.name,
+      category: d.category,
+      blurb: d.blurb,
+      upkeep: Math.round(d.upkeep * (this.state.economy.funding[d.dept] / 100)),
+      funding: this.state.economy.funding[d.dept],
+      access: !!c.access,
+      produces,
+      polluted:
+        produces.some((p) => p.utility === 'water') &&
+        this.groundPollutionAt(c.x, c.z) > UTILITIES.pollutedPumpThreshold,
+      garbage: d.garbage
+        ? {
+            trucks: Math.round(d.garbage.trucks * this.fundingEff('garbage')),
+            out: c.out,
+            stored: Math.round(c.stored),
+            storage: d.garbage.storage ?? 0,
+            processedToday: Math.round(c.processedToday),
+            process: d.garbage.process ?? 0,
+          }
+        : null,
+      refund: Math.round(c.cost * 0.25),
+    };
   }
 
   buildingDetails(id: number): BuildingDetails | null {
@@ -615,6 +857,12 @@ export class Sim {
       isResidential: b.zone === ZONE_R,
       connected: this.isBuildingConnected(b),
       born: b.born,
+      power: b.power,
+      water: b.water,
+      sewage: b.sewage,
+      polluted: b.polluted,
+      garbage: Math.round(b.garbage),
+      closed: b.closed,
     };
   }
 }

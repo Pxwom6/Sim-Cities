@@ -1,0 +1,153 @@
+import { ROAD_TYPES } from '../../data/roads';
+import { VEHICLE_SPEED_SCALE } from '../../data/civic';
+import type { Sim } from '../sim';
+import { routeBetween, type Leg } from './graph';
+
+export type VehicleKind = 'garbage' | 'fire' | 'police' | 'ambulance' | 'bus';
+
+/** A dispatched service vehicle driving along road legs. DESIGN §3.7. */
+export interface Vehicle {
+  id: number;
+  kind: VehicleKind;
+  /** Civic building it belongs to. */
+  home: number;
+  /** Building (or incident) it is heading for. */
+  target: number;
+  legs: Leg[];
+  leg: number;
+  /** Metres driven along the current leg. */
+  t: number;
+  phase: 'out' | 'work' | 'back';
+  load: number;
+  /** Ticks left working on site. */
+  wait: number;
+}
+
+export function segSpeed(sim: Sim, segId: number): number {
+  const seg = sim.state.net.segments.get(segId);
+  if (!seg) return 10;
+  return (ROAD_TYPES[seg.type].speed / 3.6) * sim.congestionFactor(segId);
+}
+
+export function route(
+  sim: Sim,
+  from: { seg: number; s: number },
+  to: { seg: number; s: number },
+): Leg[] | null {
+  return routeBetween(sim.graph(), sim.net, from, to, (id) => segSpeed(sim, id));
+}
+
+/** Total length of a route in metres. */
+export function routeLength(legs: Leg[]): number {
+  return legs.reduce((s, l) => s + Math.abs(l.s1 - l.s0), 0);
+}
+
+export interface VehicleHandlers {
+  arrive(sim: Sim, v: Vehicle): void;
+  workDone(sim: Sim, v: Vehicle): void;
+  home(sim: Sim, v: Vehicle): void;
+}
+
+const handlers = new Map<VehicleKind, VehicleHandlers>();
+export function registerVehicleKind(kind: VehicleKind, h: VehicleHandlers): void {
+  handlers.set(kind, h);
+}
+
+export function spawnVehicle(
+  sim: Sim,
+  kind: VehicleKind,
+  home: number,
+  target: number,
+  legs: Leg[],
+): Vehicle {
+  const v: Vehicle = {
+    id: sim.state.nextId++,
+    kind,
+    home,
+    target,
+    legs,
+    leg: 0,
+    t: 0,
+    phase: 'out',
+    load: 0,
+    wait: 0,
+  };
+  sim.state.vehicles.set(v.id, v);
+  const c = sim.state.civics.get(home);
+  if (c) c.out++;
+  sim.markVehiclesDirty();
+  return v;
+}
+
+export function despawnVehicle(sim: Sim, v: Vehicle): void {
+  sim.state.vehicles.delete(v.id);
+  const c = sim.state.civics.get(v.home);
+  if (c) c.out = Math.max(0, c.out - 1);
+  sim.markVehiclesDirty();
+}
+
+/** Send a vehicle back to its home building from wherever it is. */
+export function sendHome(sim: Sim, v: Vehicle): void {
+  const home = sim.state.civics.get(v.home);
+  const at = currentPoint(sim, v);
+  const legs = home?.access && at ? route(sim, at, home.access) : null;
+  if (!legs) {
+    despawnVehicle(sim, v);
+    return;
+  }
+  v.legs = legs;
+  v.leg = 0;
+  v.t = 0;
+  v.phase = 'back';
+  sim.markVehiclesDirty();
+}
+
+function currentPoint(sim: Sim, v: Vehicle): { seg: number; s: number } | null {
+  const l = v.legs[Math.min(v.leg, v.legs.length - 1)];
+  if (!l || !sim.state.net.segments.has(l.seg)) return null;
+  const dir = l.s1 >= l.s0 ? 1 : -1;
+  return { seg: l.seg, s: l.s0 + dir * Math.min(v.t, Math.abs(l.s1 - l.s0)) };
+}
+
+/** Move every vehicle one tick along its legs. */
+export function stepVehicles(sim: Sim): void {
+  for (const v of [...sim.state.vehicles.values()]) {
+    if (v.phase === 'work') {
+      if (--v.wait <= 0) handlers.get(v.kind)?.workDone(sim, v);
+      continue;
+    }
+    // Roads can vanish under a vehicle (bulldozed): reroute or give up.
+    if (v.legs.some((l) => !sim.state.net.segments.has(l.seg))) {
+      if (v.phase === 'back') despawnVehicle(sim, v);
+      else sendHome(sim, v);
+      continue;
+    }
+    let budget = 0;
+    while (v.leg < v.legs.length) {
+      const l = v.legs[v.leg]!;
+      if (budget === 0) budget = VEHICLE_SPEED_SCALE * segSpeed(sim, l.seg);
+      const len = Math.abs(l.s1 - l.s0);
+      const left = len - v.t;
+      if (budget < left) {
+        v.t += budget;
+        budget = -1;
+        break;
+      }
+      budget -= left;
+      v.leg++;
+      v.t = 0;
+      if (budget <= 0) {
+        budget = -1;
+        break;
+      }
+    }
+    if (v.leg >= v.legs.length) {
+      v.leg = v.legs.length - 1;
+      v.t = Math.abs(v.legs[v.leg]!.s1 - v.legs[v.leg]!.s0);
+      const h = handlers.get(v.kind);
+      if (v.phase === 'out') h?.arrive(sim, v);
+      else h?.home(sim, v);
+      sim.markVehiclesDirty();
+    }
+  }
+}

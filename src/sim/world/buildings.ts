@@ -42,6 +42,17 @@ export interface Building {
   shop: number;
   happiness: number;
   distress: number;
+  /** Utility supply (0..1) from the last allocation, and polluted share of the water. */
+  power: number;
+  water: number;
+  sewage: number;
+  polluted: number;
+  /** Uncollected garbage (units). */
+  garbage: number;
+  /** Consecutive hours without power / water; businesses close after a while. */
+  noPowerH: number;
+  noWaterH: number;
+  closed: boolean;
   /** Consecutive good hourly checks (upgrade) or hours of recovery (abandoned). */
   good: number;
   variant: number;

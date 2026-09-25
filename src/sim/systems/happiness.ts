@@ -1,5 +1,6 @@
 import { DEMAND, HAPPINESS } from '../../data/balance';
 import { ZONE_C, ZONE_R } from '../../data/zones';
+import { GARBAGE, UTILITIES } from '../../data/civic';
 import type { Sim } from '../sim';
 import { BState, type Building } from '../world/buildings';
 import type { Factor } from './demand';
@@ -15,6 +16,25 @@ export function happinessFactors(sim: Sim, b: Building): Factor[] {
   const f: Factor[] = [];
   const connected = sim.isBuildingConnected(b);
   if (!connected) f.push({ label: 'No road link to the highway', value: HAPPINESS.noHighwayAccess });
+  // Utilities (DESIGN §3.6).
+  if (b.power < 0.999)
+    f.push({
+      label: b.power <= 0 ? 'No power' : 'Power shortages',
+      value: UTILITIES.noPower * (1 - b.power),
+    });
+  if (b.water < 0.999)
+    f.push({
+      label: b.water <= 0 ? 'No water' : 'Water shortages',
+      value: UTILITIES.noWater * (1 - b.water),
+    });
+  if (b.sewage < 0.999) f.push({ label: 'Sewage backing up', value: UTILITIES.noSewage * (1 - b.sewage) });
+  if (b.polluted > 0.01 && b.water > 0)
+    f.push({ label: 'Polluted tap water', value: UTILITIES.pollutedWater * b.polluted });
+  if (b.garbage > GARBAGE.visible) {
+    const k = Math.min(1, (b.garbage - GARBAGE.visible) / (GARBAGE.bad - GARBAGE.visible));
+    f.push({ label: 'Uncollected garbage', value: GARBAGE.moodPenalty * k });
+  }
+  if (b.closed) f.push({ label: 'Closed: no power or water', value: -0.2 });
   const tax = sim.taxRate(ZONE_LETTER[b.zone]!, b.wealth);
   const taxTerm = HAPPINESS.taxPerPoint * (tax - DEMAND.neutralTax) * HAPPINESS.taxSensitivity[b.wealth]!;
   if (b.zone === ZONE_R) {

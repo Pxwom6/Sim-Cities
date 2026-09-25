@@ -2,6 +2,7 @@ import { GRID_CELL, GRID_RES, SHORE_HEIGHT } from '../../data/world';
 import { ZONE_I } from '../../data/zones';
 import type { Sim } from '../sim';
 import { BState } from '../world/buildings';
+import { civicDef } from '../world/civic';
 
 /** Distance (m) from each raster cell to the nearest water cell, capped. Derived from terrain. */
 export function waterDistance(sim: Sim): Float32Array {
@@ -93,6 +94,25 @@ export function updateLandValue(sim: Sim, instant = false): void {
   const wSum = blur(weight, 3);
   const nuis = blur(nuisance, 4);
   const aband = blur(abandoned, 4);
+  const civicEffect = new Float32Array(n);
+  for (const c of sim.state.civics.values()) {
+    const lvDef = civicDef(c).landValue;
+    if (!lvDef) continue;
+    const r = lvDef.radius / GRID_CELL;
+    const ci = Math.floor(c.x / GRID_CELL);
+    const cj = Math.floor(c.z / GRID_CELL);
+    for (let dj = -Math.ceil(r); dj <= Math.ceil(r); dj++) {
+      for (let di = -Math.ceil(r); di <= Math.ceil(r); di++) {
+        const i = ci + di;
+        const j = cj + dj;
+        if (i < 0 || j < 0 || i >= GRID_RES || j >= GRID_RES) continue;
+        const d = Math.hypot(di, dj) / r;
+        if (d > 1) continue;
+        civicEffect[j * GRID_RES + i]! += lvDef.value * (1 - d);
+      }
+    }
+  }
+  const ground = sim.state.groundPollution;
   const trees = sim.state.trees;
   for (let k = 0; k < n; k++) {
     const i = k % GRID_RES;
@@ -104,6 +124,8 @@ export function updateLandValue(sim: Sim, instant = false): void {
     let target = 0.3 + 0.15 * waterfront + 0.07 * view + 0.05 * (trees[k]! / 255) + 0.2 * neighbour;
     target -= 0.08 * Math.min(2, nuis[k]!);
     target -= 0.06 * Math.min(3, aband[k]!);
+    target += civicEffect[k]!;
+    target -= 0.2 * ground[k]!;
     target = Math.max(0, Math.min(1, target));
     lv[k] = instant ? target : lv[k]! + (target - lv[k]!) * 0.25;
   }

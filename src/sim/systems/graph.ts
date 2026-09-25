@@ -213,3 +213,103 @@ export class Dijkstra {
     }
   }
 }
+
+/** A stretch of road a vehicle drives: along `seg` from arc length s0 to s1 (s1 < s0 = backwards). */
+export interface Leg {
+  seg: number;
+  s0: number;
+  s1: number;
+}
+
+/**
+ * Shortest route (by travel time) between two points on the road network, as legs.
+ * `edgeCost(k)` defaults to free-flow seconds; `segSpeed(seg)` gives m/s for partial legs.
+ */
+export function routeBetween(
+  g: RoadGraph,
+  net: { segment(id: number): { a: number; b: number }; curve(id: number): { length: number } },
+  from: { seg: number; s: number },
+  to: { seg: number; s: number },
+  segSpeed: (seg: number) => number,
+  edgeCost?: (k: number) => number,
+  maxCost = Infinity,
+): Leg[] | null {
+  if (from.seg === to.seg) return [{ seg: from.seg, s0: from.s, s1: to.s }];
+  const sa = net.segment(from.seg);
+  const ta = net.segment(to.seg);
+  const lenA = net.curve(from.seg).length;
+  const lenB = net.curve(to.seg).length;
+  const va = segSpeed(from.seg);
+  const vb = segSpeed(to.seg);
+  const n = g.size;
+  const dist = new Float64Array(n).fill(Infinity);
+  const pred = new Int32Array(n).fill(-1);
+  const done = new Uint8Array(n);
+  const heap = new MinHeap();
+  const ia = g.index.get(sa.a)!;
+  const ib = g.index.get(sa.b)!;
+  dist[ia] = from.s / va;
+  dist[ib] = Math.min(dist[ib]!, (lenA - from.s) / va);
+  heap.push(dist[ia]!, ia);
+  heap.push(dist[ib]!, ib);
+  const tA = g.index.get(ta.a)!;
+  const tB = g.index.get(ta.b)!;
+  const endCost = (node: number) => (node === tA ? to.s / vb : node === tB ? (lenB - to.s) / vb : Infinity);
+  let best = Infinity;
+  let bestNode = -1;
+  const out = [0];
+  while (heap.size) {
+    const u = heap.pop(out);
+    const du = out[0]!;
+    if (done[u]) continue;
+    done[u] = 1;
+    if (du >= best || du > maxCost) break;
+    const e = endCost(u);
+    if (du + e < best) {
+      best = du + e;
+      bestNode = u;
+    }
+    for (let k = g.start[u]!; k < g.start[u + 1]!; k++) {
+      if (g.seg[k] === from.seg || g.seg[k] === to.seg) continue;
+      const v = g.to[k]!;
+      const nd = du + (edgeCost ? edgeCost(k) : g.cost[k]!);
+      if (nd < dist[v]!) {
+        dist[v] = nd;
+        pred[v] = k;
+        heap.push(nd, v);
+      }
+    }
+  }
+  if (bestNode < 0) return null;
+  // Walk back to a source node.
+  const edges: number[] = [];
+  let cur = bestNode;
+  while (pred[cur]! >= 0) {
+    const k = pred[cur]!;
+    edges.push(k);
+    // Find the edge's origin: the node u with to[k] = cur.
+    let u = 0;
+    for (let lo = 0, hi = n; lo < hi;) {
+      const m = (lo + hi) >> 1;
+      if (g.start[m + 1]! <= k) lo = m + 1;
+      else hi = m;
+      u = lo;
+    }
+    cur = u;
+  }
+  edges.reverse();
+  const legs: Leg[] = [];
+  const startNode = cur;
+  legs.push({ seg: from.seg, s0: from.s, s1: g.ids[startNode] === sa.a ? 0 : lenA });
+  let at = startNode;
+  for (const k of edges) {
+    const segId = g.seg[k]!;
+    const seg = net.segment(segId);
+    const len = g.length[k]!;
+    const forward = g.ids[at] === seg.a;
+    legs.push({ seg: segId, s0: forward ? 0 : len, s1: forward ? len : 0 });
+    at = g.to[k]!;
+  }
+  legs.push({ seg: to.seg, s0: g.ids[at] === ta.a ? 0 : lenB, s1: to.s });
+  return legs.filter((l) => Math.abs(l.s1 - l.s0) > 0.01 || legs.length === 1);
+}

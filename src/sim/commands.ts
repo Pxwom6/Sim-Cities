@@ -4,7 +4,8 @@ import type { Vec2 } from './geom';
 import type { Dept } from '../data/economy';
 
 export type ZoneArea = { kind: 'brush'; points: Vec2[]; radius: number } | { kind: 'segment'; id: number };
-export type BulldozeTarget = { kind: 'segment'; id: number } | { kind: 'building'; id: number };
+export type BulldozeTarget =
+  { kind: 'segment'; id: number } | { kind: 'building'; id: number } | { kind: 'civic'; id: number };
 
 /** Every player (and test, debug, replay) action is one of these. DESIGN.md §1.4. */
 export type Command =
@@ -19,7 +20,10 @@ export type Command =
   | { type: 'setTax'; zone: 'R' | 'C' | 'I'; wealth: 0 | 1 | 2 | 'all'; rate: number }
   | { type: 'setFunding'; dept: Dept; pct: number }
   | { type: 'takeLoan'; amount: number }
-  | { type: 'repayLoan'; id: number };
+  | { type: 'repayLoan'; id: number }
+  /** Place a civic building: centre, road tangent angle and which side of the road it stands on. */
+  | { type: 'placeBuilding'; def: string; x: number; z: number; angle: number; side: 1 | -1 }
+  | { type: 'cheat'; cheat: 'unlockAll' };
 
 export type CommandType = Command['type'];
 

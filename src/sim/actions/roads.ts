@@ -3,6 +3,7 @@ import { GRID_CELL, GRID_RES } from '../../data/world';
 import { fail, ok, type BulldozeTarget, type CommandResult } from '../commands';
 import { Curve, pointRectDistance, type Vec2 } from '../geom';
 import { footprint } from '../world/buildings';
+import { bulldozeCivic } from '../world/civic';
 import type { Sim } from '../sim';
 import { UNDO_LIMIT } from '../undo';
 import { applyRoadPlan, planRoad } from '../world/roadPlanner';
@@ -57,6 +58,7 @@ export function bulldoze(sim: Sim, target: BulldozeTarget, dryRun: boolean): Com
     sim.markNetworkChanged();
     return ok(-refund, { info });
   }
+  if (target.kind === 'civic') return bulldozeCivic(sim, target.id, dryRun);
   if (target.kind === 'building') {
     const b = sim.state.buildings.get(target.id);
     if (!b) return fail('Nothing to bulldoze');

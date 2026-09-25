@@ -6,6 +6,9 @@ import type { Building } from './world/buildings';
 import type { CityTotals } from './systems/totals';
 import type { DemandState } from './systems/demand';
 import type { EconomyState } from './systems/economy';
+import type { Civic } from './world/civic';
+import type { Vehicle } from './systems/vehicles';
+import type { UtilityStats } from './systems/utilities';
 
 export type Difficulty = 'easy' | 'normal' | 'hard';
 
@@ -57,4 +60,11 @@ export interface SimState {
   /** Round-robin positions of sliced systems. */
   cursors: { growth: number; matchRound: number };
   economy: EconomyState;
+  civics: Map<number, Civic>;
+  vehicles: Map<number, Vehicle>;
+  /** Ground pollution raster (GRID_RES²), 0..1. */
+  groundPollution: Float32Array;
+  utilityStats: UtilityStats;
+  /** Debug cheat: ignore unlock thresholds. */
+  unlockAll: boolean;
 }

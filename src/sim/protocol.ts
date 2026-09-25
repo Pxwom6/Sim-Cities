@@ -6,6 +6,7 @@ import type { SaveFile } from './save';
 import type { Speed } from './time';
 import type { RoadTypeId } from '../data/roads';
 import type { Factor } from './systems/demand';
+import type { UtilityStats } from './systems/utilities';
 
 export interface CityStats {
   tick: number;
@@ -27,6 +28,31 @@ export interface CityStats {
   loans: number;
   bankrupt: boolean;
   negativeHours: number;
+  utilities: UtilityStats;
+  civics: number;
+  vehicles: number;
+}
+
+export interface CivicDetails {
+  id: number;
+  def: string;
+  name: string;
+  category: string;
+  blurb: string;
+  upkeep: number;
+  funding: number;
+  access: boolean;
+  produces: { utility: string; output: number }[];
+  polluted: boolean;
+  garbage: {
+    trucks: number;
+    out: number;
+    stored: number;
+    storage: number;
+    processedToday: number;
+    process: number;
+  } | null;
+  refund: number;
 }
 
 export interface BudgetReport {
@@ -69,7 +95,7 @@ export interface BuildingData {
   state: number;
   progress: number;
   variant: number;
-  /** Bit flags: 1 = no link to the highway. */
+  /** Bit flags: 1 no highway link, 2 no power, 4 no water, 8 no sewage, 16 garbage, 32 closed, 64 polluted water. */
   flags: number;
 }
 
@@ -95,6 +121,12 @@ export interface BuildingDetails {
   isResidential: boolean;
   connected: boolean;
   born: number;
+  power: number;
+  water: number;
+  sewage: number;
+  polluted: number;
+  garbage: number;
+  closed: boolean;
 }
 
 export interface NodeData {
@@ -144,6 +176,33 @@ export interface Snapshot {
   net: { nodes: NodeData[]; segments: SegmentData[]; blocks: BlockData[] };
   highway: { outside: number; connect: number; segment: number };
   buildings: BuildingData[];
+  civics: CivicData[];
+  vehicles: VehicleData[];
+}
+
+export interface CivicData {
+  id: number;
+  def: string;
+  x: number;
+  z: number;
+  y: number;
+  angle: number;
+  side: 1 | -1;
+  access: boolean;
+  /** Landfill fill level 0..1. */
+  fill: number;
+  out: number;
+  variant: number;
+}
+
+export interface VehicleData {
+  id: number;
+  kind: string;
+  phase: 'out' | 'work' | 'back';
+  leg: number;
+  t: number;
+  /** Legs with their speed in metres per tick. */
+  legs: { seg: number; s0: number; s1: number; v: number }[];
 }
 
 export interface FrameDiff {
@@ -153,6 +212,9 @@ export interface FrameDiff {
   trees?: { idx: number[]; val: number[] };
   net?: NetDiff;
   buildings?: { upserts: BuildingData[]; removed: number[] };
+  civics?: { upserts: CivicData[]; removed: number[] };
+  /** Full list of active service vehicles whenever any changed. */
+  vehicles?: VehicleData[];
   events?: { kind: string; id: number }[];
 }
 
@@ -164,7 +226,11 @@ export interface WorkerPerf {
 }
 
 export type Query =
-  { type: 'hash' } | { type: 'summary' } | { type: 'building'; id: number } | { type: 'budget' };
+  | { type: 'hash' }
+  | { type: 'summary' }
+  | { type: 'building'; id: number }
+  | { type: 'budget' }
+  | { type: 'civic'; id: number };
 
 export type MainToWorker =
   | { type: 'init'; options: Partial<GameOptions>; testMode?: boolean }
