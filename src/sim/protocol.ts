@@ -8,6 +8,7 @@ import type { RoadTypeId } from '../data/roads';
 import type { Factor } from './systems/demand';
 import type { UtilityStats } from './systems/utilities';
 import type { OverlayMap } from './systems/overlays';
+import type { TripSample } from './systems/traffic';
 import type { ServiceKind } from '../data/civic';
 
 export interface CityStats {
@@ -197,6 +198,7 @@ export interface Snapshot {
   buildings: BuildingData[];
   civics: CivicData[];
   vehicles: VehicleData[];
+  traffic: TrafficData;
 }
 
 export interface CivicData {
@@ -235,6 +237,15 @@ export interface FrameDiff {
   /** Full list of active service vehicles whenever any changed. */
   vehicles?: VehicleData[];
   events?: { kind: string; id: number }[];
+  traffic?: TrafficData;
+}
+
+/** Traffic for the client: daily volumes per segment and sampled trips for visible vehicles. */
+export interface TrafficData {
+  vol: [number, number][];
+  trips: TripSample[];
+  /** Capacity factor from road maintenance funding. */
+  capScale: number;
 }
 
 export interface WorkerPerf {

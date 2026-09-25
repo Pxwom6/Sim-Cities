@@ -10,6 +10,8 @@ export class RoadGraph {
   readonly index = new Map<number, number>();
   start = new Int32Array(1);
   to = new Int32Array(0);
+  /** Node each edge leaves from (edges are stored per source node). */
+  from = new Int32Array(0);
   seg = new Int32Array(0);
   /** Free-flow seconds per edge. */
   cost = new Float64Array(0);
@@ -35,6 +37,7 @@ export class RoadGraph {
     for (let i = 0; i < n; i++) this.start[i + 1] = this.start[i]! + deg[i]!;
     const m = this.start[n]!;
     this.to = new Int32Array(m);
+    this.from = new Int32Array(m);
     this.seg = new Int32Array(m);
     this.cost = new Float64Array(m);
     this.length = new Float64Array(m);
@@ -51,6 +54,7 @@ export class RoadGraph {
       ] as const) {
         const k = this.start[u]! + fill[u]!++;
         this.to[k] = v;
+        this.from[k] = u;
         this.seg[k] = s.id;
         this.cost[k] = sec;
         this.length[k] = len;
@@ -167,21 +171,32 @@ export class Dijkstra {
   private epoch = 0;
   private heap = new MinHeap();
   private out = [0];
+  /** With `track`: the edge each settled node was reached by (−1 for sources)... */
+  pred = new Int32Array(0);
+  /** ...and the settled nodes in order (the first `settledCount` entries). */
+  settled = new Int32Array(0);
+  settledCount = 0;
 
   run(
     g: RoadGraph,
     sources: { node: number; cost: number }[],
     maxCost: number,
     visit: (node: number, cost: number) => boolean,
-    edgeCost?: (k: number) => number,
+    edgeCost?: ((k: number) => number) | Float64Array,
+    track = false,
   ): void {
     const n = g.size;
     if (this.dist.length < n) {
       this.dist = new Float64Array(n);
       this.stamp = new Int32Array(n);
       this.done = new Int32Array(n);
+      this.pred = new Int32Array(n);
+      this.settled = new Int32Array(n);
       this.epoch = 0;
     }
+    this.settledCount = 0;
+    const costArr = edgeCost instanceof Float64Array ? edgeCost : null;
+    const costFn = typeof edgeCost === 'function' ? edgeCost : null;
     this.epoch++;
     const ep = this.epoch;
     const heap = this.heap;
@@ -190,6 +205,7 @@ export class Dijkstra {
       if (this.stamp[s.node] !== ep || s.cost < this.dist[s.node]!) {
         this.stamp[s.node] = ep;
         this.dist[s.node] = s.cost;
+        if (track) this.pred[s.node] = -1;
         heap.push(s.cost, s.node);
       }
     }
@@ -200,13 +216,15 @@ export class Dijkstra {
       if (du > this.dist[u]!) continue;
       this.done[u] = ep;
       if (du > maxCost) break;
+      if (track) this.settled[this.settledCount++] = u;
       if (!visit(u, du)) break;
       for (let k = g.start[u]!; k < g.start[u + 1]!; k++) {
         const v = g.to[k]!;
-        const nd = du + (edgeCost ? edgeCost(k) : g.cost[k]!);
+        const nd = du + (costArr ? costArr[k]! : costFn ? costFn(k) : g.cost[k]!);
         if (this.stamp[v] !== ep || nd < this.dist[v]!) {
           this.stamp[v] = ep;
           this.dist[v] = nd;
+          if (track) this.pred[v] = k;
           heap.push(nd, v);
         }
       }

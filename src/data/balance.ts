@@ -68,6 +68,43 @@ export const COMMUTE = {
   accessSeconds: 30,
 };
 
+/** Traffic (DESIGN §3.8). Volumes are daily passenger-car units (PCU), both directions. */
+export const TRAFFIC = {
+  /** One-way trips per employed resident per day (there and back). */
+  tripsPerWorker: 2,
+  /** One-way shopping trips per resident per day. */
+  shopTripsPerResident: 0.5,
+  /** Share of trips made by car when there's no transit. */
+  carShare: 0.9,
+  /** People per car. */
+  occupancy: 1.2,
+  /** Share of the day's traffic on the road in the busiest hour (the day is compressed). */
+  peakShare: 0.25,
+  /** Congestion: travel time × (1 + alpha · (v/c)^beta), capped. */
+  bprAlpha: 0.15,
+  bprBeta: 4,
+  maxSlowdown: 8,
+  /**
+   * Oversaturated roads also queue: extra seconds = queueSeconds · (1 − c/v) when v > c (the average
+   * wait of a queue that builds through the rush hour at a bottleneck).
+   */
+  queueSeconds: 600,
+  /** Method of successive averages: how far volumes move towards each new assignment. */
+  msa: 0.2,
+  /** Freight truck trips per industrial worker per day, and needed per commercial job. */
+  freightPerIndustrialJob: 0.12,
+  freightPerCommercialJob: 0.06,
+  /** A truck counts as this many cars. */
+  truckPcu: 2.5,
+  /** Hourly traffic as a share of the rush-hour peak, 00:00 to 23:00. */
+  profile: [
+    0.08, 0.05, 0.04, 0.05, 0.1, 0.25, 0.5, 0.85, 1, 0.7, 0.5, 0.5, 0.55, 0.5, 0.5, 0.55, 0.75, 1, 0.85, 0.55,
+    0.4, 0.3, 0.2, 0.12,
+  ],
+  /** Visible commuter trips sampled per assignment round. */
+  samples: 320,
+};
+
 export const HAPPINESS = {
   base: 0.55,
   unemployment: -0.15,

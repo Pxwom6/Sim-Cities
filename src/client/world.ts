@@ -6,11 +6,15 @@ import type {
   FrameDiff,
   NetDiff,
   Snapshot,
+  TrafficData,
   VehicleData,
 } from '../sim/protocol';
 import { Network, type NetworkState, type RoadSegment, type ZoneBlock } from '../sim/world/network';
 import { SpatialHash } from '../sim/world/spatial';
 import { CIVIC } from '../data/civic';
+import { ROAD_TYPES } from '../data/roads';
+import { TRAFFIC } from '../data/balance';
+import type { TripSample } from '../sim/systems/traffic';
 import type { GameOptions } from '../sim/state';
 import { MAP_SIZE } from '../data/world';
 
@@ -49,6 +53,11 @@ export class ClientWorld {
   /** Active service vehicles and the tick they were reported at (the renderer extrapolates). */
   vehicles: VehicleData[] = [];
   vehiclesTick = 0;
+  /** Daily traffic per segment and sampled trips (updated every assignment round). */
+  traffic = new Map<number, number>();
+  trips: TripSample[] = [];
+  /** Bumped whenever traffic data arrives. */
+  trafficVersion = 0;
   /** Recent sim events (built, abandoned, ...) for notifications and sounds. */
   events: { kind: string; id: number }[] = [];
   /** Fractional tick, advanced smoothly between frames for lighting. */
@@ -75,7 +84,26 @@ export class ClientWorld {
     for (const c of snap.civics) this.civics.set(c.id, c);
     this.vehicles = snap.vehicles;
     this.vehiclesTick = snap.stats.tick;
+    this.setTraffic(snap.traffic);
   }
+
+  private setTraffic(t: TrafficData): void {
+    this.traffic = new Map(t.vol);
+    this.trips = t.trips;
+    this.capScale = t.capScale;
+    this.trafficVersion++;
+  }
+
+  /** Volume over capacity on a segment at `share` of the rush-hour peak (mirrors the sim). */
+  segVC(segId: number, share: number): number {
+    const seg = this.netState.segments.get(segId);
+    if (!seg) return 0;
+    const cap = ROAD_TYPES[seg.type].capacity * this.capScale;
+    return ((this.traffic.get(segId) ?? 0) * TRAFFIC.peakShare * share) / cap;
+  }
+
+  /** Capacity factor from road maintenance funding (sent with the traffic). */
+  capScale = 1;
 
   onCivics(l: (changed: number[], removed: number[]) => void): () => void {
     this.civicListeners.push(l);
@@ -245,6 +273,10 @@ export class ClientWorld {
     if (diff.vehicles) {
       this.vehicles = diff.vehicles;
       this.vehiclesTick = diff.tick;
+    }
+    if (diff.traffic) {
+      this.setTraffic(diff.traffic);
+      this.emit('traffic');
     }
     if (diff.events) {
       this.events = diff.events;

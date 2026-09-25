@@ -36,7 +36,15 @@ export function route(
   from: { seg: number; s: number },
   to: { seg: number; s: number },
 ): Leg[] | null {
-  return routeBetween(sim.graph(), sim.net, from, to, (id) => segSpeed(sim, id));
+  const costs = sim.congestedCosts();
+  return routeBetween(
+    sim.graph(),
+    sim.net,
+    from,
+    to,
+    (id) => segSpeed(sim, id),
+    (k) => costs[k]!,
+  );
 }
 
 /** Total length of a route in metres. */

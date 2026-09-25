@@ -17,6 +17,7 @@ import type {
   NodeData,
   SegmentData,
   Snapshot,
+  TrafficData,
   BuildingDetails,
   Query,
 } from './protocol';
@@ -45,6 +46,7 @@ import { updateLandValue, waterDistance } from './systems/landValue';
 import { growthPass, lifecycle } from './systems/growth';
 import { happinessFactors, updateHappiness } from './systems/happiness';
 import { runMatcher } from './systems/commute';
+import { congestedEdgeCosts, congestedSeconds, hourShare, segVC, type TripSample } from './systems/traffic';
 import { GROWTH, HAPPINESS } from '../data/balance';
 import { ZONE_R } from '../data/zones';
 import { TICKS_PER_HOUR, dateOf, isMonthStart } from './time';
@@ -134,6 +136,10 @@ export class Sim {
   readonly bldHash = new SpatialHash(32);
   readonly civHash = new SpatialHash(64);
   private vehiclesDirty = true;
+  /** Sampled trips for visible traffic (derived each assignment round; not saved). */
+  tripSamples: TripSample[] = [];
+  private trafficDirty = true;
+  private congestedCache: { key: string; costs: Float64Array } | null = null;
   private flagCache = new Map<number, number>();
   private dirtyCivics = new Set<number>();
   private removedCivics = new Set<number>();
@@ -184,6 +190,7 @@ export class Sim {
       burning: [],
       incidents: new Map(),
       crime: new Float32Array(GRID_RES * GRID_RES),
+      traffic: new Map(),
     };
     const sim = new Sim(state, terrain);
     sim.buildHighway();
@@ -244,8 +251,32 @@ export class Sim {
   }
 
   /** Travel-time multiplier on a segment from congestion and road maintenance (traffic in M6). */
-  congestionFactor(_segId: number): number {
-    return 0.8 + 0.2 * Math.min(1, this.fundingEff('roads'));
+  /** Speed factor (≤ 1) on a segment from its traffic at the current hour. */
+  congestionFactor(segId: number): number {
+    const t0 = this.graph().segSeconds.get(segId) ?? 1;
+    return t0 / congestedSeconds(t0, segVC(this, segId, hourShare(this.state.tick)));
+  }
+
+  /** Congested seconds per graph edge at the current hour (cached per hour and assignment). */
+  congestedCosts(): Float64Array {
+    const g = this.graph();
+    const key = `${Math.floor(this.state.tick / TICKS_PER_HOUR)}:${this.state.cursors.matchRound}:${g.size}:${g.cost.length}`;
+    if (this.congestedCache?.key !== key)
+      this.congestedCache = { key, costs: congestedEdgeCosts(this, g, hourShare(this.state.tick)) };
+    return this.congestedCache.costs;
+  }
+
+  /** New volumes and trip samples are ready for the client. */
+  trafficChanged(): void {
+    this.trafficDirty = true;
+  }
+
+  trafficData(): TrafficData {
+    return {
+      vol: [...this.state.traffic].sort((a, b) => a[0] - b[0]),
+      trips: this.tripSamples.map((t) => ({ ...t, legs: t.legs.map((l) => ({ ...l })) })),
+      capScale: 0.8 + 0.2 * Math.min(1, this.fundingEff('roads')),
+    };
   }
 
   groundPollutionAt(x: number, z: number): number {
@@ -671,6 +702,7 @@ export class Sim {
     ])
       set.clear();
     this.vehiclesDirty = false;
+    this.trafficDirty = false;
     this.events = [];
     return {
       options: { ...this.state.options },
@@ -686,6 +718,7 @@ export class Sim {
       buildings: [...this.state.buildings.values()].map((b) => this.buildingData(b)),
       civics: [...this.state.civics.values()].map((c) => this.civicData(c)),
       vehicles: this.vehicleData(),
+      traffic: this.trafficData(),
     };
   }
 
@@ -830,6 +863,10 @@ export class Sim {
     if (this.vehiclesDirty) {
       frame.vehicles = this.vehicleData();
       this.vehiclesDirty = false;
+    }
+    if (this.trafficDirty) {
+      frame.traffic = this.trafficData();
+      this.trafficDirty = false;
     }
     if (this.events.length) {
       frame.events = this.events;

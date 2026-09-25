@@ -73,4 +73,6 @@ export interface SimState {
   incidents: Map<number, Incident>;
   /** Crime raster (GRID_RES²), 0..1. */
   crime: Float32Array;
+  /** Daily traffic per road segment (passenger-car units, both directions). */
+  traffic: Map<number, number>;
 }
