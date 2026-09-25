@@ -231,6 +231,14 @@ test('M6: upgrade a road, run buses, click a car and cross the river', async ({ 
   });
   for (let k = 0; k < 4; k++) await page.evaluate(() => window.__game!.waitFrames(3));
   await page.evaluate(() => window.__game!.setSpeed(0));
+  // Wait for the paused sim to settle: a late frame can still move the display clock (and the cars).
+  await expect
+    .poll(async () => {
+      const a = (await state(page)).tick;
+      await page.evaluate(() => window.__game!.waitFrames(3));
+      return (await state(page)).tick === a;
+    })
+    .toBe(true);
   expect((await state(page)).renderStats.cars).toBeGreaterThan(5);
   // Pausing snaps the display clock to the sim, so a car can finish its trip while the camera
   // moves: pick one that is still on the road once the view has settled.
@@ -243,6 +251,11 @@ test('M6: upgrade a road, run buses, click a car and cross the river', async ({ 
     );
     await page.evaluate(() => window.__game!.waitFrames(2));
     same = await page.evaluate((id) => window.__game!.getCars().find((c) => c.id === id) ?? null, car.id);
+    if (!same) continue;
+    // Make sure the click will land on it.
+    const at = await page.evaluate((c) => window.__game!.worldToScreen(c.x, c.z), same);
+    const hit = await page.evaluate(([x, y]) => window.__game!.pickAt(x!, y!), [at.x, at.y]);
+    if (hit?.kind !== 'car') same = null;
   }
   expect(same).not.toBeNull();
   const cp = await page.evaluate((c) => window.__game!.worldToScreen(c.x, c.z), same!);

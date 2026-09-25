@@ -465,11 +465,38 @@ area redevelop to the higher wealth (gentrification); decline lowers it.
 
 ### 3.12 Disasters (M9)
 
-Earthquake (epicentre + radius: damage probability by distance, collapses → rubble, starts fires),
-tornado (moving path, destroys buildings along a swath), flood (terrain below `waterLevel + h` near
-water floods for a while: buildings damaged/closed), meteor (impact crater radius: destroy + fires).
-Rubble must be cleared (bulldoze, or free auto-clear by a nearby fire station over time); lots then
-regrow. Disasters on/off in options; fires always on.
+Fires are always on (§3.7). The optional disasters live in `sim/systems/disasters.ts` as saved state
+(`disasters`, `roadDamage`, `craters`, `civic.damage`/`flooded`, `building.flooded`; save v8) and draw
+only on the `disasters` RNG stream, so they replay exactly. Each disaster keeps its parameters (point,
+start/end tick, size, heading, seed) and its motion is a pure function of them and the tick, so the
+client animates it between frames with the same maths (`tornadoAt`, `floodLevel`, `impactTick`).
+
+- **Earthquake** (magnitude 5.6–7.4, skewed low): radius 120 + 220·(M − 5) m. Intensity falls off as
+  (1 − d/R)^1.3. Buildings collapse with chance 0.6·I² (more for tall, abandoned or unfinished ones),
+  otherwise catch fire with 0.12·I; roads within 70 % of the radius crack (0.7·I, closed 6–24 h);
+  civic buildings go offline (0.7·I, 8–24 h). The camera shakes for the 20 ticks it lasts.
+- **Tornado**: touches down and heads for the city centre (±0.4 rad), 28 m/tick for 45–70 ticks with a
+  lazy sideways wobble; every tick, buildings within its half-width (18–32 m) are destroyed (35 % in
+  the core, 10 % at the edge), civics hit go offline 36 h, roads get debris (8 h), trees are flattened.
+- **Flood**: needs open water within 320 m. The peak level is 1.8 m above the typical land within
+  150 m of the water near the source (4–13 m): water rises over 4 h, holds 10 h, drains over 8 h,
+  within 520 m of the source. Anything whose ground is below the level is under water: homes and
+  businesses close (mood −0.5) and may be wrecked after 3 h (5 %/h low density, 2 % otherwise), civic
+  buildings are out of action, and roads with any stretch under water are impassable.
+- **Meteor**: a 30-tick warning while it falls, then everything within the crater radius (28–48 m) is
+  flattened (a civic building hit squarely is destroyed and must be rebuilt), fires start out to 2.2×
+  the radius, roads in the crater close for 72 h and a scorched crater stays for 60 days.
+
+Consequences reuse the existing systems: collapsed homes with people inside raise ambulance calls,
+fires go to the fire service, and closed roads (damaged or flooded) are left out of the routing
+graph, so commutes, service coverage, utilities and buses route around them until repaired. Whether a
+place is linked to the highway at all uses the network as built, so a temporary closure doesn't mark a
+neighbourhood as cut off. Offline civic buildings supply nothing (`civicOnline`). Repairs count down
+hourly and are paid when done ('Disaster repairs': half a road's build cost, a quarter of a civic
+building's). Recovery: rubble clears after 36 h (or bulldoze it), and abandoned buildings nobody moves
+back into crumble after four days, so lots regrow as demand returns. Random disasters strike about
+once per 30 game days once the city has 1,500 residents, and can be switched off (`setDisasters`); the
+disasters menu can set any one off at a chosen point whatever that setting.
 
 ### 3.13 Progression (M10)
 

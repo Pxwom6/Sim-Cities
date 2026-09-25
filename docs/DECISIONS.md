@@ -112,3 +112,14 @@ One line each: what was decided and why. Newest at the bottom of each section.
 - Player settings (volumes, mute, tilt-shift) live in localStorage, per device rather than per city; M11 adds the rest to the same record.
 - Street-lamp light is faked with additive quads (with polygon offset so they survive at distance) rather than real lights, which would multiply the lighting cost per lamp.
 - The variety pass adds about 45 % more triangles to a low-density home (93 → 139 on average) for gardens, trees and cars; mid and high density are almost unchanged, and those dominate big cities.
+
+## M9
+- Disasters are saved state, but their motion (tornado position, flood level, meteor fall) is a pure function of their parameters and the tick, so the client animates them smoothly and a save/load mid-disaster carries on identically.
+- Floods set their peak from the local shoreline (1.8 m above the typical land near the water) rather than a fixed height: the maps' banks range from ~3 m to ~11 m, and a fixed level either did nothing or drowned everything.
+- Closed roads leave the routing graph, but "linked to the highway" uses the network as built: otherwise a day's repairs marked whole streets as cut off, doubled their distress and emptied them.
+- Disaster repairs take 6–24 h for roads and 8–24 h for civic buildings (the first draft had up to 72 h): longer outages pushed whole towns past the 48-hour abandonment threshold and they never recovered.
+- Abandoned buildings nobody moves back into now crumble after four days. Without this, a town that lost its businesses in a disaster stayed scarred for good, since empty shops can't pass the reoccupy test with no customers around.
+- Earthquake magnitudes are skewed towards the low end (5.6 + 1.8·u²): a magnitude-7 quake in the middle of a small town destroys about a third of it, which is right for a rare big one but too much as the average.
+- A direct meteor hit destroys a civic building outright (the player rebuilds it); other disasters only knock civic buildings offline for repairs.
+- The disasters menu works whether or not random disasters are on: the setting only stops them striking by themselves.
+- Disaster collapses are their own event ('collapsed', logged but not toasted); the report when a disaster is over sums up the damage instead of a toast per building.

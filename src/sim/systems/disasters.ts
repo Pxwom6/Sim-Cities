@@ -192,6 +192,7 @@ export function startDisaster(
     d.end = impactTick(d) + 60;
   }
   s.disasters.push(d);
+  sim.disastersChanged();
   sim.events.push({ kind: 'disaster', id: d.id });
   return { ok: true, cost: 0, created: [d.id] };
 }
@@ -347,6 +348,7 @@ function meteorImpact(sim: Sim, d: Disaster): void {
   for (const { seg } of segmentsNear(sim, d.x, d.z, r)) damageRoad(sim, seg, m.roadHours, d);
   clearTrees(sim, d.x, d.z, r * 1.6);
   sim.state.craters.push({ x: d.x, z: d.z, r, tick: sim.state.tick });
+  sim.disastersChanged();
 }
 
 /** Segments under flood water right now (any stretch of the road below the level). */
@@ -436,6 +438,7 @@ export function disastersTick(sim: Sim): void {
     } else if (d.kind === 'tornado' && s.tick >= d.start && s.tick <= d.end) tornadoTick(sim, d);
     if (s.tick >= d.end) {
       s.disasters = s.disasters.filter((x) => x !== d);
+      sim.disastersChanged();
       sim.events.push({
         kind: 'disasterOver',
         id: d.id,
@@ -481,7 +484,9 @@ export function disastersHour(sim: Sim): void {
     sim.civicStatusChanged(c.id);
     sim.events.push({ kind: 'civicRepaired', id: c.id });
   }
+  const craters = s.craters.length;
   s.craters = s.craters.filter((c) => s.tick - c.tick < DISASTERS.meteor.scorchTicks);
+  if (s.craters.length !== craters) sim.disastersChanged();
   randomDisaster(sim);
 }
 

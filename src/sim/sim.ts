@@ -425,6 +425,11 @@ export class Sim {
     this.disastersDirty = true;
   }
 
+  /** Disasters started, ended or left a crater: resend them to the client. */
+  disastersChanged(): void {
+    this.disastersDirty = true;
+  }
+
   /** Flood levels moved: recompute which roads are under water, and reroute if that changed. */
   floodChanged(): void {
     const prev = this.blockedCache;

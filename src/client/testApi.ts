@@ -50,7 +50,15 @@ export interface TestApi {
   /** Show a data map (or null to hide). */
   setOverlay(map: string | null): Promise<void>;
   /** Render-side building list (id, position, state). */
-  getBuildings(): { id: number; x: number; z: number; state: number; zone: number; fire: number }[];
+  getBuildings(): {
+    id: number;
+    x: number;
+    z: number;
+    state: number;
+    zone: number;
+    fire: number;
+    flags: number;
+  }[];
   /** Client (CSS pixel) coordinates of a world point on the ground. */
   worldToScreen(x: number, z: number): { x: number; y: number };
   advance(ticks: number): Promise<number>;
@@ -176,6 +184,7 @@ export function installTestApi(game: Game): TestApi {
         state: b.state,
         zone: b.zone,
         fire: b.fire,
+        flags: b.flags,
       })),
     worldToScreen: (x, z) => {
       const v = new Vector3(x, Math.max(0, game.world.heightAt(x, z)), z).project(game.renderer.camera);
