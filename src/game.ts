@@ -23,6 +23,8 @@ export class Game {
   frameMs = 0;
   debugOpen = false;
   hint: ToolHint | null = null;
+  /** Open side panel (budget, and later data maps, advisors...). */
+  panel: 'budget' | null = null;
   /** Currently inspected building. */
   selected: number | null = null;
   toasts: { id: number; text: string; tone: 'info' | 'ok' | 'bad' }[] = [];
@@ -68,6 +70,11 @@ export class Game {
 
   dispatch(cmd: Command): Promise<CommandResult> {
     return this.client.command(cmd);
+  }
+
+  openPanel(p: Game['panel']): void {
+    this.panel = this.panel === p ? null : p;
+    this.notify();
   }
 
   select(id: number | null): void {

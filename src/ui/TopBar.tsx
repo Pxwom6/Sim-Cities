@@ -19,12 +19,21 @@ export function TopBar() {
     <div class="topbar panel" data-testid="topbar">
       <span class="city">{st.cityName}</span>
       <span class="divider" />
-      <div class="stat">
+      <button
+        class="stat stat-btn"
+        data-testid="open-budget"
+        title="Open the budget (M)"
+        onClick={() => game.openPanel('budget')}
+      >
         <span class="label">Treasury</span>
         <span class={`value ${st.treasury < 0 ? 'negative' : ''}`} data-testid="treasury">
           {formatMoney(st.treasury)}
         </span>
-      </div>
+        <span class={`sub ${st.netMonthly < 0 ? 'negative' : 'positive'}`} data-testid="net-income">
+          {st.netMonthly >= 0 ? '+' : ''}
+          {formatMoney(st.netMonthly)}/mo
+        </span>
+      </button>
       <div class="stat">
         <span class="label">Population</span>
         <span class="value" data-testid="population">

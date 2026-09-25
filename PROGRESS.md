@@ -3,7 +3,7 @@
 - [x] M0 Foundation
 - [x] M1 Roads and zoning
 - [x] M2 Growth
-- [ ] M3 Money
+- [x] M3 Money
 - [ ] M4 Utilities
 - [ ] M5 Services and happiness
 - [ ] M6 Traffic and transport
@@ -15,14 +15,14 @@
 - [ ] M12 Balance, performance and polish
 
 ## In progress
-M3 Money (not started).
+M4 Utilities (not started).
 
 ## Next tasks
-1. Ledger with categories (taxes by zone/wealth, upkeep, roads, loans, policies, trade, one-offs); exact "income − expenses = Δtreasury" invariant; monthly close + 24-month history.
-2. Tax commands (9 rates) feeding demand, spawn chance per wealth and happiness; department funding sliders.
-3. Loans (take/repay, annuity), low-money warnings, bankruptcy after a 2-month grace period (sandbox exempt). Save migration v1 → v2.
-4. Budget panel with charts (income/expense lines, projection, history), top-bar net income.
-5. Scenario tests: taxes shift demand; a city can go bankrupt.
+1. Placeable service/utility buildings (data table, footprint snapped to a road side, validity, cost + upkeep via departments, bulldoze with refund), `placeBuilding` command, undo.
+2. Power, water, sewage: supply by road distance from plants (multi-source Dijkstra), capacity × funding, groundwater at pumps, polluted water, outflow pollution. Garbage: accumulation, landfill/recycling/incinerator trucks.
+3. Consequences: mood penalties, businesses closing after 12 h, abandonment; problem icons over buildings; advisor-style alerts.
+4. Data maps (power, water, sewage, garbage, groundwater/resources) with legends, colour-blind-friendly ramps.
+5. Scenario tests: cutting a utility hurts the right buildings and causes decline.
 
 ## Known issues
 - Mood tops out around 0.65 until services exist (M5); upgrade threshold set to 0.62 for now.

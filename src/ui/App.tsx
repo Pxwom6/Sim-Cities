@@ -6,7 +6,8 @@ import { TopBar } from './TopBar';
 import { ToolHintLabel, Toolbar } from './Toolbar';
 import { Inspector } from './Inspector';
 import { Toasts } from './SystemMenu';
-import { useGameUpdates } from './hooks';
+import { formatMoney, useGameUpdates } from './hooks';
+import { BudgetPanel } from './Budget';
 
 function Shortcuts({ game }: { game: Game }) {
   useEffect(() => {
@@ -20,6 +21,7 @@ function Shortcuts({ game }: { game: Game }) {
       } else if (e.code === 'Digit1') game.setSpeed(1);
       else if (e.code === 'Digit2') game.setSpeed(2);
       else if (e.code === 'Digit3') game.setSpeed(3);
+      else if (e.code === 'KeyM' && !e.ctrlKey && !e.metaKey) game.openPanel('budget');
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -36,6 +38,8 @@ export function App({ game }: { game: Game }) {
       <Toolbar />
       <ToolHintLabel />
       <Inspector />
+      <BudgetPanel />
+      <MoneyBanner />
       <ToastLayer />
     </GameContext.Provider>
   );
@@ -44,4 +48,49 @@ export function App({ game }: { game: Game }) {
 function ToastLayer() {
   useGameUpdates(100);
   return <Toasts />;
+}
+
+/** Escalating money warnings and the bankruptcy screen. */
+function MoneyBanner() {
+  const game = useGameUpdates(300);
+  const st = game.world.stats;
+  if (st.bankrupt) {
+    return (
+      <div class="modal-backdrop" data-testid="bankrupt">
+        <div class="modal panel">
+          <h2>The city is bankrupt</h2>
+          <p>
+            {st.cityName} ran out of money and couldn't recover in time. The regional authority has taken over
+            its finances.
+          </p>
+          <div class="modal-actions">
+            <button class="btn" onClick={() => (location.search = '?load=quick')}>
+              Load quick save
+            </button>
+            <button class="btn active" onClick={() => (location.search = '')}>
+              Start a new city
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  if (st.treasury < 0) {
+    const left = Math.max(0, 48 - st.negativeHours);
+    return (
+      <div class="banner bad" data-testid="money-warning" role="alert">
+        The treasury is empty ({formatMoney(st.treasury)}). Raise taxes, cut funding or take a loan:
+        bankruptcy in about {left} hours.
+      </div>
+    );
+  }
+  if (st.netMonthly < 0 && st.treasury < -st.netMonthly * 3) {
+    return (
+      <div class="banner warn" data-testid="money-warning" role="status">
+        Money is running low: at {formatMoney(st.netMonthly)} a month, the treasury lasts about{' '}
+        {Math.max(0, Math.floor(st.treasury / -st.netMonthly))} months.
+      </div>
+    );
+  }
+  return null;
 }

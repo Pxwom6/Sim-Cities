@@ -38,3 +38,15 @@ One line each: what was decided and why. Newest at the bottom of each section.
 - Demolishing zoned buildings is free (no cost, no refund).
 - Loading a save reloads the page into `?load=<slot>`; this keeps the renderer's setup path single and robust.
 - Saves are gzip-compressed JSON in IndexedDB; exports use the same bytes with a `.citybloom` extension.
+
+## M3
+- Money is integer dollars. Hourly accruals carry their fractional remainder per ledger category, so `treasury = month-start treasury + Σ ledger lines` holds exactly every tick (checked in test mode).
+- A month is one day/night cycle, so monthly rates accrue in 24 hourly steps; the budget closes at midnight and keeps 24 months of history.
+- Loans are annuities paid hourly (interest first); up to 3 at once; early repayment settles the balance. Bigger loans unlock with population.
+- Bankruptcy: the treasury may be negative for 48 hours (two months); then the city is bankrupt, the sim stops and every command is refused. Sandbox never goes bankrupt.
+- Low-money warning when the monthly net is negative and the treasury covers less than three months of it.
+- Tax changes affect demand (average rate per zone), spawn chance per wealth level, and each building's mood (weighted by wealth sensitivity).
+- Department funding scales upkeep linearly; effectiveness follows `f ≤ 1 ? f : 1 + ½(f − 1)`. Road maintenance funding only scales cost until traffic (M6) uses it for road wear.
+- Policies are listed under Money in the spec but built in M10 with progression; the ledger already has a `policies` line.
+- Budget charts use two single-axis charts (treasury line, net-income bars in the diverging blue/red poles), never a dual axis.
+- Save format v2 adds the economy; `migrations[1]` upgrades v1 saves with default taxes and funding (tested).
