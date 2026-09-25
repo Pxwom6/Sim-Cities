@@ -1,3 +1,4 @@
+import { POLICY_EFFECTS } from '../../data/policies';
 import { COMMUTE, DEMAND, TRAFFIC } from '../../data/balance';
 import { ROAD_TYPES } from '../../data/roads';
 import { ZONE_C, ZONE_I, ZONE_R } from '../../data/zones';
@@ -103,6 +104,8 @@ export function runMatcher(sim: Sim): void {
   const near = lines.length ? stopsNearNodes(sim, lines) : new Map();
   const riders = new Float64Array(lines.length);
   const loadOf = lines.map((l) => s.transit.load.get(l.depot) ?? 1);
+  // Free buses: no fare makes the bus feel quicker in the choice between bus and car.
+  const freeRide = sim.policy('freeTransit') ? POLICY_EFFECTS.freeTransitSeconds : 0;
   if (order.length) {
     const startAt = s.cursors.matchRound % order.length;
     s.cursors.matchRound++;
@@ -135,7 +138,7 @@ export function runMatcher(sim: Sim): void {
               workersLeft -= take;
               employed += take;
               const bus = lines.length ? busTime(lines, near, node, u) : null;
-              const share = bus && bus.line >= 0 ? busShare(t, bus.t, loadOf[bus.line]!) : 0;
+              const share = bus && bus.line >= 0 ? busShare(t, bus.t - freeRide, loadOf[bus.line]!) : 0;
               commuteSum += take * (share > 0 ? share * bus!.t + (1 - share) * t : t);
               if (share > 0) riders[bus!.line] += take * share * TRAFFIC.tripsPerWorker;
               const n = take * TRAFFIC.tripsPerWorker * car * (1 - share);

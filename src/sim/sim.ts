@@ -63,7 +63,18 @@ import { congestedEdgeCosts, congestedSeconds, hourShare, segVC, type TripSample
 import { GROWTH, HAPPINESS, TRANSIT } from '../data/balance';
 import { ZONE_I, ZONE_R } from '../data/zones';
 import { TICKS_PER_HOUR, dateOf, isMonthStart } from './time';
-import { bulldozeCivic, civicDef, civicRect, findAccess, placeCivic, type Civic } from './world/civic';
+import {
+  addModule,
+  bulldozeCivic,
+  civicCapacity,
+  civicDef,
+  civicRect,
+  civicUpkeep,
+  civicVehicles,
+  findAccess,
+  placeCivic,
+  type Civic,
+} from './world/civic';
 import { civicOutput, emptyUtilityStats, updateUtilities, utilityConsequences } from './systems/utilities';
 import { dispatchGarbage, garbageHour } from './systems/garbage';
 import { segSpeed, stepVehicles } from './systems/vehicles';
@@ -79,6 +90,9 @@ import {
 } from './systems/services';
 import { ignite, incidentsHour, incidentsTick } from './systems/incidents';
 import { disastersHour, disastersTick, floodedSegments, startDisaster } from './systems/disasters';
+import { progressHour } from './systems/progress';
+import { specialisationsHour } from './systems/specialisations';
+import { POLICY, type PolicyId } from '../data/policies';
 import { decayCrime, splatField } from './systems/pollution';
 import type { ServiceKind } from '../data/civic';
 import { GARBAGE, UTILITIES, VEHICLE_SPEED_SCALE } from '../data/civic';
@@ -129,7 +143,9 @@ export type SimEvent = {
     | 'civicDestroyed'
     | 'roadRepaired'
     | 'decayed'
-    | 'collapsed';
+    | 'collapsed'
+    | 'milestone'
+    | 'achievement';
   id: number;
   /** Extra details for the notification (disaster reports, destroyed buildings). */
   info?: Record<string, number | string>;
@@ -221,6 +237,9 @@ export class Sim {
       disasters: [],
       roadDamage: new Map(),
       craters: [],
+      progress: { peak: 0, milestone: 0, achievements: {} },
+      policies: [],
+      tourism: { visitors: 0, overnight: 0 },
     };
     const sim = new Sim(state, terrain);
     sim.buildHighway();
@@ -275,7 +294,7 @@ export class Sim {
     const out: Partial<Record<Dept, number>> = {};
     for (const c of this.state.civics.values()) {
       const d = civicDef(c);
-      out[d.dept] = (out[d.dept] ?? 0) + d.upkeep;
+      out[d.dept] = (out[d.dept] ?? 0) + civicUpkeep(c);
     }
     if (this.state.transit.stops.size)
       out.transit = (out.transit ?? 0) + this.state.transit.stops.size * TRANSIT.stopUpkeep;
@@ -401,6 +420,25 @@ export class Sim {
   }
 
   // ---------------------------------------------------------------- derived caches
+
+  /** Is a policy in force? */
+  policy(id: PolicyId): boolean {
+    return this.state.policies.includes(id);
+  }
+
+  /** Is something that unlocks at `population` available? (Unlocks keep once reached.) */
+  isUnlocked(population: number): boolean {
+    return this.state.unlockAll || this.reached(population);
+  }
+
+  /**
+   * Has the city itself grown this big (sandbox counts)? Zone densities go by this: the unlock-all
+   * cheat opens up things to build, not how tall the city grows.
+   */
+  reached(population: number): boolean {
+    const s = this.state;
+    return s.options.sandbox || Math.max(s.progress.peak, s.totals.population) >= population;
+  }
 
   /** Roads nothing can drive along right now: damaged by a disaster, or under flood water. */
   blockedSegments(): Set<number> {
@@ -701,6 +739,22 @@ export class Sim {
         if (r.ok && !dryRun) this.disastersDirty = true;
         return r;
       }
+      case 'setPolicy': {
+        const def = POLICY.get(cmd.id);
+        if (!def) return fail('No such policy');
+        if (cmd.on && !this.isUnlocked(def.unlockPopulation))
+          return fail(`Unlocks at ${def.unlockPopulation.toLocaleString('en-US')} residents`);
+        if (!dryRun) {
+          const set = new Set(this.state.policies);
+          if (cmd.on) set.add(cmd.id);
+          else set.delete(cmd.id);
+          this.state.policies = [...set].sort();
+          if (cmd.id === 'freeTransit') this.transitChanged();
+        }
+        return ok(0);
+      }
+      case 'addModule':
+        return addModule(this, cmd.civic, cmd.module, dryRun);
       case 'setDisasters':
         if (!dryRun) this.state.options = { ...this.state.options, disasters: cmd.on };
         return ok(0);
@@ -776,6 +830,8 @@ export class Sim {
       s.totals = computeTotals(this);
       updateDemand(this);
       economyHour(this);
+      specialisationsHour(this);
+      progressHour(this);
       if (t % (TICKS_PER_HOUR * 3) === 0) updateLandValue(this);
     }
     if (this.testMode) checkInvariants(this);
@@ -839,7 +895,9 @@ export class Sim {
       bankrupt: this.state.economy.bankrupt,
       negativeHours: this.state.economy.negativeHours,
       utilities: this.state.utilityStats,
-      unlockAll: this.state.unlockAll,
+      unlockAll: this.state.unlockAll || this.state.options.sandbox,
+      peak: Math.max(this.state.progress.peak, this.state.totals.population),
+      milestone: this.state.progress.milestone,
       civics: this.state.civics.size,
       vehicles: this.state.vehicles.size,
       avgCommute: this.avgCommute(),
@@ -999,6 +1057,7 @@ export class Sim {
       variant: c.variant,
       damage: c.damage,
       flooded: c.flooded,
+      modules: [...c.modules],
     };
   }
 
@@ -1174,7 +1233,7 @@ export class Sim {
       name: d.name,
       category: d.category,
       blurb: d.blurb,
-      upkeep: Math.round(d.upkeep * (this.state.economy.funding[d.dept] / 100)),
+      upkeep: Math.round(civicUpkeep(c) * (this.state.economy.funding[d.dept] / 100)),
       funding: this.state.economy.funding[d.dept],
       access: !!c.access,
       produces,
@@ -1227,10 +1286,10 @@ export class Sim {
     }
     return {
       kind: svc.kind,
-      vehicles: svc.vehicles ? Math.max(0, Math.round(svc.vehicles * eff)) : 0,
+      vehicles: Math.max(0, Math.round(civicVehicles(c) * eff)),
       out: [...this.state.vehicles.values()].filter((v) => v.home === c.id).length,
       reach,
-      seats: svc.capacity ? Math.round(svc.capacity * eff) : 0,
+      seats: Math.round(civicCapacity(c) * eff),
       used: this.schoolUse.get(c.id) ?? 0,
     };
   }

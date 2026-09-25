@@ -1,3 +1,4 @@
+import { POLICY_EFFECTS } from '../../data/policies';
 import { GARBAGE } from '../../data/civic';
 import { ZONE_R } from '../../data/zones';
 import type { Sim } from '../sim';
@@ -11,14 +12,15 @@ import { registerVehicleKind, route, sendHome, spawnVehicle, despawnVehicle } fr
 const dijkstra = new Dijkstra();
 
 /** Garbage made per hour by a building. */
-export function garbageRate(b: Building): number {
+export function garbageRate(sim: Sim, b: Building): number {
   if (b.state !== BState.Active || b.pop <= 0) return 0;
-  return (b.zone === ZONE_R ? b.pop * GARBAGE.perResident : b.pop * GARBAGE.perJob[b.zone]!) / 24;
+  const k = sim.policy('recycling') ? POLICY_EFFECTS.recycling : 1;
+  return (k * (b.zone === ZONE_R ? b.pop * GARBAGE.perResident : b.pop * GARBAGE.perJob[b.zone]!)) / 24;
 }
 
 export function garbageHour(sim: Sim): void {
   for (const b of sim.state.buildings.values()) {
-    const r = garbageRate(b);
+    const r = garbageRate(sim, b);
     if (!r) continue;
     const before = b.garbage;
     b.garbage = Math.min(1000, Math.round((b.garbage + r) * 1000) / 1000);

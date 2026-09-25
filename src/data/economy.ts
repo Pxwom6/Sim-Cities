@@ -22,7 +22,9 @@ export type Dept =
   | 'health'
   | 'education'
   | 'parks'
-  | 'transit';
+  | 'transit'
+  | 'tourism'
+  | 'trade';
 export const DEPTS: { id: Dept; name: string; effect: string }[] = [
   { id: 'roads', name: 'Road maintenance', effect: 'Below 100 %, roads wear and traffic slows.' },
   { id: 'power', name: 'Power', effect: 'Scales power plant output.' },
@@ -35,6 +37,8 @@ export const DEPTS: { id: Dept; name: string; effect: string }[] = [
   { id: 'education', name: 'Education', effect: 'Scales school coverage and seats.' },
   { id: 'parks', name: 'Parks', effect: 'Scales how much parks lift their surroundings.' },
   { id: 'transit', name: 'Transit', effect: 'Scales bus frequency.' },
+  { id: 'tourism', name: 'Tourism', effect: 'Scales how many visitors landmarks draw and hotels host.' },
+  { id: 'trade', name: 'Trade and research', effect: 'Scales freight, mining, oil and research income.' },
 ];
 export const FUNDING_MIN = 0;
 export const FUNDING_MAX = 150;
@@ -52,7 +56,7 @@ export const LOAN_OPTIONS: {
 }[] = [
   { amount: 25_000, annualRate: 0.05, months: 60, unlockPopulation: 0 },
   { amount: 50_000, annualRate: 0.06, months: 60, unlockPopulation: 0 },
-  { amount: 100_000, annualRate: 0.075, months: 72, unlockPopulation: 1_000 },
+  { amount: 100_000, annualRate: 0.075, months: 72, unlockPopulation: 800 },
   { amount: 250_000, annualRate: 0.085, months: 96, unlockPopulation: 10_000 },
 ];
 export const MAX_LOANS = 3;
@@ -86,6 +90,9 @@ export const LEDGER_LABELS: Record<string, string> = {
   loanPrincipal: 'Loan repayments',
   policies: 'Policies',
   repairs: 'Disaster repairs',
+  tourism: 'Tourism',
+  resources: 'Ore and oil sales',
+  technology: 'Research licences',
 };
 
 export function ledgerLabel(key: string): string {

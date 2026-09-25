@@ -228,7 +228,7 @@ export function BudgetPanel() {
           <h3>Borrow</h3>
           <div class="loan-options">
             {LOAN_OPTIONS.map((o) => {
-              const locked = game.world.stats.population < o.unlockPopulation;
+              const locked = !game.world.stats.unlockAll && game.world.stats.peak < o.unlockPopulation;
               return (
                 <button
                   key={o.amount}

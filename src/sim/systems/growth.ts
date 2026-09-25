@@ -48,8 +48,8 @@ export function maxWealth(sim: Sim, seg: number, s: number): Wealth {
 }
 
 export function unlockedDensity(sim: Sim): Density {
-  const pop = sim.state.totals.population;
-  return pop >= DENSITY_UNLOCK_POPULATION[2] ? 2 : pop >= DENSITY_UNLOCK_POPULATION[1] ? 1 : 0;
+  if (sim.reached(DENSITY_UNLOCK_POPULATION[2]) && !sim.policy('highRiseBan')) return 2;
+  return sim.reached(DENSITY_UNLOCK_POPULATION[1]) ? 1 : 0;
 }
 
 function lotFits(

@@ -1,3 +1,4 @@
+import { POLICY_EFFECTS } from '../../data/policies';
 import { GRID_CELL, GRID_RES } from '../../data/world';
 import { ENVIRONMENT } from '../../data/balance';
 import { seedFromString } from '../rng';
@@ -54,9 +55,10 @@ export function updateGroundPollution(sim: Sim, hours: number): void {
   const s = sim.state;
   const field = s.groundPollution;
   const add = new Float32Array(field.length);
+  const clean = sim.policy('cleanIndustry') ? POLICY_EFFECTS.cleanIndustry : 1;
   for (const b of s.buildings.values()) {
     if (b.state !== BState.Active) continue;
-    if (b.zone === ZONE_I && b.wealth === 0) splat(add, b.x, b.z, 0.012 * b.w * b.d * hours, 3);
+    if (b.zone === ZONE_I && b.wealth === 0) splat(add, b.x, b.z, 0.012 * b.w * b.d * hours * clean, 3);
     if (b.sewage < 0.99) splat(add, b.x, b.z, 0.01 * (1 - b.sewage) * b.w * b.d * hours, 2);
   }
   for (const c of s.civics.values()) {
@@ -119,6 +121,7 @@ export function windAngle(seed: string, tick: number): number {
  * decay, and let trees and parks absorb some.
  */
 export function updateAirPollution(sim: Sim, hours: number): void {
+  const clean = sim.policy('cleanIndustry') ? POLICY_EFFECTS.cleanIndustry : 1;
   const s = sim.state;
   const E = ENVIRONMENT;
   const field = s.airPollution;
@@ -127,7 +130,7 @@ export function updateAirPollution(sim: Sim, hours: number): void {
   for (const b of s.buildings.values()) {
     if (b.state !== BState.Active || b.zone !== ZONE_I) continue;
     const busy = b.cap > 0 ? Math.min(1, b.pop / b.cap) : 0;
-    splat(add, b.x, b.z, E.industryAir[b.wealth]! * b.w * b.d * busy * k, 2);
+    splat(add, b.x, b.z, E.industryAir[b.wealth]! * b.w * b.d * busy * k * clean, 2);
   }
   for (const c of s.civics.values()) {
     const def = civicDef(c);

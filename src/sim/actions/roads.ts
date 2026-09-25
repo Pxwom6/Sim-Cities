@@ -13,7 +13,7 @@ import { removeStop } from '../systems/transit';
 function roadLocked(sim: Sim, road: RoadTypeId): string | null {
   const t = ROAD_TYPES[road];
   if (!t.buildable) return "That road type can't be built";
-  if (sim.state.totals.population < t.unlockPopulation && !sim.state.unlockAll && !sim.state.options.sandbox)
+  if (!sim.isUnlocked(t.unlockPopulation))
     return `${t.name}s unlock at ${t.unlockPopulation.toLocaleString('en-US')} residents`;
   return null;
 }

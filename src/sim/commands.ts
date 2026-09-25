@@ -3,6 +3,7 @@ import type { ZoneLetter } from '../data/zones';
 import type { Vec2 } from './geom';
 import type { Dept } from '../data/economy';
 import type { DisasterKind } from './systems/disasters';
+import type { PolicyId } from '../data/policies';
 
 export type ZoneArea = { kind: 'brush'; points: Vec2[]; radius: number } | { kind: 'segment'; id: number };
 export type BulldozeTarget =
@@ -37,7 +38,11 @@ export type Command =
   /** Start a disaster at a point (the disasters menu). `size` and `heading` are for tests. */
   | { type: 'disaster'; kind: DisasterKind; at: Vec2; size?: number; heading?: number }
   /** Random disasters on or off. */
-  | { type: 'setDisasters'; on: boolean };
+  | { type: 'setDisasters'; on: boolean }
+  /** Enact or repeal a policy. */
+  | { type: 'setPolicy'; id: PolicyId; on: boolean }
+  /** Add a module (extra engines, beds, classrooms, buses...) to a civic building. */
+  | { type: 'addModule'; civic: number; module: string };
 
 export type CommandType = Command['type'];
 

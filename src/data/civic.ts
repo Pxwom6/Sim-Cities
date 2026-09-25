@@ -65,6 +65,18 @@ export interface CivicDef {
   };
   /** Land-value effect radius (m) and strength (negative for nuisances). */
   landValue?: { radius: number; value: number };
+  /** Specialisations (M10). Tourism: visitors a landmark draws a day, or hotel rooms. */
+  tourism?: { draw?: number; rooms?: number };
+  /** Mines and wells: extracted units a day on a rich deposit, export price, and units in a deposit. */
+  resource?: { kind: 'ore' | 'oil'; perDay: number; price: number; reserve: number };
+  /** Freight terminal: trade income per industrial job a day, and extra industrial demand. */
+  freight?: { perJob: number; demand: number };
+  /** Research park: income per high-tech job a day; high-tech industry needs less education. */
+  research?: { perJob: number };
+  /** Only one can be built (landmarks). */
+  unique?: boolean;
+  /** Another civic building the city must have first. */
+  requires?: string;
   /** Model family for the renderer. */
   model: string;
 }
@@ -115,7 +127,7 @@ export const CIVIC_DEFS: CivicDef[] = [
     airPollution: 0.35,
     landValue: { radius: 160, value: -0.08 },
     blurb: 'Cleaner than coal, pricier to run.',
-    unlockPopulation: 1_200,
+    unlockPopulation: 2_000,
     model: 'gas',
   },
   {
@@ -129,7 +141,7 @@ export const CIVIC_DEFS: CivicDef[] = [
     upkeep: 180,
     output: { power: 220 },
     blurb: 'Silent and clean; needs plenty of land.',
-    unlockPopulation: 4_000,
+    unlockPopulation: 5_000,
     model: 'solar',
   },
   {
@@ -240,7 +252,7 @@ export const CIVIC_DEFS: CivicDef[] = [
     garbage: { trucks: 3, truckCapacity: 90, process: 900, revenuePerUnit: 0.8 },
     landValue: { radius: 90, value: -0.05 },
     blurb: 'Collects and recycles garbage, earning a little from the materials.',
-    unlockPopulation: 2_500,
+    unlockPopulation: 2_000,
     model: 'recycling',
   },
   {
@@ -256,7 +268,7 @@ export const CIVIC_DEFS: CivicDef[] = [
     airPollution: 0.6,
     landValue: { radius: 160, value: -0.12 },
     blurb: 'Burns garbage for a little power, and some smoke.',
-    unlockPopulation: 6_000,
+    unlockPopulation: 5_000,
     model: 'incinerator',
   },
   // Safety
@@ -314,7 +326,7 @@ export const CIVIC_DEFS: CivicDef[] = [
     upkeep: 1_100,
     service: { kind: 'health', range: 100, vehicles: 4, capacity: 300, vehicle: 'ambulance' },
     blurb: 'Many beds and ambulances; covers a large area.',
-    unlockPopulation: 4_000,
+    unlockPopulation: 5_000,
     model: 'hospital',
   },
   // Education
@@ -343,7 +355,7 @@ export const CIVIC_DEFS: CivicDef[] = [
     upkeep: 760,
     service: { kind: 'education', range: 80, capacity: 700, level: 2 },
     blurb: 'Teenagers from a wide area study here.',
-    unlockPopulation: 2_500,
+    unlockPopulation: 2_000,
     model: 'highschool',
   },
   {
@@ -357,7 +369,7 @@ export const CIVIC_DEFS: CivicDef[] = [
     upkeep: 2_300,
     service: { kind: 'education', range: 240, capacity: 2_000, level: 3 },
     blurb: 'Higher education for the whole city; educated workers attract high-tech industry.',
-    unlockPopulation: 15_000,
+    unlockPopulation: 20_000,
     model: 'university',
   },
   {
@@ -372,7 +384,7 @@ export const CIVIC_DEFS: CivicDef[] = [
     service: { kind: 'education', range: 50, capacity: 200, level: 1 },
     landValue: { radius: 120, value: 0.06 },
     blurb: 'Lifelong learning; a small boost to education and land value.',
-    unlockPopulation: 1_500,
+    unlockPopulation: 800,
     model: 'library',
   },
   // Parks
@@ -403,7 +415,7 @@ export const CIVIC_DEFS: CivicDef[] = [
     service: { kind: 'park', range: 20 },
     landValue: { radius: 140, value: 0.14 },
     blurb: 'A paved square with a fountain; especially loved by shops nearby.',
-    unlockPopulation: 600,
+    unlockPopulation: 800,
     model: 'plaza',
   },
   {
@@ -438,7 +450,195 @@ CIVIC_DEFS.push({
   model: 'busdepot',
 });
 
+// Specialisations (M10): tourism, trade and technology. All designs are original.
+CIVIC_DEFS.push(
+  {
+    id: 'hotel',
+    name: 'Hotel',
+    category: 'landmark',
+    dept: 'tourism',
+    w: 32,
+    d: 28,
+    cost: 24_000,
+    upkeep: 260,
+    tourism: { rooms: 400 },
+    landValue: { radius: 120, value: 0.05 },
+    blurb: 'Rooms for 400 visitors a night. Overnight guests spend far more than day trippers.',
+    unlockPopulation: 10_000,
+    model: 'hotel',
+  },
+  {
+    id: 'clocktower',
+    name: 'Clock tower',
+    category: 'landmark',
+    dept: 'tourism',
+    w: 24,
+    d: 24,
+    cost: 30_000,
+    upkeep: 180,
+    tourism: { draw: 500 },
+    landValue: { radius: 220, value: 0.12 },
+    service: { kind: 'park', range: 12 },
+    unique: true,
+    blurb: 'A tall brick clock tower on a paved square. Draws 500 visitors a day.',
+    unlockPopulation: 10_000,
+    model: 'clocktower',
+  },
+  {
+    id: 'wheel',
+    name: 'Observation wheel',
+    category: 'landmark',
+    dept: 'tourism',
+    w: 40,
+    d: 32,
+    cost: 60_000,
+    upkeep: 380,
+    tourism: { draw: 900 },
+    landValue: { radius: 240, value: 0.12 },
+    service: { kind: 'park', range: 14 },
+    unique: true,
+    blurb: 'A giant wheel with views over the whole city. Draws 900 visitors a day.',
+    unlockPopulation: 20_000,
+    model: 'wheel',
+  },
+  {
+    id: 'conservatory',
+    name: 'Glass conservatory',
+    category: 'landmark',
+    dept: 'tourism',
+    w: 48,
+    d: 40,
+    cost: 90_000,
+    upkeep: 520,
+    tourism: { draw: 1_200 },
+    landValue: { radius: 280, value: 0.15 },
+    service: { kind: 'park', range: 18 },
+    unique: true,
+    blurb: 'Tropical gardens under glass domes. Draws 1,200 visitors a day.',
+    unlockPopulation: 40_000,
+    model: 'conservatory',
+  },
+  {
+    id: 'skyneedle',
+    name: 'Sky needle',
+    category: 'landmark',
+    dept: 'tourism',
+    w: 32,
+    d: 32,
+    cost: 160_000,
+    upkeep: 800,
+    tourism: { draw: 2_000 },
+    landValue: { radius: 320, value: 0.15 },
+    unique: true,
+    blurb: 'A slender observation tower with a restaurant at the top. Draws 2,000 visitors a day.',
+    unlockPopulation: 70_000,
+    model: 'skyneedle',
+  },
+  {
+    id: 'grandarch',
+    name: 'Grand arch',
+    category: 'landmark',
+    dept: 'tourism',
+    w: 48,
+    d: 32,
+    cost: 250_000,
+    upkeep: 900,
+    tourism: { draw: 3_000 },
+    landValue: { radius: 360, value: 0.18 },
+    service: { kind: 'park', range: 20 },
+    unique: true,
+    blurb: 'A monumental arch for a metropolis. Draws 3,000 visitors a day.',
+    unlockPopulation: 100_000,
+    model: 'grandarch',
+  },
+  {
+    id: 'freighthub',
+    name: 'Freight terminal',
+    category: 'special',
+    dept: 'trade',
+    w: 56,
+    d: 48,
+    cost: 45_000,
+    upkeep: 480,
+    freight: { perJob: 0.6, demand: 0.12 },
+    landValue: { radius: 160, value: -0.08 },
+    blurb: "Ships the city's goods out: trade income from every industrial job, and more industrial demand.",
+    unlockPopulation: 10_000,
+    model: 'freighthub',
+  },
+  {
+    id: 'oremine',
+    name: 'Ore mine',
+    category: 'special',
+    dept: 'trade',
+    w: 40,
+    d: 40,
+    cost: 30_000,
+    upkeep: 300,
+    resource: { kind: 'ore', perDay: 60, price: 14, reserve: 40_000 },
+    airPollution: 0.25,
+    groundPollution: 0.3,
+    landValue: { radius: 200, value: -0.15 },
+    blurb: 'Digs ore out of a deposit (see the resources map) and sells it to the region.',
+    unlockPopulation: 10_000,
+    model: 'oremine',
+  },
+  {
+    id: 'oilwell',
+    name: 'Oil well',
+    category: 'special',
+    dept: 'trade',
+    w: 24,
+    d: 24,
+    cost: 36_000,
+    upkeep: 280,
+    resource: { kind: 'oil', perDay: 40, price: 24, reserve: 30_000 },
+    groundPollution: 0.4,
+    landValue: { radius: 160, value: -0.15 },
+    blurb: 'Pumps oil from a field (see the resources map) and sells it to the region.',
+    unlockPopulation: 10_000,
+    model: 'oilwell',
+  },
+  {
+    id: 'techpark',
+    name: 'Research park',
+    category: 'special',
+    dept: 'trade',
+    w: 56,
+    d: 40,
+    cost: 80_000,
+    upkeep: 700,
+    research: { perJob: 1.2 },
+    landValue: { radius: 240, value: 0.1 },
+    unique: true,
+    requires: 'university',
+    blurb:
+      'Labs beside the university: high-tech industry needs fewer graduates, and research earns licence fees.',
+    unlockPopulation: 20_000,
+    model: 'techpark',
+  },
+);
+
 export const CIVIC = new Map(CIVIC_DEFS.map((d) => [d.id, d]));
+
+/** Specialisation economy (per day, which is one ledger month). */
+export const SPECIALISATION = {
+  /** Visitors who stay overnight (if there are rooms) and what each kind spends. */
+  overnightShare: 0.45,
+  daySpend: 3,
+  nightSpend: 10,
+  /** Visitor appeal: base plus a share of city approval. */
+  appealBase: 0.6,
+  /** Commercial demand from visitors: up to this, half reached at `visitorsHalf`. */
+  visitorDemand: 0.25,
+  visitorsHalf: 1_500,
+  /** Resource deposits: minimum mean richness under a mine or well, and the floor its output falls to. */
+  minRichness: 0.2,
+  depletedFloor: 0.2,
+  /** Research park: high-tech industry's education requirement drops to this, and its land value one. */
+  techEducation: 0.2,
+  techLandValue: 0.3,
+};
 
 /** Incident and service tuning (in ticks; see DESIGN §3.7 on vehicle time). */
 export const SERVICES = {

@@ -1,3 +1,5 @@
+import { CIVIC, SPECIALISATION } from '../../data/civic';
+import { freightHubs } from './specialisations';
 import { DEMAND } from '../../data/balance';
 import type { Sim } from '../sim';
 
@@ -56,11 +58,18 @@ export function updateDemand(sim: Sim): void {
     },
     { label: 'Workers looking for jobs', value: (DEMAND.cWorkforceWeight * t.unemployed) / (t.workers + 50) },
     { label: 'Commercial taxes', value: DEMAND.taxPerPoint * (taxC - DEMAND.neutralTax) },
+    {
+      label: 'Visitors shopping',
+      value:
+        (SPECIALISATION.visitorDemand * sim.state.tourism.visitors) /
+        (sim.state.tourism.visitors + SPECIALISATION.visitorsHalf),
+    },
   ];
   const I: Factor[] = [
     { label: 'Workers looking for jobs', value: (DEMAND.iWorkforceWeight * t.unemployed) / (t.workers + 50) },
     { label: 'Regional demand for goods', value: t.highwayConnected ? DEMAND.exports : 0 },
     { label: 'Industrial taxes', value: DEMAND.taxPerPoint * (taxI - DEMAND.neutralTax) },
+    { label: 'Freight terminal', value: freightHubs(sim) * (CIVIC.get('freighthub')?.freight?.demand ?? 0) },
   ];
   const sum = (fs: Factor[]) => clamp(fs.reduce((s, f) => s + f.value, 0));
   const ease = (cur: number, target: number) => round3(cur + (target - cur) * DEMAND.easing);

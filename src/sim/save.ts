@@ -1,9 +1,10 @@
+import { MILESTONES } from '../data/progression';
 import { GAME_TITLE } from '../config';
 import { canonicalStringify, decodeValue, encodeValue } from './serialize';
 import type { SimState } from './state';
 
 /** Bump when the saved state shape changes, and add a migration from the previous version. */
-export const SAVE_VERSION = 8;
+export const SAVE_VERSION = 9;
 export const SAVE_FORMAT = 'citybloom-save';
 
 export interface SaveMeta {
@@ -117,6 +118,21 @@ export const migrations: Record<number, (state: Record<string, unknown>) => Reco
     const civs = s.civics as { $m: [number, Record<string, unknown>][] };
     for (const [, c] of civs.$m) Object.assign(c, { damage: 0, flooded: false });
     return { ...s, disasters: [], roadDamage: { $m: [] }, craters: [] };
+  },
+  // v8 → v9 (M10): progression, policies and civic modules.
+  8: (s) => {
+    const civs = s.civics as { $m: [number, Record<string, unknown>][] };
+    for (const [, c] of civs.$m) c.modules = [];
+    const pop = Number((s.totals as { population?: number }).population ?? 0);
+    const milestone = MILESTONES.reduce((k, m, i) => (pop >= m.population ? i : k), 0);
+    const econ = s.economy as { funding: Record<string, number> };
+    econ.funding = { ...econ.funding, tourism: 100, trade: 100 };
+    return {
+      ...s,
+      progress: { peak: pop, milestone, achievements: {} },
+      policies: [],
+      tourism: { visitors: 0, overnight: 0 },
+    };
   },
 };
 

@@ -12,6 +12,7 @@ import type { UtilityStats } from './systems/utilities';
 import type { Incident } from './systems/incidents';
 import type { TransitState } from './systems/transit';
 import type { Crater, Disaster } from './systems/disasters';
+import type { TourismState } from './systems/specialisations';
 
 export type Difficulty = 'easy' | 'normal' | 'hard';
 
@@ -87,4 +88,10 @@ export interface SimState {
   roadDamage: Map<number, number>;
   /** Meteor craters (scorch marks fade after a while). */
   craters: Crater[];
+  /** Progression: the highest population reached (unlocks keep), milestone index, achievements (id → tick). */
+  progress: { peak: number; milestone: number; achievements: Record<string, number> };
+  /** Policies in force. */
+  policies: string[];
+  /** Visitors a day and overnight guests (tourism specialisation). */
+  tourism: TourismState;
 }

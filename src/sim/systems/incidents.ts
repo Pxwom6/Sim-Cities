@@ -3,11 +3,12 @@ import { ZONE_I, ZONE_R } from '../../data/zones';
 import { rectsOverlap } from '../geom';
 import type { Sim } from '../sim';
 import { BState, footprint, type Building } from '../world/buildings';
-import { civicDef, civicOnline } from '../world/civic';
+import { civicDef, civicOnline, civicVehicles } from '../world/civic';
 import { attachmentOf } from './commute';
 import { Dijkstra } from './graph';
 import { sicknessRate } from './health';
 import { HEALTH } from '../../data/balance';
+import { POLICY_EFFECTS } from '../../data/policies';
 import {
   despawnVehicle,
   registerVehicleKind,
@@ -52,10 +53,7 @@ export function dispatch(
     const def = civicDef(c);
     if (def.service?.kind !== service || def.service.vehicle !== vehicle || !c.access || !civicOnline(c))
       continue;
-    const total = Math.max(
-      0,
-      Math.round((def.service.vehicles ?? 0) * Math.min(1.25, sim.fundingEff(def.dept))),
-    );
+    const total = Math.max(0, Math.round(civicVehicles(c) * Math.min(1.25, sim.fundingEff(def.dept))));
     if (c.out >= total) continue;
     const seg = s.net.segments.get(c.access.seg);
     if (!seg) continue;
@@ -86,8 +84,10 @@ export function dispatch(
   return v;
 }
 
-function fireRisk(b: Building): number {
+/** Hourly chance a building catches fire by itself. */
+export function fireRisk(sim: Sim, b: Building): number {
   let p = SERVICES.fireBase * (1 - SERVICES.fireCoverageCut * b.covFire);
+  if (sim.policy('fireSafety')) p *= POLICY_EFFECTS.fireSafety;
   if (b.state === BState.Abandoned) p *= 4;
   if (b.zone === ZONE_I) p *= 1.5;
   return p;
@@ -113,12 +113,13 @@ export function incidentsHour(sim: Sim): void {
   for (const id of s.burning) if (!engines.has(id)) dispatch(sim, 'fire', 'fire', id);
   for (const b of [...s.buildings.values()]) {
     if (b.state !== BState.Active && b.state !== BState.Abandoned) continue;
-    if (b.fire <= 0 && rng.chance(fireRisk(b))) ignite(sim, b);
+    if (b.fire <= 0 && rng.chance(fireRisk(sim, b))) ignite(sim, b);
     if (b.state !== BState.Active) continue;
     if (b.zone !== ZONE_I) {
       const workers = Math.max(1, b.seekers);
       const unemp = b.zone === ZONE_R ? Math.max(0, b.seekers - b.employed) / workers : 0;
       const rate =
+        (sim.policy('neighbourhoodWatch') ? POLICY_EFFECTS.neighbourhoodWatch : 1) *
         SERVICES.crimeBase *
         (1 + 2 * unemp + (b.wealth === 0 ? 0.5 : 0) + 1.5 * Math.max(0, 0.5 - b.happiness)) *
         (1 - SERVICES.crimePoliceCut * b.covPolice) *

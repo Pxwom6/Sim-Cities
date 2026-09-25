@@ -147,7 +147,8 @@ export function Toolbar() {
   const game = useGameUpdates(100);
   const tools = game.tools;
   const active: ToolId = tools.activeId;
-  const pop = game.world.stats.population;
+  // Unlocks go by the highest population reached (and the unlock-all cheat / sandbox).
+  const pop = game.world.stats.unlockAll ? Infinity : game.world.stats.peak;
   const use = (id: ToolId) => tools.use(active === id && id !== 'select' ? 'select' : id);
   const [mapsOpen, setMapsOpen] = useState(false);
   const [disastersOpen, setDisastersOpen] = useState(false);
@@ -271,7 +272,7 @@ export function Toolbar() {
           {CIVIC_DEFS.filter(
             (d) => d.category === (active === 'stop' ? 'transit' : tools.place.category),
           ).map((d) => {
-            const locked = pop < d.unlockPopulation && !game.world.stats.unlockAll;
+            const locked = pop < d.unlockPopulation;
             const out = d.output ? Object.entries(d.output).map(([k, v]) => `${v} ${k} units`) : [];
             return (
               <ToolButton

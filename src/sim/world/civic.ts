@@ -1,4 +1,5 @@
-import { CIVIC, type CivicDef } from '../../data/civic';
+import { MODULE } from '../../data/modules';
+import { CIVIC, SPECIALISATION, type CivicDef } from '../../data/civic';
 import { ROAD_RULES, ROAD_TYPES } from '../../data/roads';
 import { MAP_SIZE, SHORE_HEIGHT, GRID_CELL, GRID_RES } from '../../data/world';
 import { fail, ok, type CommandResult } from '../commands';
@@ -30,6 +31,65 @@ export interface Civic {
   /** Hours until disaster damage is repaired (offline until then), and under flood water now. */
   damage: number;
   flooded: boolean;
+  /** Add-on modules installed (M10). */
+  modules: string[];
+}
+
+/** Vehicles, seats or beds, and buses a building has with its modules (before funding). */
+export function civicVehicles(c: Civic): number {
+  return (
+    (civicDef(c).service?.vehicles ?? 0) + c.modules.reduce((a, m) => a + (MODULE.get(m)?.vehicles ?? 0), 0)
+  );
+}
+export function civicCapacity(c: Civic): number {
+  return (
+    (civicDef(c).service?.capacity ?? 0) + c.modules.reduce((a, m) => a + (MODULE.get(m)?.capacity ?? 0), 0)
+  );
+}
+export function civicBuses(c: Civic): number {
+  return (civicDef(c).transit?.buses ?? 0) + c.modules.reduce((a, m) => a + (MODULE.get(m)?.buses ?? 0), 0);
+}
+/** Monthly upkeep at 100 % funding, modules included. */
+export function civicUpkeep(c: Civic): number {
+  return civicDef(c).upkeep + c.modules.reduce((a, m) => a + (MODULE.get(m)?.upkeep ?? 0), 0);
+}
+
+/** Add a module to a civic building. */
+export function addModule(sim: Sim, civicId: number, moduleId: string, dryRun: boolean): CommandResult {
+  const c = sim.state.civics.get(civicId);
+  const m = MODULE.get(moduleId);
+  if (!c || !m) return { ok: false, reason: 'Nothing to add that to' };
+  if (!m.for.includes(c.def)) return { ok: false, reason: "That module doesn't fit this building" };
+  if (c.modules.includes(m.id)) return { ok: false, reason: 'Already added' };
+  if (!sim.isUnlocked(m.unlockPopulation))
+    return { ok: false, reason: `Unlocks at ${m.unlockPopulation.toLocaleString('en-US')} residents` };
+  if (!sim.state.options.sandbox && sim.state.treasury < m.cost)
+    return { ok: false, reason: 'Not enough money' };
+  if (dryRun) return { ok: true, cost: m.cost };
+  sim.spend(m.cost, 'construction');
+  c.modules = [...c.modules, m.id];
+  c.cost += m.cost;
+  sim.civicStatusChanged(c.id);
+  return { ok: true, cost: m.cost };
+}
+
+/** Mean richness (0–1) of an ore or oil deposit under a footprint. */
+export function resourceRichness(sim: Sim, kind: 'ore' | 'oil', r: ORect): number {
+  const raster = kind === 'ore' ? sim.terrain.ore : sim.terrain.oil;
+  const c = Math.cos(r.angle);
+  const s = Math.sin(r.angle);
+  let sum = 0;
+  let n = 0;
+  for (let u = -1; u <= 1; u += 0.5)
+    for (let v = -1; v <= 1; v += 0.5) {
+      const x = r.x + u * r.hw * c - v * r.hd * s;
+      const z = r.z + u * r.hw * s + v * r.hd * c;
+      const i = Math.min(GRID_RES - 1, Math.max(0, Math.floor(x / GRID_CELL)));
+      const j = Math.min(GRID_RES - 1, Math.max(0, Math.floor(z / GRID_CELL)));
+      sum += raster[j * GRID_RES + i]! / 255;
+      n++;
+    }
+  return sum / n;
 }
 
 /** A civic building works unless it's damaged or flooded. */
@@ -127,6 +187,17 @@ export function checkPlacement(
     if (wd > def.nearWater + Math.max(def.w, def.d) / 2)
       return { ...res, reason: 'Must be next to a river, lake or the sea' };
   }
+  if (def.unique)
+    for (const o of sim.state.civics.values())
+      if (o.def === def.id && o.id !== ignoreCivic)
+        return { ...res, reason: `The city already has a ${def.name.toLowerCase()}` };
+  if (def.requires && ![...sim.state.civics.values()].some((o) => o.def === def.requires))
+    return { ...res, reason: `Needs a ${CIVIC.get(def.requires)?.name.toLowerCase() ?? def.requires} first` };
+  if (def.resource && resourceRichness(sim, def.resource.kind, rect) < SPECIALISATION.minRichness)
+    return {
+      ...res,
+      reason: `Must stand on ${def.resource.kind === 'ore' ? 'an ore deposit' : 'an oil field'} (see the resources map)`,
+    };
   // Roads crossing the footprint.
   const shrunk: ORect = { ...rect, hw: rect.hw - 0.5, hd: rect.hd - 0.5 };
   const rad = Math.hypot(rect.hw, rect.hd);
@@ -151,7 +222,7 @@ export function checkPlacement(
     const b = sim.state.buildings.get(id)!;
     if (rectsOverlap(shrunk, zonedFootprint(b, 0.5))) res.demolish.push(id);
   }
-  if (sim.state.totals.population < def.unlockPopulation && !sim.state.unlockAll)
+  if (!sim.isUnlocked(def.unlockPopulation))
     return { ...res, reason: `Unlocks at ${def.unlockPopulation.toLocaleString('en-US')} residents` };
   if (!sim.state.options.sandbox && sim.state.treasury < def.cost)
     return { ...res, reason: 'Not enough money' };
@@ -192,6 +263,7 @@ export function placeCivic(
     variant: sim.rng.world.int(1 << 16),
     damage: 0,
     flooded: false,
+    modules: [],
   };
   for (const id of chk.demolish) sim.removeBuilding(id);
   sim.addCivic(civ);

@@ -1,3 +1,6 @@
+import { SPECIALISATION } from '../../data/civic';
+import { hasResearchPark } from './specialisations';
+import { POLICY_EFFECTS } from '../../data/policies';
 import { EDUCATION, HEALTH } from '../../data/balance';
 import { GARBAGE } from '../../data/civic';
 import { ZONE_C, ZONE_I, ZONE_R } from '../../data/zones';
@@ -47,12 +50,14 @@ export function sicknessRate(sim: Sim, b: Building): number {
   const ground = fieldAt(s.groundPollution, b.x, b.z);
   const water = b.water > 0 ? b.polluted : 0;
   const garbage = Math.min(1, b.garbage / GARBAGE.bad);
+  const k = sim.policy('healthyLiving') ? POLICY_EFFECTS.healthyLiving : 1;
   return (
-    HEALTH.baseRate +
-    HEALTH.airRate * air +
-    HEALTH.groundRate * ground +
-    HEALTH.waterRate * water +
-    HEALTH.garbageRate * garbage
+    k *
+    (HEALTH.baseRate +
+      HEALTH.airRate * air +
+      HEALTH.groundRate * ground +
+      HEALTH.waterRate * water +
+      HEALTH.garbageRate * garbage)
   );
 }
 
@@ -93,8 +98,13 @@ export function workforceEducation(sim: Sim): [number, number] {
  */
 export function educationCap(sim: Sim, zone: number, lv: number): Wealth {
   const [e1, e2] = sim.state.totals.eduWorkforce;
-  if (zone === ZONE_I)
-    return e2 >= EDUCATION.highTech && lv >= 0.4 ? 2 : e1 >= EDUCATION.manufacturing ? 1 : 0;
+  if (zone === ZONE_I) {
+    // A research park lowers the bar for high-tech industry.
+    const tech = hasResearchPark(sim);
+    const need = tech ? SPECIALISATION.techEducation : EDUCATION.highTech;
+    const lvNeed = tech ? SPECIALISATION.techLandValue : 0.4;
+    return e2 >= need && lv >= lvNeed ? 2 : e1 >= EDUCATION.manufacturing ? 1 : 0;
+  }
   if (zone === ZONE_C) return e2 >= EDUCATION.offices ? 2 : 1;
   return 2;
 }

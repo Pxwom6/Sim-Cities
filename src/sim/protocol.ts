@@ -36,6 +36,9 @@ export interface CityStats {
   negativeHours: number;
   utilities: UtilityStats;
   unlockAll: boolean;
+  /** Highest population reached (what unlocks go by) and the milestone index. */
+  peak: number;
+  milestone: number;
   civics: number;
   vehicles: number;
   /** Average commute of employed residents, seconds. */
@@ -236,6 +239,8 @@ export interface CivicData {
   /** Hours until disaster damage is repaired (offline until then), and under flood water now. */
   damage: number;
   flooded: boolean;
+  /** Add-on modules installed. */
+  modules: string[];
 }
 
 export interface VehicleData {

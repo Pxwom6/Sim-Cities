@@ -1,3 +1,5 @@
+import { specialisationIncome } from './specialisations';
+import { POLICY, policyCost, type PolicyId } from '../../data/policies';
 import { ROAD_TYPES } from '../../data/roads';
 import {
   BANKRUPTCY,
@@ -122,6 +124,11 @@ export function monthlyRates(sim: Sim): Record<string, number> {
   add('roadUpkeep', -roadUpkeep * (e.funding.roads / 100));
   for (const [dept, cost] of Object.entries(sim.departmentUpkeep()))
     add(`upkeep:${dept}`, -cost * (e.funding[dept as Dept] / 100));
+  for (const [k, v] of Object.entries(specialisationIncome(sim))) add(k, v);
+  for (const id of s.policies) {
+    const p = POLICY.get(id as PolicyId);
+    if (p) add('policies', -policyCost(p, s.totals.population));
+  }
   for (const loan of e.loans) {
     const r = loan.annualRate / 12;
     const interest = Math.min(loan.balance * r, loan.payment);
@@ -215,7 +222,7 @@ export function takeLoan(sim: Sim, amount: number, dryRun: boolean): CommandResu
   const s = sim.state;
   const opt = LOAN_OPTIONS.find((o) => o.amount === amount);
   if (!opt) return fail('No such loan');
-  if (s.totals.population < opt.unlockPopulation)
+  if (!sim.isUnlocked(opt.unlockPopulation))
     return fail(`Needs ${opt.unlockPopulation.toLocaleString('en-US')} residents`);
   if (s.economy.loans.length >= MAX_LOANS) return fail(`At most ${MAX_LOANS} loans at a time`);
   if (s.economy.bankrupt) return fail('The city is bankrupt');

@@ -4,7 +4,7 @@ import { ROAD_TYPES } from '../../data/roads';
 import { ZONE_R } from '../../data/zones';
 import type { Sim } from '../sim';
 import { BState, type Building } from '../world/buildings';
-import { civicDef, civicOnline, findAccess, type Civic } from '../world/civic';
+import { civicDef, civicCapacity, civicOnline, findAccess, type Civic } from '../world/civic';
 import { attachmentOf } from './commute';
 import { Dijkstra, type RoadGraph } from './graph';
 
@@ -168,7 +168,7 @@ export function applyCoverage(sim: Sim, cov: Coverage): void {
     const def = civicDef(c);
     const svc = def.service;
     if (!svc?.capacity || (svc.kind !== 'education' && svc.kind !== 'health') || !civicOnline(c)) continue;
-    const total = svc.capacity * Math.min(1.25, sim.fundingEff(def.dept));
+    const total = civicCapacity(c) * Math.min(1.25, sim.fundingEff(def.dept));
     const [need, have] =
       svc.kind === 'health' ? [sick, beds] : [want[(svc.level ?? 1) - 1]!, got[(svc.level ?? 1) - 1]!];
     const used = fill(sim, g, c, svc.range, total, byNode, need, have);

@@ -2,7 +2,7 @@ import { TRAFFIC, TRANSIT } from '../../data/balance';
 import { ROAD_TYPES } from '../../data/roads';
 import { fail, ok, type CommandResult } from '../commands';
 import type { Sim } from '../sim';
-import { civicDef, civicOnline } from '../world/civic';
+import { civicBuses, civicDef, civicOnline } from '../world/civic';
 import { routeBetween, type Leg } from './graph';
 
 /**
@@ -188,7 +188,7 @@ export function computeLines(sim: Sim): BusLine[] {
     }
     if (!okLine || t <= 0) continue;
     const def = civicDef(d).transit!;
-    const buses = Math.max(1, Math.round(def.buses * Math.min(1.25, sim.fundingEff('transit'))));
+    const buses = Math.max(1, Math.round(civicBuses(d) * Math.min(1.25, sim.fundingEff('transit'))));
     lines.push({
       depot: d.id,
       stops: order.map((st) => st.id),
