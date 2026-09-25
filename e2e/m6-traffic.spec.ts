@@ -232,13 +232,18 @@ test('M6: upgrade a road, run buses, click a car and cross the river', async ({ 
   for (let k = 0; k < 4; k++) await page.evaluate(() => window.__game!.waitFrames(3));
   await page.evaluate(() => window.__game!.setSpeed(0));
   expect((await state(page)).renderStats.cars).toBeGreaterThan(5);
-  const car = await page.evaluate(() => window.__game!.getCars()[0]!);
-  await page.evaluate(
-    (c) => window.__game!.setCamera({ x: c.x, z: c.z, distance: 70, yaw: 0.4, tilt: 0.2 }),
-    car,
-  );
-  await page.evaluate(() => window.__game!.waitFrames(2));
-  const same = await page.evaluate((id) => window.__game!.getCars().find((c) => c.id === id) ?? null, car.id);
+  // Pausing snaps the display clock to the sim, so a car can finish its trip while the camera
+  // moves: pick one that is still on the road once the view has settled.
+  let same: { id: number; x: number; z: number } | null = null;
+  for (let attempt = 0; attempt < 4 && !same; attempt++) {
+    const car = await page.evaluate((k) => window.__game!.getCars()[k]!, attempt);
+    await page.evaluate(
+      (c) => window.__game!.setCamera({ x: c.x, z: c.z, distance: 70, yaw: 0.4, tilt: 0.2 }),
+      car,
+    );
+    await page.evaluate(() => window.__game!.waitFrames(2));
+    same = await page.evaluate((id) => window.__game!.getCars().find((c) => c.id === id) ?? null, car.id);
+  }
   expect(same).not.toBeNull();
   const cp = await page.evaluate((c) => window.__game!.worldToScreen(c.x, c.z), same!);
   await page.mouse.click(cp.x, cp.y);

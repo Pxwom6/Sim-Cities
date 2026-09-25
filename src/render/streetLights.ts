@@ -41,6 +41,10 @@ export class StreetLightRenderer {
       transparent: true,
       depthWrite: false,
       blending: AdditiveBlending,
+      // Pull towards the camera so the pools never lose to the road surface far away.
+      polygonOffset: true,
+      polygonOffsetFactor: -6,
+      polygonOffsetUnits: -6,
       uniforms: { uNight: { value: 0 } },
       vertexShader: /* glsl */ `
         varying vec2 vUv;

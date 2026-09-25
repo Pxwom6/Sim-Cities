@@ -66,6 +66,8 @@ export interface TestApi {
    * row per def and `variants` columns. Screenshots only; the sim knows nothing about them.
    */
   showGallery(defs: string[], at: { x: number; z: number }, variants: number): void;
+  /** What a click at this screen position would select. */
+  pickAt(x: number, y: number): { kind: string; id: number } | null;
   /** Change player settings (as the menu does); returns the tilt-shift frame count. */
   setSettings(patch: Record<string, unknown>): number;
   /** Render every sound effect and the ambient bed offline, and measure them. */
@@ -189,6 +191,7 @@ export function installTestApi(game: Game): TestApi {
       }),
     errors: [],
     renderSounds,
+    pickAt: (x, y) => game.renderer.pick(x, y),
     setSettings: (patch) => {
       game.updateSettings(patch);
       return game.renderer.tiltShift.frames;

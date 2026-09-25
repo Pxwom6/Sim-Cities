@@ -227,14 +227,20 @@ export class Game {
     }
   }
 
-  /** Urgent advice becomes a notification the first time it appears. */
+  /**
+   * Urgent advice becomes a notification the first time it appears. Only the first new one pops
+   * up as a toast; the rest go straight to the log, so a bad moment isn't a wall of red.
+   */
   private adviceNotices(): void {
     const keys = new Set<string>();
+    let toasted = false;
     for (const a of this.advice) {
       if (a.severity < 3) continue;
       const key = `${a.advisor}:${a.title.replace(/[0-9,]+/g, '#')}`;
       keys.add(key);
-      if (!this.lastAdviceKeys.has(key)) this.notice(key, `${a.title}. ${a.text}`, 'bad', a.at);
+      if (this.lastAdviceKeys.has(key)) continue;
+      this.notice(key, `${a.title}. ${a.text}`, 'bad', a.at, !toasted);
+      toasted = true;
     }
     this.lastAdviceKeys = keys;
   }

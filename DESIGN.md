@@ -522,10 +522,34 @@ revenue), technology (university-driven high-tech campus → tax and education b
   (rebuilt incrementally, ≤ 2 chunks per frame); buildings under construction and burning ones are
   individual meshes with scaffolding/flames. The registry can later return glTF-loaded geometry.
 - **Vehicles**: instanced meshes per vehicle class; matrices updated in place (no per-frame allocation).
+  Visible traffic follows the sim's sampled trips (§3.8); cars carry head and tail lights (one additive
+  point system) after dark.
+- **Pedestrians** (close zoom, camera distance < 420 m): up to 240 instanced figures walking the
+  sampled *short* trips (shop ≤ 1.2 km, work ≤ 0.9 km) along the pavement of their route, at walking
+  pace on the vehicles' time scale. Clickable like cars; the inspector shows the trip.
+- **Street lights**: lamps every 34 m along every street/avenue/boulevard (alternating sides), rebuilt
+  when the network changes. Heads glow and additive light pools (polygon-offset quads, no real lights)
+  appear as night falls; lit windows come from the buildings' emissive mask.
+- **Building variety**: detached homes in four styles (classic, L-shaped, modern flat-roofed, cottage
+  with dormer) with gardens, trees, fences, driveways and parked cars; shops as corner stores, cafés
+  with terraces or mini-markets behind a car park; brick walk-ups with pitched roofs and roof gardens;
+  heavy industry as saw-tooth sheds, barrel-roofed warehouses with container yards, or tank farms;
+  high-tech campuses with glass drums. `scripts/dev/gallery.mjs` screenshots every archetype.
 - **Overlays**: a 128×128 `DataTexture` per active data map, sampled by terrain and building shaders
   with a colour-blind-friendly ramp (viridis/cividis) and legend.
 - **Picking**: a 2D spatial index of building oriented boxes walked along the view ray (no GPU picking).
-- **Post** (optional): tilt-shift blur when zoomed in.
+- **Post** (optional, off by default): tilt-shift. After the scene renders, the finished frame is
+  copied to a texture and blurred in two separable passes whose radius grows away from a focus band
+  just below the centre, scaled by zoom (none beyond 520 m). Working on the tone-mapped frame keeps the
+  look (and the custom shaders) identical with it on or off.
+- **Audio** (`src/audio`): everything synthesised with Web Audio (noise buffers, oscillators, filters,
+  envelopes), no samples. Effects: click (every UI button), build, place, zone, bulldoze, error,
+  alert, good news, siren. The ambient bed has continuous layers (traffic rumble and tyre hiss, wind,
+  fire roar) and scheduled events (bird trills by day, crickets at night, hammering and drills,
+  sirens, fire crackle). `ambientScene()` summarises what's around the view centre four times a second
+  (cars, buildings, construction, fires, emergency vehicles, tree density, zoom, night, paused) and the
+  pure `ambientMix()` turns that into layer levels. Master/effects/ambience volumes and mute are
+  player settings; the context starts on the first gesture and suspends when the tab is hidden.
 
 ## 5. UI
 
@@ -533,7 +557,22 @@ Preact components over the canvas. All colours, type scale, spacing, radii and s
 properties in `src/ui/styles/tokens.css`. Top bar (money, net income, population, date/time, speed,
 RCI, approval), bottom toolbar by category with SVG icons and tooltips (cost, upkeep, effect, shortcut),
 panels (budget, inspector, data maps, advisors, policies), notifications, debug panel (backtick),
-menus. The UI reads `ClientWorld` via a small subscribe/selector hook and sends commands through
+menus.
+
+- **Advisors** (`sim/systems/advisors.ts`, queried every 2 s): finance, utilities, safety, health,
+  education, transport, environment and planning each read the live state and return findings with a
+  severity (0 fine … 3 urgent), a concrete suggestion, the centre of the affected buildings or the
+  worst road, and the data map that shows it. "Show me" flies there and opens that map.
+- **Notifications**: sim events and newly urgent advice go into a log (repeats of a kind within a
+  minute collapse into a count); at most one toast per kind every 20 s, and only the first new urgent
+  advice of a refresh toasts. Entries fly to their place.
+- **Resident thoughts**: a feed of short lines picked per game hour by hashing building ids (no RNG,
+  so determinism is untouched), each voicing that building's strongest mood factor (sometimes the
+  runner-up). Clicking one opens the building.
+- **Street names**: client-side and not saved. Segments that carry straight on through a junction
+  (same type, > 150°) are joined into one street; each street is named from its lowest segment id, so
+  names stay put as the city grows. Neighbourhoods are named per 384 m cell. Labels follow the roads
+  at close zoom (≤ 10, DOM); inspectors and advisors use addresses ("Maple Street, Northgate"). The UI reads `ClientWorld` via a small subscribe/selector hook and sends commands through
 `SimClient`.
 
 ## 6. Saves

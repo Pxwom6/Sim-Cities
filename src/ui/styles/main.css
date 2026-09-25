@@ -740,6 +740,7 @@ body {
   right: calc(20rem + var(--space-3) * 2);
 }
 .toast {
+  max-width: 30rem;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
   background: var(--color-surface-dark);

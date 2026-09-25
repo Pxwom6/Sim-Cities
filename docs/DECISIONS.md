@@ -100,3 +100,15 @@ One line each: what was decided and why. Newest at the bottom of each section.
 - Trees and parks absorb air pollution; there's no tree-planting tool (SimCity 2013 had none either) — parks are the player's lever.
 - Unprotected fires spread much less than in M5 (spread chance 0.06 → 0.02 per 30 ticks, collapse after 450 ticks instead of 700): the e2e screenshots showed whole streets burning in towns without a fire station.
 - The air pollution map shows values ×2.5 so that the thin but harmful downwind plume (0.05–0.2) is visible.
+
+## M8
+- Advisors are pure queries over the sim state every 2 s rather than saved state: nothing to migrate, and they can never disagree with the data maps they point at.
+- Only the first new urgent advice of a refresh pops up as a toast; the rest go straight to the notification log. The first e2e screenshot showed three red toasts about power, water and sewage at once.
+- Resident thoughts are chosen by hashing building ids with the game hour, not with the sim RNG, so asking for them can't change the simulation.
+- Street names live only on the client (derived from segment ids); a save doesn't need them and they come out the same on every load.
+- Audio is not positional: at city scale the mix already follows the view, and panning individual sources would cost more than it adds.
+- Pedestrians walk the sim's sampled short trips, but those trips are still counted as car trips on the roads; the walkers are a visible sample, not a separate travel mode. A walking mode share is a possible M12 refinement.
+- Tilt-shift works on the finished frame (copy + two blur passes) instead of an EffectComposer chain, so the tone-mapped look and the custom shaders (sky, water, lamp pools, smoke) stay identical with it on or off. It's off by default.
+- Player settings (volumes, mute, tilt-shift) live in localStorage, per device rather than per city; M11 adds the rest to the same record.
+- Street-lamp light is faked with additive quads (with polygon offset so they survive at distance) rather than real lights, which would multiply the lighting cost per lamp.
+- The variety pass adds about 45 % more triangles to a low-density home (93 → 139 on average) for gardens, trees and cars; mid and high density are almost unchanged, and those dominate big cities.

@@ -43,6 +43,9 @@ export interface RenderStats {
   fires: number;
   cars: number;
   walkers: number;
+  /** Street lamps placed, and how dark it is (0 day … 1 night). */
+  lamps: number;
+  night: number;
   buses: number;
   smoke: number;
 }
@@ -92,6 +95,8 @@ export class GameRenderer {
     fires: 0,
     cars: 0,
     walkers: 0,
+    lamps: 0,
+    night: 0,
     buses: 0,
     smoke: 0,
   };
@@ -316,6 +321,8 @@ export class GameRenderer {
       fires: this.effects.fires,
       cars: this.traffic.count,
       walkers: this.pedestrians.count,
+      lamps: this.streetLights.count,
+      night: this.lighting.night,
       buses: this.transit.busCount,
       smoke: this.effects.smokeParticles,
     };

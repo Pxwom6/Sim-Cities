@@ -5,7 +5,7 @@ import { IconChat } from './icons';
 
 /** A small feed of what residents and businesses are saying; click one to see where. */
 export function ThoughtsFeed() {
-  const game = useGameUpdates(1000);
+  const game = useGameUpdates(200);
   const [list, setList] = useState<Thought[]>([]);
   const [shown, setShown] = useState(0);
   useEffect(() => {
@@ -21,7 +21,10 @@ export function ThoughtsFeed() {
       clearInterval(r);
     };
   }, [game]);
-  if (!list.length || game.world.stats.population === 0) return null;
+  // Side panels sit where the feed does, and while building the map needs every pixel: the feed
+  // steps aside for both.
+  if (!list.length || game.world.stats.population === 0 || game.panel) return null;
+  if (game.tools.activeId !== 'select') return null;
   const items = [list[shown % list.length]!, list[(shown + 1) % list.length]!].filter(
     (x, i, a) => a.findIndex((y) => y.id === x.id) === i,
   );

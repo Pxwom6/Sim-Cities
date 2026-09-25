@@ -97,9 +97,9 @@ export function advise(sim: Sim): Advice[] {
 
   // Utilities.
   const util = [
-    ['power', 'power plant', (b: Building) => b.power < 0.5],
-    ['water', 'water pump', (b: Building) => b.water < 0.5],
-    ['sewage', 'outflow or treatment plant', (b: Building) => b.sewage < 0.5],
+    ['power', 'a power plant', (b: Building) => b.power < 0.5],
+    ['water', 'a water pump', (b: Building) => b.water < 0.5],
+    ['sewage', 'an outflow or treatment plant', (b: Building) => b.sewage < 0.5],
   ] as const;
   let utilOk = true;
   for (const [u, fix, lacking] of util) {
@@ -111,7 +111,7 @@ export function advise(sim: Sim): Advice[] {
       advisor: 'utilities',
       severity: share > 0.2 ? 3 : 2,
       title: `${plural(without.length, 'building')} without ${u}`,
-      text: `Build a ${fix} or connect these buildings to one by road. They'll close or empty within a day or two.`,
+      text: `Build ${fix} or connect these buildings to one by road. They'll close or empty within a day or two.`,
       at: centre(without.slice(0, 20)),
       map: u,
     });
