@@ -52,6 +52,8 @@ export const GROWTH = {
   recoverRate: 2,
   /** Abandoned buildings re-occupy after this many hours of good conditions. */
   reoccupyHours: 24,
+  /** Abandoned buildings nobody moves back into crumble to rubble after this many hours, freeing the lot. */
+  abandonedDecayHours: 96,
   reoccupyHappiness: 0.5,
   /** Max angle difference (radians) between adjacent columns of one lot. */
   maxLotBend: 0.1,
@@ -201,4 +203,78 @@ export const HAPPINESS = {
   bizServiceLoss: 0.04,
   park: 0.1,
   crime: -0.15,
+};
+
+/** Disasters (M9). Distances in metres, times in ticks unless noted. DESIGN.md §3.12. */
+export const DISASTERS = {
+  /** Random disasters: chance per hour once the city has `minPopulation` residents. */
+  hourlyChance: 1 / (24 * 30 * 30),
+  minPopulation: 1500,
+  /** Relative odds of each kind when one strikes at random. */
+  weights: { earthquake: 0.3, tornado: 0.3, flood: 0.25, meteor: 0.15 },
+  maxActive: 3,
+  earthquake: {
+    magnitude: [5.6, 7.4] as [number, number],
+    /** Radius = base + perMagnitude × (magnitude − 5). */
+    radiusBase: 120,
+    radiusPerMagnitude: 220,
+    shakeTicks: 20,
+    /** Collapse chance = collapse × intensity²; otherwise a fire with fire × intensity. */
+    collapse: 0.6,
+    fire: 0.12,
+    /** Roads within this share of the radius can crack: chance roadChance × intensity. */
+    roadReach: 0.7,
+    roadChance: 0.7,
+    /** Civic buildings knocked offline: chance civicChance × intensity. */
+    civicChance: 0.7,
+  },
+  tornado: {
+    /** Metres per tick and lifetime. */
+    speed: 28,
+    ticks: [45, 70] as [number, number],
+    halfWidth: [18, 32] as [number, number],
+    /** Destroy chance per tick for a building in the core (inner 60 %) or the edge. */
+    destroyCore: 0.35,
+    destroyEdge: 0.1,
+    civicHours: 36,
+    roadHours: 8,
+  },
+  flood: {
+    /**
+     * Peak water level (terrain height, m): this far above the typical land within 150 m of the
+     * water near the source, within `height`. And how far it reaches from the source.
+     */
+    aboveShore: 1.8,
+    height: [4, 13] as [number, number],
+    radius: 520,
+    riseTicks: 60 * 4,
+    holdTicks: 60 * 10,
+    fallTicks: 60 * 8,
+    /** Needs open water this close to where it's triggered. */
+    maxWaterDistance: 320,
+    /** Hourly chance a flooded building is wrecked, after `graceHours` under water. */
+    graceHours: 3,
+    destroyLow: 0.05,
+    destroyOther: 0.02,
+  },
+  meteor: {
+    radius: [28, 48] as [number, number],
+    /** Ticks from the warning to the impact. */
+    fallTicks: 30,
+    /** Fires within this multiple of the crater radius. */
+    fireReach: 2.2,
+    civicHours: 72,
+    roadHours: 72,
+    /** Crater scorch fades over this many ticks. */
+    scorchTicks: 1440 * 60,
+  },
+  /** Repairs: roads cost this share of their build cost, civic buildings this share of theirs. */
+  roadRepairShare: 0.5,
+  civicRepairShare: 0.25,
+  /** Hours to repair a civic building knocked offline by an earthquake (plus up to 16 by intensity). */
+  civicRepairHours: 8,
+  civicRepairPerIntensity: 16,
+  /** Hours to repair a cracked road (plus up to 18 by intensity). */
+  roadRepairHours: 6,
+  roadRepairPerIntensity: 18,
 };

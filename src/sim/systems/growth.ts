@@ -24,6 +24,7 @@ import {
 } from '../world/buildings';
 import type { ZoneBlock } from '../world/network';
 import { computeHappiness } from './happiness';
+import { toRubble } from './incidents';
 import { landValueAt } from './landValue';
 import { educationCap, welcome } from './health';
 
@@ -146,6 +147,7 @@ export function createBuilding(sim: Sim, block: ZoneBlock, col: number, def: Zon
     fire: 0,
     burn: 0,
     rubbleH: 0,
+    flooded: 0,
     sick: 0,
     treated: 0,
     edu: def.zone === ZONE_R ? EDUCATION.newcomer : 0,
@@ -266,7 +268,11 @@ export function lifecycle(sim: Sim): void {
         b.distress = 0;
         b.good = 0;
         sim.markBuildingDirty(b.id);
+        continue;
       }
+      // Left empty long enough, it falls into ruin; the rubble clears and the lot can grow again.
+      b.distress++;
+      if (b.distress >= GROWTH.abandonAt + GROWTH.abandonedDecayHours) toRubble(sim, b, 'decayed');
       continue;
     }
     if (b.state !== BState.Active) continue;

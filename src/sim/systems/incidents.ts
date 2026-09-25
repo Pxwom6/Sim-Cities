@@ -3,7 +3,7 @@ import { ZONE_I, ZONE_R } from '../../data/zones';
 import { rectsOverlap } from '../geom';
 import type { Sim } from '../sim';
 import { BState, footprint, type Building } from '../world/buildings';
-import { civicDef } from '../world/civic';
+import { civicDef, civicOnline } from '../world/civic';
 import { attachmentOf } from './commute';
 import { Dijkstra } from './graph';
 import { sicknessRate } from './health';
@@ -50,7 +50,8 @@ export function dispatch(
   const stations = new Map<number, number[]>();
   for (const c of s.civics.values()) {
     const def = civicDef(c);
-    if (def.service?.kind !== service || def.service.vehicle !== vehicle || !c.access) continue;
+    if (def.service?.kind !== service || def.service.vehicle !== vehicle || !c.access || !civicOnline(c))
+      continue;
     const total = Math.max(
       0,
       Math.round((def.service.vehicles ?? 0) * Math.min(1.25, sim.fundingEff(def.dept))),
@@ -216,7 +217,7 @@ export function incidentsTick(sim: Sim): void {
   }
 }
 
-export function toRubble(sim: Sim, b: Building): void {
+export function toRubble(sim: Sim, b: Building, why: 'destroyed' | 'decayed' = 'destroyed'): void {
   b.state = BState.Rubble;
   b.fire = 0;
   b.burn = 0;
@@ -228,7 +229,7 @@ export function toRubble(sim: Sim, b: Building): void {
   b.progress = 0;
   sim.state.burning = sim.state.burning.filter((x) => x !== b.id);
   sim.markBuildingDirty(b.id);
-  sim.events.push({ kind: 'destroyed', id: b.id });
+  sim.events.push({ kind: why, id: b.id });
 }
 
 registerVehicleKind('fire', {

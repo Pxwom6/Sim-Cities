@@ -35,7 +35,8 @@ export function happinessFactors(sim: Sim, b: Building): Factor[] {
     const k = Math.min(1, (b.garbage - GARBAGE.visible) / (GARBAGE.bad - GARBAGE.visible));
     f.push({ label: 'Uncollected garbage', value: GARBAGE.moodPenalty * k });
   }
-  if (b.closed) f.push({ label: 'Closed: no power or water', value: -0.2 });
+  if (b.flooded > 0) f.push({ label: 'Flooded', value: -0.5 });
+  else if (b.closed) f.push({ label: 'Closed: no power or water', value: -0.2 });
   // Services (DESIGN §3.9): coverage lifts moods; missing coverage hurts more for the wealthy.
   const expect = HAPPINESS.serviceExpect[b.wealth]!;
   const svc = (label: string, cov: number, gain: number, loss: number) => {

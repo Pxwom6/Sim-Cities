@@ -2,7 +2,7 @@ import { CIVIC, UTILITIES, UTILITY_USE, type Utility } from '../../data/civic';
 import { GRID_CELL, GRID_RES } from '../../data/world';
 import type { Sim } from '../sim';
 import { BState, type Building } from '../world/buildings';
-import { civicDef, type Civic } from '../world/civic';
+import { civicDef, civicOnline, type Civic } from '../world/civic';
 import { attachmentOf } from './commute';
 import { Dijkstra } from './graph';
 
@@ -28,6 +28,7 @@ const UTIL_LIST: Utility[] = ['power', 'water', 'sewage'];
 
 /** Output of a producer for a utility at current funding and site conditions. */
 export function civicOutput(sim: Sim, c: Civic, u: Utility): number {
+  if (!civicOnline(c)) return 0;
   const def = civicDef(c);
   let out = def.output?.[u] ?? 0;
   if (u === 'power' && def.garbage?.powerPerUnit) out += c.lastDay * def.garbage.powerPerUnit; // incinerator: yesterday's burn
@@ -133,7 +134,8 @@ export function utilityConsequences(sim: Sim): void {
     b.noPowerH = b.power < 0.5 ? b.noPowerH + 1 : 0;
     b.noWaterH = b.water < 0.5 ? b.noWaterH + 1 : 0;
     const shouldClose =
-      b.zone !== 1 && (b.noPowerH >= UTILITIES.closeAfterHours || b.noWaterH >= UTILITIES.closeAfterHours);
+      b.zone !== 1 &&
+      (b.flooded > 0 || b.noPowerH >= UTILITIES.closeAfterHours || b.noWaterH >= UTILITIES.closeAfterHours);
     if (shouldClose !== b.closed) {
       b.closed = shouldClose;
       sim.markBuildingDirty(b.id);

@@ -11,6 +11,7 @@ import type { Vehicle } from './systems/vehicles';
 import type { UtilityStats } from './systems/utilities';
 import type { Incident } from './systems/incidents';
 import type { TransitState } from './systems/transit';
+import type { Crater, Disaster } from './systems/disasters';
 
 export type Difficulty = 'easy' | 'normal' | 'hard';
 
@@ -80,4 +81,10 @@ export interface SimState {
   transit: TransitState;
   /** Air pollution raster (GRID_RES²), 0..1, drifting with the wind. */
   airPollution: Float32Array;
+  /** Disasters under way. */
+  disasters: Disaster[];
+  /** Damaged roads: segment → hours until repaired (impassable until then). */
+  roadDamage: Map<number, number>;
+  /** Meteor craters (scorch marks fade after a while). */
+  craters: Crater[];
 }

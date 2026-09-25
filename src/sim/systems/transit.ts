@@ -2,7 +2,7 @@ import { TRAFFIC, TRANSIT } from '../../data/balance';
 import { ROAD_TYPES } from '../../data/roads';
 import { fail, ok, type CommandResult } from '../commands';
 import type { Sim } from '../sim';
-import { civicDef } from '../world/civic';
+import { civicDef, civicOnline } from '../world/civic';
 import { routeBetween, type Leg } from './graph';
 
 /**
@@ -123,7 +123,7 @@ export function computeLines(sim: Sim): BusLine[] {
   const g = sim.graph();
   const peak = sim.peakCosts();
   const depots = [...s.civics.values()]
-    .filter((c) => civicDef(c).transit && c.access)
+    .filter((c) => civicDef(c).transit && c.access && civicOnline(c))
     .sort((a, b) => a.id - b.id);
   if (!depots.length || s.transit.stops.size < 2) return [];
   const speed = (id: number) => (ROAD_TYPES[sim.net.segment(id).type].speed / 3.6) * 0.999;

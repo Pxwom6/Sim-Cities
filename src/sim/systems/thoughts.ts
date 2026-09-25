@@ -79,6 +79,7 @@ const LINES: [RegExp, Line[]][] = [
   [/highway/i, [() => 'We feel cut off from the rest of the world.']],
   [/too few customers/i, [() => 'The shop is empty all day.', () => 'Business is dead around here.']],
   [/not enough workers/i, [() => "Can't find anyone to hire.", () => 'We could grow if we had the staff.']],
+  [/flooded/i, [() => 'The water is up to the windows.', () => 'Everything downstairs is ruined.']],
   [/closed/i, [() => "We've had to shut until the power's back."]],
   [/on fire/i, [() => 'FIRE! Call the fire brigade!']],
   // Good news.

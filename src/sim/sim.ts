@@ -9,6 +9,7 @@ import type {
   BudgetReport,
   CivicData,
   CivicDetails,
+  DisasterData,
   VehicleData,
   BuildingData,
   CityStats,
@@ -49,7 +50,7 @@ import { happinessFactors, updateHappiness } from './systems/happiness';
 import { runMatcher } from './systems/commute';
 import { advise } from './systems/advisors';
 import { thoughts } from './systems/thoughts';
-import { deckProfile, type DeckProfile } from './world/bridge';
+import { deckAt, deckProfile, type DeckProfile } from './world/bridge';
 import {
   computeLines,
   emptyTransit,
@@ -77,6 +78,7 @@ import {
   type Coverage,
 } from './systems/services';
 import { ignite, incidentsHour, incidentsTick } from './systems/incidents';
+import { disastersHour, disastersTick, floodedSegments, startDisaster } from './systems/disasters';
 import { decayCrime, splatField } from './systems/pollution';
 import type { ServiceKind } from '../data/civic';
 import { GARBAGE, UTILITIES, VEHICLE_SPEED_SCALE } from '../data/civic';
@@ -119,8 +121,17 @@ export type SimEvent = {
     | 'bankrupt'
     | 'closed'
     | 'civicBuilt'
-    | 'civicRemoved';
+    | 'civicRemoved'
+    | 'disaster'
+    | 'disasterOver'
+    | 'civicDamaged'
+    | 'civicRepaired'
+    | 'civicDestroyed'
+    | 'roadRepaired'
+    | 'decayed';
   id: number;
+  /** Extra details for the notification (disaster reports, destroyed buildings). */
+  info?: Record<string, number | string>;
 };
 
 /**
@@ -206,6 +217,9 @@ export class Sim {
       traffic: new Map(),
       transit: emptyTransit(),
       airPollution: new Float32Array(GRID_RES * GRID_RES),
+      disasters: [],
+      roadDamage: new Map(),
+      craters: [],
     };
     const sim = new Sim(state, terrain);
     sim.buildHighway();
@@ -387,9 +401,55 @@ export class Sim {
 
   // ---------------------------------------------------------------- derived caches
 
+  /** Roads nothing can drive along right now: damaged by a disaster, or under flood water. */
+  blockedSegments(): Set<number> {
+    if (!this.blockedCache) {
+      const out = floodedSegments(this);
+      for (const id of this.state.roadDamage.keys()) out.add(id);
+      this.blockedCache = out;
+    }
+    return this.blockedCache;
+  }
+
+  private blockedCache: Set<number> | null = null;
+  private disastersDirty = true;
+
+  /** Roads were damaged, repaired, flooded or drained: routing and everything built on it changes. */
+  roadsBlockedChanged(): void {
+    this.blockedCache = null;
+    this.graphCache = null;
+    this.coverageCache = null;
+    this.peakCache = null;
+    this.transitChanged();
+    this.disastersDirty = true;
+  }
+
+  /** Flood levels moved: recompute which roads are under water, and reroute if that changed. */
+  floodChanged(): void {
+    const prev = this.blockedCache;
+    this.blockedCache = null;
+    const now = this.blockedSegments();
+    if (!prev || prev.size !== now.size || [...now].some((id) => !prev.has(id))) this.roadsBlockedChanged();
+    this.disastersDirty = true;
+  }
+
+  /** A civic building went offline or came back (disaster damage, floods, repairs). */
+  civicStatusChanged(id: number): void {
+    this.coverageCache = null;
+    this.transitChanged();
+    this.dirtyCivics.add(id);
+  }
+
+  /** Road surface height (bridge deck or ground) at arc length `s` of a segment. */
+  roadHeightAt(segId: number, s: number, x: number, z: number): number {
+    const g = Math.max(0, this.terrain.heightAt(x, z));
+    const d = this.deck(segId);
+    return d ? Math.max(g, deckAt(d, s)) : g;
+  }
+
   graph(): RoadGraph {
     if (!this.graphCache) {
-      this.graphCache = new RoadGraph(this.net);
+      this.graphCache = new RoadGraph(this.net, this.blockedSegments());
       this.highwayComponent = this.graphCache.componentOfNode(this.state.highway.connect);
     }
     return this.graphCache;
@@ -425,6 +485,11 @@ export class Sim {
 
   markNetworkChanged(): void {
     this.graphCache = null;
+    this.blockedCache = null;
+    this.disastersDirty = true;
+    // A damaged road that was bulldozed or rebuilt is no longer damaged.
+    for (const id of [...this.state.roadDamage.keys()])
+      if (!this.state.net.segments.has(id)) this.state.roadDamage.delete(id);
     this.coverageCache = null;
     this.peakCache = null;
     this.transitChanged();
@@ -604,6 +669,14 @@ export class Sim {
         return takeLoan(this, cmd.amount, dryRun);
       case 'repayLoan':
         return repayLoan(this, cmd.id, dryRun);
+      case 'disaster': {
+        const r = startDisaster(this, cmd.kind, cmd.at, { size: cmd.size, heading: cmd.heading }, dryRun);
+        if (r.ok && !dryRun) this.disastersDirty = true;
+        return r;
+      }
+      case 'setDisasters':
+        if (!dryRun) this.state.options = { ...this.state.options, disasters: cmd.on };
+        return ok(0);
       default: {
         const never: never = cmd;
         return fail(`Unknown command ${(never as { type: string }).type}`);
@@ -653,8 +726,10 @@ export class Sim {
     }
     stepVehicles(this);
     incidentsTick(this);
+    disastersTick(this);
     if (t % GROWTH.passInterval === 0) growthPass(this);
     if (t % TICKS_PER_HOUR === 0) {
+      disastersHour(this);
       updateUtilities(this);
       utilityConsequences(this);
       applyCoverage(this, this.coverage);
@@ -836,6 +911,18 @@ export class Sim {
       vehicles: this.vehicleData(),
       traffic: this.trafficData(),
       transit: this.transitData(),
+      disasters: this.disasterData(),
+    };
+  }
+
+  disasterData(): DisasterData {
+    const s = this.state;
+    const flooded = floodedSegments(this);
+    return {
+      active: s.disasters.map((d) => ({ ...d })),
+      damaged: [...s.roadDamage.keys()].sort((a, b) => a - b),
+      flooded: [...flooded].sort((a, b) => a - b),
+      craters: s.craters.map((c) => ({ ...c })),
     };
   }
 
@@ -853,6 +940,7 @@ export class Sim {
       if (b.zone !== ZONE_I && fieldAt(this.state.airPollution, b.x, b.z) > 0.35) f |= 512;
     }
     if (b.fire > 0) f |= 128;
+    if (b.flooded > 0) f |= 1024;
     return f;
   }
 
@@ -881,6 +969,8 @@ export class Sim {
       fill: d.garbage?.storage ? c.stored / d.garbage.storage : 0,
       out: c.out,
       variant: c.variant,
+      damage: c.damage,
+      flooded: c.flooded,
     };
   }
 
@@ -990,6 +1080,10 @@ export class Sim {
     if (this.transitDirty) {
       frame.transit = this.transitData();
       this.transitDirty = false;
+    }
+    if (this.disastersDirty) {
+      frame.disasters = this.disasterData();
+      this.disastersDirty = false;
     }
     if (this.events.length) {
       frame.events = this.events;

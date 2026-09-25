@@ -4,7 +4,7 @@ import { ROAD_TYPES } from '../../data/roads';
 import { ZONE_R } from '../../data/zones';
 import type { Sim } from '../sim';
 import { BState, type Building } from '../world/buildings';
-import { civicDef, findAccess, type Civic } from '../world/civic';
+import { civicDef, civicOnline, findAccess, type Civic } from '../world/civic';
 import { attachmentOf } from './commute';
 import { Dijkstra, type RoadGraph } from './graph';
 
@@ -134,7 +134,7 @@ export function computeCoverage(sim: Sim): Coverage {
   const civics = [...sim.state.civics.values()].sort((a, b) => a.id - b.id);
   for (const c of civics) {
     const svc = civicDef(c).service;
-    if (svc) stationCoverage(sim, g, c, kinds[svc.kind]);
+    if (svc && civicOnline(c)) stationCoverage(sim, g, c, kinds[svc.kind]);
   }
   return { graph: g, kinds };
 }
@@ -167,7 +167,7 @@ export function applyCoverage(sim: Sim, cov: Coverage): void {
   for (const c of civics) {
     const def = civicDef(c);
     const svc = def.service;
-    if (!svc?.capacity || (svc.kind !== 'education' && svc.kind !== 'health')) continue;
+    if (!svc?.capacity || (svc.kind !== 'education' && svc.kind !== 'health') || !civicOnline(c)) continue;
     const total = svc.capacity * Math.min(1.25, sim.fundingEff(def.dept));
     const [need, have] =
       svc.kind === 'health' ? [sick, beds] : [want[(svc.level ?? 1) - 1]!, got[(svc.level ?? 1) - 1]!];

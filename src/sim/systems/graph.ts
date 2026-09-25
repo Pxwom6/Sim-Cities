@@ -20,7 +20,8 @@ export class RoadGraph {
   /** Per-segment free-flow seconds and length, keyed by segment id. */
   readonly segSeconds = new Map<number, number>();
 
-  constructor(net: Network) {
+  /** `blocked` segments (damaged or flooded roads) are left out: nothing can drive along them. */
+  constructor(net: Network, blocked?: ReadonlySet<number>) {
     const nodes = [...net.st.nodes.keys()].sort((a, b) => a - b);
     nodes.forEach((id, i) => {
       this.ids.push(id);
@@ -28,7 +29,7 @@ export class RoadGraph {
     });
     const n = nodes.length;
     const deg = new Int32Array(n);
-    const segs = [...net.st.segments.values()].sort((a, b) => a.id - b.id);
+    const segs = [...net.st.segments.values()].filter((s) => !blocked?.has(s.id)).sort((a, b) => a.id - b.id);
     for (const s of segs) {
       deg[this.index.get(s.a)!]!++;
       deg[this.index.get(s.b)!]!++;

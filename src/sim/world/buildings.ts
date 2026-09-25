@@ -72,6 +72,8 @@ export interface Building {
   fire: number;
   burn: number;
   rubbleH: number;
+  /** Hours under flood water (0 when dry). */
+  flooded: number;
   /** Consecutive good hourly checks (upgrade) or hours of recovery (abandoned). */
   good: number;
   variant: number;

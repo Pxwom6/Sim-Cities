@@ -27,6 +27,14 @@ export interface Civic {
   cost: number;
   born: number;
   variant: number;
+  /** Hours until disaster damage is repaired (offline until then), and under flood water now. */
+  damage: number;
+  flooded: boolean;
+}
+
+/** A civic building works unless it's damaged or flooded. */
+export function civicOnline(c: Civic): boolean {
+  return c.damage <= 0 && !c.flooded;
 }
 
 export function civicDef(c: Civic): CivicDef {
@@ -182,6 +190,8 @@ export function placeCivic(
     cost: def.cost,
     born: s.tick,
     variant: sim.rng.world.int(1 << 16),
+    damage: 0,
+    flooded: false,
   };
   for (const id of chk.demolish) sim.removeBuilding(id);
   sim.addCivic(civ);

@@ -20,6 +20,14 @@ export function checkInvariants(sim: Sim): void {
   }
   for (const [k, v] of Object.entries(e.month))
     if (!Number.isInteger(v)) throw new InvariantError(`ledger ${k} not an integer: ${v}`);
+  for (const d of s.disasters)
+    for (const k of ['x', 'z', 'size', 'start', 'end', 'heading'] as const)
+      if (!Number.isFinite(d[k])) throw new InvariantError(`disaster ${d.id} ${k} = ${d[k]}`);
+  for (const [seg, h] of s.roadDamage)
+    if (!(h > 0) || !s.net.segments.has(seg)) throw new InvariantError(`road damage ${seg}: ${h}`);
+  for (const c of s.civics.values())
+    if (!Number.isFinite(c.damage) || c.damage < 0)
+      throw new InvariantError(`civic ${c.id} damage ${c.damage}`);
   for (const loan of e.loans)
     if (!Number.isFinite(loan.balance) || loan.balance < 0)
       throw new InvariantError(`loan balance ${loan.balance}`);
@@ -37,6 +45,7 @@ export function checkInvariants(sim: Sim): void {
       'z',
       'y',
       'progress',
+      'flooded',
       'sick',
       'treated',
       'edu',

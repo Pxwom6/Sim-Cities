@@ -2,7 +2,7 @@ import { GARBAGE } from '../../data/civic';
 import { ZONE_R } from '../../data/zones';
 import type { Sim } from '../sim';
 import { BState, type Building } from '../world/buildings';
-import { civicDef, type Civic } from '../world/civic';
+import { civicDef, civicOnline, type Civic } from '../world/civic';
 import { accrue } from './economy';
 import { attachmentOf } from './commute';
 import { Dijkstra } from './graph';
@@ -46,7 +46,7 @@ export function dispatchGarbage(sim: Sim): void {
   const targeted = new Set<number>();
   for (const v of s.vehicles.values()) if (v.kind === 'garbage') targeted.add(v.target);
   const facilities = [...s.civics.values()]
-    .filter((c) => civicDef(c).garbage && c.access)
+    .filter((c) => civicDef(c).garbage && c.access && civicOnline(c))
     .sort((a, b) => a.id - b.id);
   for (const c of facilities) {
     let free = trucksFor(sim, c) - c.out;
@@ -92,7 +92,7 @@ export function garbageCovered(sim: Sim): Set<number> {
   const g = sim.graph();
   const covered = new Set<number>();
   for (const c of s.civics.values()) {
-    if (!civicDef(c).garbage || !c.access || full(c)) continue;
+    if (!civicDef(c).garbage || !c.access || full(c) || !civicOnline(c)) continue;
     const seg = s.net.segments.get(c.access.seg);
     if (!seg) continue;
     const node = g.index.get(c.access.s < sim.net.curve(seg.id).length / 2 ? seg.a : seg.b);

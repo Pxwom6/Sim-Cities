@@ -5,7 +5,7 @@ import { TICKS_PER_MONTH } from '../time';
 import { ZONE_I } from '../../data/zones';
 import type { Sim } from '../sim';
 import { BState } from '../world/buildings';
-import { civicDef } from '../world/civic';
+import { civicDef, civicOnline } from '../world/civic';
 
 /**
  * Ground pollution raster (DESIGN §3.11). M4: industry, sewage outflows, landfills and unserved
@@ -131,7 +131,7 @@ export function updateAirPollution(sim: Sim, hours: number): void {
   }
   for (const c of s.civics.values()) {
     const def = civicDef(c);
-    if (!def.airPollution) continue;
+    if (!def.airPollution || !civicOnline(c)) continue;
     splat(add, c.x, c.z, def.airPollution * ENVIRONMENT.plantAir * k, Math.max(1.5, def.w / 2 / GRID_CELL));
   }
   for (const [segId, vol] of s.traffic) {

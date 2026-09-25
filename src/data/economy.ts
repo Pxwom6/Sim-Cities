@@ -85,6 +85,7 @@ export const LEDGER_LABELS: Record<string, string> = {
   loanInterest: 'Loan interest',
   loanPrincipal: 'Loan repayments',
   policies: 'Policies',
+  repairs: 'Disaster repairs',
 };
 
 export function ledgerLabel(key: string): string {

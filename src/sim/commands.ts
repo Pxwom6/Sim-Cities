@@ -2,6 +2,7 @@ import type { RoadTypeId } from '../data/roads';
 import type { ZoneLetter } from '../data/zones';
 import type { Vec2 } from './geom';
 import type { Dept } from '../data/economy';
+import type { DisasterKind } from './systems/disasters';
 
 export type ZoneArea = { kind: 'brush'; points: Vec2[]; radius: number } | { kind: 'segment'; id: number };
 export type BulldozeTarget =
@@ -31,8 +32,12 @@ export type Command =
   /** Place a civic building: centre, road tangent angle and which side of the road it stands on. */
   | { type: 'placeBuilding'; def: string; x: number; z: number; angle: number; side: 1 | -1 }
   | { type: 'cheat'; cheat: 'unlockAll' }
-  /** Start a fire in a building (debug panel, tests; the M9 disasters menu builds on it). */
-  | { type: 'cheat'; cheat: 'ignite'; id: number };
+  /** Start a fire in a building (debug panel, tests). */
+  | { type: 'cheat'; cheat: 'ignite'; id: number }
+  /** Start a disaster at a point (the disasters menu). `size` and `heading` are for tests. */
+  | { type: 'disaster'; kind: DisasterKind; at: Vec2; size?: number; heading?: number }
+  /** Random disasters on or off. */
+  | { type: 'setDisasters'; on: boolean };
 
 export type CommandType = Command['type'];
 

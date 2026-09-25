@@ -1,3 +1,4 @@
+import type { Crater, Disaster } from './systems/disasters';
 /** Typed messages between the main thread and the sim worker. DESIGN.md §1.4. */
 import type { TerrainParams } from './terrain/generate';
 import type { Command, CommandResult } from './commands';
@@ -120,7 +121,7 @@ export interface BuildingData {
   variant: number;
   /**
    * Bit flags: 1 no highway link, 2 no power, 4 no water, 8 no sewage, 16 garbage, 32 closed,
-   * 64 polluted water, 128 on fire, 256 sick without care, 512 smog.
+   * 64 polluted water, 128 on fire, 256 sick without care, 512 smog, 1024 flooded.
    */
   flags: number;
   /** Fire intensity 0..1 (tenths). */
@@ -216,6 +217,7 @@ export interface Snapshot {
   vehicles: VehicleData[];
   traffic: TrafficData;
   transit: TransitData;
+  disasters: DisasterData;
 }
 
 export interface CivicData {
@@ -231,6 +233,9 @@ export interface CivicData {
   fill: number;
   out: number;
   variant: number;
+  /** Hours until disaster damage is repaired (offline until then), and under flood water now. */
+  damage: number;
+  flooded: boolean;
 }
 
 export interface VehicleData {
@@ -253,9 +258,19 @@ export interface FrameDiff {
   civics?: { upserts: CivicData[]; removed: number[] };
   /** Full list of active service vehicles whenever any changed. */
   vehicles?: VehicleData[];
-  events?: { kind: string; id: number }[];
+  events?: { kind: string; id: number; info?: Record<string, number | string> }[];
   traffic?: TrafficData;
   transit?: TransitData;
+  disasters?: DisasterData;
+}
+
+/** Disasters under way and what they've left: damaged or flooded roads, craters. */
+export interface DisasterData {
+  active: Disaster[];
+  /** Damaged road segments (impassable until repaired) and segments under flood water. */
+  damaged: number[];
+  flooded: number[];
+  craters: Crater[];
 }
 
 /** Traffic for the client: daily volumes per segment and sampled trips for visible vehicles. */
