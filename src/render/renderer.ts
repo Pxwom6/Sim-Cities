@@ -4,6 +4,7 @@ import {
   PerspectiveCamera,
   SRGBColorSpace,
   Scene,
+  Vector3,
   WebGLRenderer,
 } from 'three';
 import type { ClientWorld } from '../client/world';
@@ -16,6 +17,7 @@ import { WaterRenderer } from './water';
 import { RoadRenderer } from './roads';
 import { ZoneRenderer } from './zones';
 import { GhostRenderer } from './ghost';
+import { BuildingRenderer } from './buildings';
 
 export interface RenderStats {
   calls: number;
@@ -38,7 +40,10 @@ export class GameRenderer {
   readonly roads: RoadRenderer;
   readonly zones: ZoneRenderer;
   readonly ghost: GhostRenderer;
+  readonly buildings: BuildingRenderer;
   private time = 0;
+  private treePoints: { x: number; z: number }[] = [];
+  private treeRebuildAt = 0;
   lastStats: RenderStats = { calls: 0, triangles: 0, geometries: 0, textures: 0, trees: 0 };
 
   constructor(
@@ -63,12 +68,20 @@ export class GameRenderer {
     this.scene.add(this.roads.group);
     this.zones = new ZoneRenderer(world);
     this.scene.add(this.zones.group);
+    this.buildings = new BuildingRenderer(world, this.terrain.uniforms);
+    this.scene.add(this.buildings.group);
     this.ghost = new GhostRenderer((x, z) => world.heightAt(x, z));
     this.scene.add(this.ghost.group);
     this.trees = new TreeRenderer(world);
-    this.trees.blocked = (x, z) => this.roads.onRoad(x, z, 1.5);
+    this.trees.blocked = (x, z) => this.roads.onRoad(x, z, 1.5) || this.onBuilding(x, z);
     this.trees.rebuildAll();
     this.scene.add(this.trees.group);
+    world.onBuildings((changed) => {
+      for (const id of changed) {
+        const b = world.buildings.get(id);
+        if (b) this.treePoints.push({ x: b.x, z: b.z });
+      }
+    });
     world.onNet((c) => {
       const pts: { x: number; z: number }[] = [];
       for (const id of c.segments) {
@@ -90,6 +103,29 @@ export class GameRenderer {
     this.controller = new CameraController(this.camera, canvas, (x, z) => world.heightAt(x, z));
     this.resize();
     window.addEventListener('resize', () => this.resize());
+  }
+
+  /** Building under a screen position: marches the view ray and tests lot boxes by height. */
+  pickBuilding(clientX: number, clientY: number): number | null {
+    const ground = this.controller.screenToGround(clientX, clientY);
+    const cam = this.camera.position;
+    const end = ground ?? cam.clone().add(new Vector3(0, -1, 0));
+    const dir = end.clone().sub(cam);
+    const len = dir.length();
+    dir.normalize();
+    for (let t = 0; t <= len + 1; t += 1.5) {
+      const x = cam.x + dir.x * t;
+      const y = cam.y + dir.y * t;
+      const z = cam.z + dir.z * t;
+      const b = this.world.buildingAt(x, z, -0.5);
+      if (b && y <= b.y + (this.buildings.heights.get(b.id) ?? 5) + 0.5) return b.id;
+    }
+    return null;
+  }
+
+  /** Is (x, z) inside a building lot? Keeps trees off lots. */
+  onBuilding(x: number, z: number): boolean {
+    return this.world.buildingAt(x, z, 1) !== null;
   }
 
   resize(): void {
@@ -121,6 +157,13 @@ export class GameRenderer {
     l.fog.far = Math.max(7500, this.controller.current.distance * 3.5);
     this.renderer.toneMappingExposure = 1.0 + l.night * 0.35;
     this.terrain.update(this.time);
+    this.buildings.update(l.night);
+    // Trees under new buildings: rebuilt at most twice a second.
+    if (this.treePoints.length && this.time - this.treeRebuildAt > 0.5) {
+      this.treeRebuildAt = this.time;
+      this.trees.rebuildAround(this.treePoints);
+      this.treePoints = [];
+    }
     this.trees.updateLod(this.camera.position.x, this.camera.position.z);
     this.water.update(this.time);
     const wu = this.water.material.uniforms;

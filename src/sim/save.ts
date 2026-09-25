@@ -3,7 +3,7 @@ import { canonicalStringify, decodeValue, encodeValue } from './serialize';
 import type { SimState } from './state';
 
 /** Bump when the saved state shape changes, and add a migration from the previous version. */
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 export const SAVE_FORMAT = 'citybloom-save';
 
 export interface SaveMeta {
@@ -22,7 +22,40 @@ export interface SaveFile {
 }
 
 /** migrations[v] converts an encoded state of version v into version v + 1. */
-export const migrations: Record<number, (state: Record<string, unknown>) => Record<string, unknown>> = {};
+export const migrations: Record<number, (state: Record<string, unknown>) => Record<string, unknown>> = {
+  // v1 → v2 (M3): the economy (taxes, funding, loans, ledger) arrived. Start from defaults.
+  1: (s) => {
+    const funding: Record<string, number> = {};
+    for (const d of [
+      'roads',
+      'power',
+      'water',
+      'sewage',
+      'garbage',
+      'fire',
+      'police',
+      'health',
+      'education',
+      'parks',
+      'transit',
+    ])
+      funding[d] = 100;
+    return {
+      ...s,
+      economy: {
+        taxes: { R: [9, 9, 9], C: [9, 9, 9], I: [9, 9, 9] },
+        funding,
+        loans: [],
+        month: {},
+        carry: {},
+        monthStartTreasury: s.treasury,
+        history: [],
+        negativeHours: 0,
+        bankrupt: false,
+      },
+    };
+  },
+};
 
 export function encodeState(state: SimState): unknown {
   return encodeValue(state);

@@ -4,6 +4,9 @@ import { DebugPanel } from './DebugPanel';
 import { GameContext } from './hooks';
 import { TopBar } from './TopBar';
 import { ToolHintLabel, Toolbar } from './Toolbar';
+import { Inspector } from './Inspector';
+import { Toasts } from './SystemMenu';
+import { useGameUpdates } from './hooks';
 
 function Shortcuts({ game }: { game: Game }) {
   useEffect(() => {
@@ -32,6 +35,13 @@ export function App({ game }: { game: Game }) {
       <DebugPanel />
       <Toolbar />
       <ToolHintLabel />
+      <Inspector />
+      <ToastLayer />
     </GameContext.Provider>
   );
+}
+
+function ToastLayer() {
+  useGameUpdates(100);
+  return <Toasts />;
 }

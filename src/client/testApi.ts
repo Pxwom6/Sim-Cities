@@ -18,6 +18,8 @@ export interface TestApi {
       zoned: { R: number; C: number; I: number };
     }
   >;
+  /** Render-side building list (id, position, state). */
+  getBuildings(): { id: number; x: number; z: number; state: number; zone: number }[];
   /** Client (CSS pixel) coordinates of a world point on the ground. */
   worldToScreen(x: number, z: number): { x: number; y: number };
   advance(ticks: number): Promise<number>;
@@ -59,6 +61,14 @@ export function installTestApi(game: Game): TestApi {
     },
     setCamera: (preset) => game.setCamera(preset, true),
     getCamera: () => ({ ...game.renderer.controller.goal }),
+    getBuildings: () =>
+      [...game.world.buildings.values()].map((b) => ({
+        id: b.id,
+        x: b.x,
+        z: b.z,
+        state: b.state,
+        zone: b.zone,
+      })),
     worldToScreen: (x, z) => {
       const v = new Vector3(x, Math.max(0, game.world.heightAt(x, z)), z).project(game.renderer.camera);
       const rect = game.renderer.canvas.getBoundingClientRect();
@@ -68,6 +78,7 @@ export function installTestApi(game: Game): TestApi {
     setSpeed: (s) => game.setSpeed(s),
     waitFrames: (n) =>
       new Promise((resolve) => {
+        game.renderer.buildings.flushAll();
         let k = 0;
         const step = () => (++k >= n ? resolve() : requestAnimationFrame(step));
         requestAnimationFrame(step);

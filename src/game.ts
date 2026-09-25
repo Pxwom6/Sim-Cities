@@ -23,6 +23,10 @@ export class Game {
   frameMs = 0;
   debugOpen = false;
   hint: ToolHint | null = null;
+  /** Currently inspected building. */
+  selected: number | null = null;
+  toasts: { id: number; text: string; tone: 'info' | 'ok' | 'bad' }[] = [];
+  private toastId = 1;
   audio: AudioSink | null = null;
   readonly tools: ToolManager;
   private listeners = new Set<Listener>();
@@ -35,6 +39,10 @@ export class Game {
   ) {
     client.onFrame((diff, perf, speed) => {
       this.world.applyFrame(diff);
+      if (this.selected !== null && diff.buildings) {
+        if (diff.buildings.removed.includes(this.selected)) this.select(null);
+        else if (diff.buildings.upserts.some((b) => b.id === this.selected)) this.select(this.selected);
+      }
       this.perf = perf;
       this.speed = speed;
       // Keep the smooth display clock close to the authoritative tick.
@@ -60,6 +68,25 @@ export class Game {
 
   dispatch(cmd: Command): Promise<CommandResult> {
     return this.client.command(cmd);
+  }
+
+  select(id: number | null): void {
+    this.selected = id;
+    const b = id !== null ? this.world.buildings.get(id) : undefined;
+    this.renderer.ghost.showSelection(
+      b ? { x: b.x, z: b.z, hw: b.w * 4, hd: b.d * 4, angle: b.angle } : null,
+    );
+    this.notify();
+  }
+
+  toast(text: string, tone: 'info' | 'ok' | 'bad' = 'info', ms = 3500): void {
+    const id = this.toastId++;
+    this.toasts = [...this.toasts, { id, text, tone }].slice(-4);
+    this.notify();
+    setTimeout(() => {
+      this.toasts = this.toasts.filter((t) => t.id !== id);
+      this.notify();
+    }, ms);
   }
 
   setHint(h: ToolHint | null): void {

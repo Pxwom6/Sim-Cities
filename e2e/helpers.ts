@@ -23,3 +23,41 @@ export async function shot(page: Page, name: string): Promise<void> {
   await page.evaluate(() => window.__game!.waitFrames(2));
   await page.screenshot({ path: `docs/screenshots/${name}.png` });
 }
+
+/** Same planned town as tests/helpers.ts `buildTown`, dispatched through the test API. */
+export async function buildTownViaApi(page: Page, len = 480, streets = 4): Promise<void> {
+  await page.evaluate(
+    async ([len, streets]) => {
+      const g = window.__game!;
+      const s = await g.getState();
+      const c = { x: 24, z: s.highwayZ };
+      const ok = async (cmd: Parameters<typeof g.dispatch>[0]) => {
+        const r = await g.dispatch(cmd);
+        if (!r.ok) throw new Error(`${cmd.type} failed: ${r.reason}`);
+      };
+      await ok({ type: 'buildRoad', road: 'avenue', points: [c, { x: c.x + len!, z: c.z }] });
+      for (let k = 1; k <= streets!; k++) {
+        const x = c.x + (len! * k) / (streets! + 1);
+        await ok({
+          type: 'buildRoad',
+          road: 'street',
+          points: [
+            { x, z: c.z - 160 },
+            { x, z: c.z + 160 },
+          ],
+        });
+      }
+      const brush = (
+        zone: 'R' | 'C' | 'I',
+        a: { x: number; z: number },
+        b: { x: number; z: number },
+        radius: number,
+      ) => ok({ type: 'zone', zone, area: { kind: 'brush', points: [a, b], radius } });
+      await brush('R', { x: c.x + 20, z: c.z - 100 }, { x: c.x + len!, z: c.z - 100 }, 70);
+      await brush('C', { x: c.x + 20, z: c.z + 20 }, { x: c.x + len!, z: c.z + 20 }, 22);
+      await brush('R', { x: c.x + 20, z: c.z + 90 }, { x: c.x + len! / 2, z: c.z + 90 }, 50);
+      await brush('I', { x: c.x + len! / 2 + 20, z: c.z + 110 }, { x: c.x + len!, z: c.z + 110 }, 50);
+    },
+    [len, streets],
+  );
+}

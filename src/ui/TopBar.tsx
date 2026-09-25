@@ -1,6 +1,8 @@
 import { dateOf, formatDate, type Speed } from '../sim/time';
 import { formatMoney, formatNumber, useGameUpdates } from './hooks';
 import { IconPause, IconSpeed1, IconSpeed2, IconSpeed3 } from './icons';
+import { Rci } from './Rci';
+import { SystemMenu } from './SystemMenu';
 
 const SPEEDS: { s: Speed; label: string; Icon: typeof IconPause; key: string }[] = [
   { s: 0, label: 'Pause', Icon: IconPause, key: 'Space' },
@@ -29,6 +31,19 @@ export function TopBar() {
           {formatNumber(st.population)}
         </span>
       </div>
+      <div class="stat">
+        <span class="label">Jobs</span>
+        <span class="value" data-testid="jobs">
+          {formatNumber(st.jobsFilled)} / {formatNumber(st.jobs)}
+        </span>
+      </div>
+      <div class="stat" title="City approval: how happy residents are overall">
+        <span class="label">Approval</span>
+        <span class="value" data-testid="approval">
+          {st.population > 0 ? `${Math.round(st.approval * 100)}%` : '—'}
+        </span>
+      </div>
+      <Rci />
       <span class="divider" />
       <div class="stat">
         <span class="label">Date</span>
@@ -50,6 +65,7 @@ export function TopBar() {
           </button>
         ))}
       </div>
+      <SystemMenu />
     </div>
   );
 }

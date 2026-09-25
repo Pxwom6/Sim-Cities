@@ -1,0 +1,245 @@
+import { ROAD_TYPES } from '../../data/roads';
+import {
+  BANKRUPTCY,
+  DEPTS,
+  LEDGER_HISTORY_MONTHS,
+  LOAN_OPTIONS,
+  MAX_LOANS,
+  TAX_BASE,
+  TAX_DEFAULT,
+  TAX_MAX,
+  TAX_MIN,
+  FUNDING_MAX,
+  FUNDING_MIN,
+  type Dept,
+  type ZoneKey,
+} from '../../data/economy';
+import { ZONE_C, ZONE_I, ZONE_R } from '../../data/zones';
+import { fail, ok, type CommandResult } from '../commands';
+import type { Sim } from '../sim';
+import { HOURS_PER_DAY } from '../time';
+import { BState } from '../world/buildings';
+
+export interface Loan {
+  id: number;
+  principal: number;
+  annualRate: number;
+  months: number;
+  /** Monthly payment (annuity). */
+  payment: number;
+  /** Outstanding principal (float; bookings are integers via the ledger carry). */
+  balance: number;
+  takenTick: number;
+}
+
+export interface MonthReport {
+  /** Months since the start (the month this report covers). */
+  month: number;
+  lines: Record<string, number>;
+  treasury: number;
+}
+
+export interface EconomyState {
+  taxes: Record<ZoneKey, [number, number, number]>;
+  funding: Record<Dept, number>;
+  loans: Loan[];
+  /** Integer totals per ledger category for the current month (signed: + income, − expense). */
+  month: Record<string, number>;
+  /** Fractional remainders per category carried hour to hour so nothing is lost. */
+  carry: Record<string, number>;
+  monthStartTreasury: number;
+  history: MonthReport[];
+  negativeHours: number;
+  bankrupt: boolean;
+}
+
+export function defaultEconomy(treasury: number): EconomyState {
+  const funding = {} as Record<Dept, number>;
+  for (const d of DEPTS) funding[d.id] = 100;
+  return {
+    taxes: {
+      R: [TAX_DEFAULT, TAX_DEFAULT, TAX_DEFAULT],
+      C: [TAX_DEFAULT, TAX_DEFAULT, TAX_DEFAULT],
+      I: [TAX_DEFAULT, TAX_DEFAULT, TAX_DEFAULT],
+    },
+    funding,
+    loans: [],
+    month: {},
+    carry: {},
+    monthStartTreasury: treasury,
+    history: [],
+    negativeHours: 0,
+    bankrupt: false,
+  };
+}
+
+/** Book an integer amount to the treasury and the ledger (+ income, − expense). */
+export function book(sim: Sim, category: string, amount: number): void {
+  const v = Math.round(amount);
+  if (!v) return;
+  const e = sim.state.economy;
+  sim.state.treasury += v;
+  e.month[category] = (e.month[category] ?? 0) + v;
+}
+
+/** Accrue a fractional amount: whole dollars are booked, the remainder carries to next time. */
+export function accrue(sim: Sim, category: string, amount: number): void {
+  if (!amount) return;
+  const e = sim.state.economy;
+  const c = (e.carry[category] ?? 0) + amount;
+  const whole = c < 0 ? Math.ceil(c) : Math.floor(c);
+  e.carry[category] = c - whole;
+  book(sim, category, whole);
+}
+
+const ZONE_KEY: Record<number, ZoneKey> = { [ZONE_R]: 'R', [ZONE_C]: 'C', [ZONE_I]: 'I' };
+
+/** Monthly amounts by category at current conditions (the hourly accrual is this / 24). */
+export function monthlyRates(sim: Sim): Record<string, number> {
+  const s = sim.state;
+  const e = s.economy;
+  const out: Record<string, number> = {};
+  const add = (k: string, v: number) => {
+    if (v) out[k] = (out[k] ?? 0) + v;
+  };
+  for (const b of s.buildings.values()) {
+    if (b.state !== BState.Active && !(b.state === BState.Construction && b.pop > 0)) continue;
+    const z = ZONE_KEY[b.zone];
+    if (!z || b.pop <= 0) continue;
+    const rate = e.taxes[z][b.wealth]! / 100;
+    let base = b.pop * TAX_BASE[z][b.wealth]!;
+    if (z === 'C') base *= 0.5 + 0.5 * Math.min(1, b.shop);
+    add(`tax${z}${b.wealth}`, base * rate);
+  }
+  let roadUpkeep = 0;
+  for (const seg of s.net.segments.values())
+    roadUpkeep += sim.net.curve(seg.id).length * ROAD_TYPES[seg.type].upkeepPerMetre;
+  add('roadUpkeep', -roadUpkeep * (e.funding.roads / 100));
+  for (const [dept, cost] of Object.entries(sim.departmentUpkeep()))
+    add(`upkeep:${dept}`, -cost * (e.funding[dept as Dept] / 100));
+  for (const loan of e.loans) {
+    const r = loan.annualRate / 12;
+    const interest = Math.min(loan.balance * r, loan.payment);
+    add('loanInterest', -interest);
+    add('loanPrincipal', -Math.min(loan.balance, loan.payment - interest));
+  }
+  return out;
+}
+
+/** Hourly accrual of every income and expense line, loan amortisation and bankruptcy checks. */
+export function economyHour(sim: Sim): void {
+  const s = sim.state;
+  const e = s.economy;
+  if (e.bankrupt) return;
+  const rates = monthlyRates(sim);
+  for (const k of Object.keys(rates).sort()) {
+    if (k === 'loanPrincipal' || k === 'loanInterest') continue;
+    accrue(sim, k, rates[k]! / HOURS_PER_DAY);
+  }
+  // Loans: pay an hourly share of the monthly payment; interest first, then principal.
+  for (const loan of [...e.loans]) {
+    const r = loan.annualRate / 12;
+    const interest = (loan.balance * r) / HOURS_PER_DAY;
+    const pay = Math.min(loan.payment / HOURS_PER_DAY, loan.balance + interest);
+    const principal = pay - interest;
+    accrue(sim, 'loanInterest', -interest);
+    accrue(sim, 'loanPrincipal', -principal);
+    loan.balance -= principal;
+    if (loan.balance <= 0.5) {
+      // Settle the last cents exactly so nothing is lost or created.
+      accrue(sim, 'loanPrincipal', -loan.balance);
+      e.loans = e.loans.filter((l) => l !== loan);
+      sim.events.push({ kind: 'loanRepaid', id: loan.id });
+    }
+  }
+  if (!s.options.sandbox) {
+    if (s.treasury < 0) {
+      e.negativeHours++;
+      if (e.negativeHours === 1 || e.negativeHours % 12 === 0)
+        sim.events.push({ kind: 'moneyNegative', id: BANKRUPTCY.graceHours - e.negativeHours });
+      if (e.negativeHours >= BANKRUPTCY.graceHours) {
+        e.bankrupt = true;
+        sim.events.push({ kind: 'bankrupt', id: 0 });
+      }
+    } else e.negativeHours = 0;
+  }
+}
+
+/** Close the month: store its report and start a new one. */
+export function closeMonth(sim: Sim, monthIndex: number): void {
+  const e = sim.state.economy;
+  e.history.push({ month: monthIndex, lines: { ...e.month }, treasury: sim.state.treasury });
+  if (e.history.length > LEDGER_HISTORY_MONTHS) e.history.shift();
+  e.month = {};
+  e.monthStartTreasury = sim.state.treasury;
+}
+
+export function setTax(
+  sim: Sim,
+  zone: ZoneKey,
+  wealth: 0 | 1 | 2 | 'all',
+  rate: number,
+  dryRun: boolean,
+): CommandResult {
+  if (!['R', 'C', 'I'].includes(zone)) return fail('Unknown zone');
+  if (!Number.isFinite(rate)) return fail('Invalid rate');
+  const r = Math.max(TAX_MIN, Math.min(TAX_MAX, Math.round(rate * 10) / 10));
+  if (!dryRun) {
+    const t = sim.state.economy.taxes[zone];
+    if (wealth === 'all') t[0] = t[1] = t[2] = r;
+    else t[wealth] = r;
+  }
+  return ok(0, { info: { rate: r } });
+}
+
+export function setFunding(sim: Sim, dept: Dept, pct: number, dryRun: boolean): CommandResult {
+  if (!DEPTS.some((d) => d.id === dept)) return fail('Unknown department');
+  if (!Number.isFinite(pct)) return fail('Invalid funding');
+  const v = Math.max(FUNDING_MIN, Math.min(FUNDING_MAX, Math.round(pct)));
+  if (!dryRun) sim.state.economy.funding[dept] = v;
+  sim.markNetworkChanged();
+  return ok(0, { info: { funding: v } });
+}
+
+export function annuity(principal: number, annualRate: number, months: number): number {
+  const r = annualRate / 12;
+  return r === 0 ? principal / months : (principal * r) / (1 - Math.pow(1 + r, -months));
+}
+
+export function takeLoan(sim: Sim, amount: number, dryRun: boolean): CommandResult {
+  const s = sim.state;
+  const opt = LOAN_OPTIONS.find((o) => o.amount === amount);
+  if (!opt) return fail('No such loan');
+  if (s.totals.population < opt.unlockPopulation)
+    return fail(`Needs ${opt.unlockPopulation.toLocaleString('en-US')} residents`);
+  if (s.economy.loans.length >= MAX_LOANS) return fail(`At most ${MAX_LOANS} loans at a time`);
+  if (s.economy.bankrupt) return fail('The city is bankrupt');
+  const payment = annuity(opt.amount, opt.annualRate, opt.months);
+  if (!dryRun) {
+    const loan: Loan = {
+      id: s.nextId++,
+      principal: opt.amount,
+      annualRate: opt.annualRate,
+      months: opt.months,
+      payment,
+      balance: opt.amount,
+      takenTick: s.tick,
+    };
+    s.economy.loans.push(loan);
+    book(sim, 'loans', opt.amount);
+  }
+  return ok(-opt.amount, { info: { payment: Math.round(payment) } });
+}
+
+export function repayLoan(sim: Sim, id: number, dryRun: boolean): CommandResult {
+  const e = sim.state.economy;
+  const loan = e.loans.find((l) => l.id === id);
+  if (!loan) return fail('No such loan');
+  const due = Math.ceil(loan.balance);
+  if (!sim.state.options.sandbox && sim.state.treasury < due) return fail('Not enough money to repay it now');
+  if (!dryRun) {
+    accrue(sim, 'loanPrincipal', -loan.balance);
+    e.loans = e.loans.filter((l) => l !== loan);
+  }
+  return ok(due);
+}

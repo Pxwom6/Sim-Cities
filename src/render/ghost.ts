@@ -132,6 +132,44 @@ export class GhostRenderer {
     this.group.add(this.highlight);
   }
 
+  private selection: Mesh | null = null;
+  private selMat = new MeshBasicMaterial({
+    color: new Color('#ffd23f'),
+    transparent: true,
+    opacity: 0.9,
+    depthWrite: false,
+    depthTest: false,
+  });
+
+  /** Outline around a selected footprint (oriented rectangle). */
+  showSelection(r: { x: number; z: number; hw: number; hd: number; angle: number } | null): void {
+    if (this.selection) {
+      this.group.remove(this.selection);
+      this.selection.geometry.dispose();
+      this.selection = null;
+    }
+    if (!r) return;
+    const buf = new GeoBuffer(64);
+    const c = Math.cos(r.angle);
+    const s = Math.sin(r.angle);
+    const w = 0.7;
+    const pt = (u: number, v: number) => {
+      const x = r.x + u * c - v * s;
+      const z = r.z + u * s + v * c;
+      return [x, this.y(x, z) + 0.6, z];
+    };
+    const hw = r.hw + 0.8;
+    const hd = r.hd + 0.8;
+    const col = new Color('#ffffff');
+    buf.quad(pt(-hw, -hd), pt(hw, -hd), pt(hw, -hd + w), pt(-hw, -hd + w), col);
+    buf.quad(pt(-hw, hd - w), pt(hw, hd - w), pt(hw, hd), pt(-hw, hd), col);
+    buf.quad(pt(-hw, -hd), pt(-hw + w, -hd), pt(-hw + w, hd), pt(-hw, hd), col);
+    buf.quad(pt(hw - w, -hd), pt(hw, -hd), pt(hw, hd), pt(hw - w, hd), col);
+    this.selection = new Mesh(mergeChunks([buf.trimmed()]), this.selMat);
+    this.selection.renderOrder = 30;
+    this.group.add(this.selection);
+  }
+
   showBrush(p: Vec2 | null, radius: number, color = '#ffffff'): void {
     this.brush.visible = !!p;
     if (!p) return;

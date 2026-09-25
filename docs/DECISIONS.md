@@ -25,3 +25,16 @@ One line each: what was decided and why. Newest at the bottom of each section.
 - Snapping (nodes, roads, 45° steps relative to world axes and existing roads, optional 8 m grid) happens on the client for responsiveness; the sim re-validates every command.
 - Keyboard: T roads, Z/X/C/V zones (R/C/I/dezone), B bulldoze, H or Esc select, Tab road mode, G grid, [ ] brush size, Ctrl+Z or U undo. WASD/QE/RF/+− stay on the camera.
 - Save format stays at version 1 until M2 introduces real save/load; from then on every format change bumps the version with a migration.
+
+## M2
+- Buildings are archetypes by zone × density × wealth × level (`src/data/buildings.ts`); density is set by the road type and population unlocks (medium at 800, high at 5,000), wealth by land value.
+- If a bigger footprint doesn't fit when upgrading, the building rebuilds in place on its lot (capacity scales with lot area), so packed streets still upgrade.
+- Employment and shopping come from one nearest-first matcher over the road graph (DESIGN §3.8), so jobs need a road connection. Residents from outside the city don't commute in (no regional commuters) to keep the loop readable.
+- New residents aren't counted as unemployed until the next matching round (avoids a move-in/move-out flicker).
+- Upgrades need mood ≥ 0.62, occupancy ≥ 88 % for 3 hours and positive demand for that zone. 0.62 is reachable before services exist; revisit once services add positive factors (M5/M12).
+- High wealth can't move in until services exist (M5); M2 caps wealth at medium.
+- Industry "wealth" is the industry tier (heavy, manufacturing, high-tech); M2 grows heavy industry only (education drives tiers in M7).
+- Growth needs the lot's road to be connected to the highway; cut-off buildings gain distress twice as fast and are abandoned within about a day.
+- Demolishing zoned buildings is free (no cost, no refund).
+- Loading a save reloads the page into `?load=<slot>`; this keeps the renderer's setup path single and robust.
+- Saves are gzip-compressed JSON in IndexedDB; exports use the same bytes with a `.citybloom` extension.

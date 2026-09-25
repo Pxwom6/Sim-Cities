@@ -6,6 +6,7 @@ import { Terrain } from './terrain/terrain';
 import { SAVE_VERSION, makeSaveFile, readSaveFile, stateToCanonicalJson, type SaveFile } from './save';
 import type {
   BlockData,
+  BudgetReport,
   BuildingData,
   CityStats,
   FrameDiff,
@@ -42,14 +43,29 @@ import { happinessFactors, updateHappiness } from './systems/happiness';
 import { runMatcher } from './systems/commute';
 import { GROWTH, HAPPINESS } from '../data/balance';
 import { ZONE_R } from '../data/zones';
-import { TICKS_PER_HOUR } from './time';
+import { TICKS_PER_HOUR, dateOf, isMonthStart } from './time';
+import {
+  book,
+  closeMonth,
+  defaultEconomy,
+  economyHour,
+  monthlyRates,
+  repayLoan,
+  setFunding,
+  setTax,
+  takeLoan,
+} from './systems/economy';
+import { fundingEffect, type Dept } from '../data/economy';
 
 export const STARTING_FUNDS = { easy: 100_000, normal: 60_000, hard: 35_000 } as const;
 const SANDBOX_FUNDS = 999_999_999;
 /** The highway connection node sits this far inside the west edge. */
 export const HIGHWAY_CONNECT_X = 24;
 
-export type SimEvent = { kind: 'built' | 'abandoned' | 'upgrading' | 'demolished'; id: number };
+export type SimEvent = {
+  kind: 'built' | 'abandoned' | 'upgrading' | 'demolished' | 'loanRepaid' | 'moneyNegative' | 'bankrupt';
+  id: number;
+};
 
 /**
  * The simulation. Pure TypeScript, deterministic, runs in the worker and headlessly in tests.
@@ -112,6 +128,7 @@ export class Sim {
       demand: emptyDemand(),
       landValue: new Float32Array(GRID_RES * GRID_RES),
       cursors: { growth: 0, matchRound: 0 },
+      economy: defaultEconomy(options.sandbox ? SANDBOX_FUNDS : STARTING_FUNDS[options.difficulty]),
     };
     const sim = new Sim(state, terrain);
     sim.buildHighway();
@@ -144,19 +161,31 @@ export class Sim {
     return this.state.tick;
   }
 
-  // ---------------------------------------------------------------- money (full ledger in M3)
+  // ---------------------------------------------------------------- money (DESIGN §3.5)
 
-  spend(amount: number, _category: string): void {
-    this.state.treasury -= Math.round(amount);
+  /** One-off expense booked to the ledger. */
+  spend(amount: number, category: string): void {
+    book(this, category, -Math.round(amount));
   }
 
-  earn(amount: number, _category: string): void {
-    this.state.treasury += Math.round(amount);
+  /** One-off income booked to the ledger. */
+  earn(amount: number, category: string): void {
+    book(this, category, Math.round(amount));
   }
 
-  /** Tax rate (percent) for a zone and wealth level. Taxes arrive in M3. */
-  taxRate(_zone: 'R' | 'C' | 'I', _wealth: number): number {
-    return 9;
+  /** Tax rate (percent) for a zone and wealth level. */
+  taxRate(zone: 'R' | 'C' | 'I', wealth: number): number {
+    return this.state.economy.taxes[zone][wealth] ?? 9;
+  }
+
+  /** Monthly upkeep at 100 % funding of every department's buildings (services arrive in M4/M5). */
+  departmentUpkeep(): Partial<Record<Dept, number>> {
+    return {};
+  }
+
+  /** Effectiveness (0..1.25) of a department at its current funding. */
+  fundingEff(dept: Dept): number {
+    return fundingEffect(this.state.economy.funding[dept] / 100);
   }
 
   avgTax(zone: 'R' | 'C' | 'I'): number {
@@ -255,6 +284,7 @@ export class Sim {
   }
 
   private apply(cmd: Command, dryRun: boolean): CommandResult {
+    if (this.state.economy.bankrupt && cmd.type !== 'cheat') return fail('The city is bankrupt');
     switch (cmd.type) {
       case 'cheat': {
         if (!Number.isFinite(cmd.amount)) return fail('Invalid amount');
@@ -275,6 +305,14 @@ export class Sim {
         return zone(this, cmd.zone, cmd.area, dryRun, cmd.stroke);
       case 'undo':
         return this.undo(dryRun);
+      case 'setTax':
+        return setTax(this, cmd.zone, cmd.wealth, cmd.rate, dryRun);
+      case 'setFunding':
+        return setFunding(this, cmd.dept, cmd.pct, dryRun);
+      case 'takeLoan':
+        return takeLoan(this, cmd.amount, dryRun);
+      case 'repayLoan':
+        return repayLoan(this, cmd.id, dryRun);
       default: {
         const never: never = cmd;
         return fail(`Unknown command ${(never as { type: string }).type}`);
@@ -301,6 +339,11 @@ export class Sim {
     const s = this.state;
     s.tick++;
     const t = s.tick;
+    if (s.economy.bankrupt) {
+      if (this.testMode) checkInvariants(this);
+      return;
+    }
+    if (isMonthStart(t)) closeMonth(this, dateOf(t).totalMonths - 1);
     if (t % GROWTH.passInterval === 0) growthPass(this);
     if (t % TICKS_PER_HOUR === 0) {
       if (t % (TICKS_PER_HOUR * 2) === 0) runMatcher(this);
@@ -308,6 +351,7 @@ export class Sim {
       lifecycle(this);
       s.totals = computeTotals(this);
       updateDemand(this);
+      economyHour(this);
       if (t % (TICKS_PER_HOUR * 3) === 0) updateLandValue(this);
     }
     if (this.testMode) checkInvariants(this);
@@ -366,6 +410,44 @@ export class Sim {
       buildings: t.buildings,
       abandoned: t.abandoned,
       highwayConnected: t.highwayConnected,
+      netMonthly: this.projectedNet(),
+      loans: this.state.economy.loans.length,
+      bankrupt: this.state.economy.bankrupt,
+      negativeHours: this.state.economy.negativeHours,
+    };
+  }
+
+  /** Projected net income per month at current rates (whole dollars). */
+  projectedNet(): number {
+    const r = monthlyRates(this);
+    return Math.round(Object.values(r).reduce((a, b) => a + b, 0));
+  }
+
+  budget(): BudgetReport {
+    const e = this.state.economy;
+    const rates = monthlyRates(this);
+    return {
+      treasury: this.state.treasury,
+      month: { ...e.month },
+      projection: Object.fromEntries(Object.entries(rates).map(([k, v]) => [k, Math.round(v)])),
+      history: e.history.map((h) => ({ month: h.month, lines: { ...h.lines }, treasury: h.treasury })),
+      taxes: {
+        R: [...e.taxes.R] as [number, number, number],
+        C: [...e.taxes.C] as [number, number, number],
+        I: [...e.taxes.I] as [number, number, number],
+      },
+      funding: { ...e.funding },
+      loans: e.loans.map((l) => ({
+        id: l.id,
+        principal: l.principal,
+        annualRate: l.annualRate,
+        months: l.months,
+        payment: Math.round(l.payment),
+        balance: Math.ceil(l.balance),
+      })),
+      negativeHours: e.negativeHours,
+      bankrupt: e.bankrupt,
+      monthStartTreasury: e.monthStartTreasury,
     };
   }
 
@@ -501,6 +583,8 @@ export class Sim {
         return this.stats();
       case 'building':
         return this.buildingDetails(q.id);
+      case 'budget':
+        return this.budget();
     }
   }
 

@@ -11,6 +11,18 @@ export function checkInvariants(sim: Sim): void {
   if (!Number.isFinite(s.treasury) || !Number.isInteger(s.treasury)) {
     throw new InvariantError(`treasury is not a finite integer: ${s.treasury}`);
   }
+  const e = s.economy;
+  const booked = Object.values(e.month).reduce((a, b) => a + b, 0);
+  if (s.treasury !== e.monthStartTreasury + booked) {
+    throw new InvariantError(
+      `money does not balance: treasury ${s.treasury} ≠ ${e.monthStartTreasury} + ${booked}`,
+    );
+  }
+  for (const [k, v] of Object.entries(e.month))
+    if (!Number.isInteger(v)) throw new InvariantError(`ledger ${k} not an integer: ${v}`);
+  for (const loan of e.loans)
+    if (!Number.isFinite(loan.balance) || loan.balance < 0)
+      throw new InvariantError(`loan balance ${loan.balance}`);
   for (const b of s.buildings.values()) {
     for (const k of [
       'pop',

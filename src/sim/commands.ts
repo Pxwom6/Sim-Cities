@@ -1,6 +1,7 @@
 import type { RoadTypeId } from '../data/roads';
 import type { ZoneLetter } from '../data/zones';
 import type { Vec2 } from './geom';
+import type { Dept } from '../data/economy';
 
 export type ZoneArea = { kind: 'brush'; points: Vec2[]; radius: number } | { kind: 'segment'; id: number };
 export type BulldozeTarget = { kind: 'segment'; id: number } | { kind: 'building'; id: number };
@@ -14,7 +15,11 @@ export type Command =
   | { type: 'bulldoze'; target: BulldozeTarget }
   /** `stroke` groups several paint commands from one drag into a single undo step. */
   | { type: 'zone'; zone: ZoneLetter | 'none'; area: ZoneArea; stroke?: number }
-  | { type: 'undo' };
+  | { type: 'undo' }
+  | { type: 'setTax'; zone: 'R' | 'C' | 'I'; wealth: 0 | 1 | 2 | 'all'; rate: number }
+  | { type: 'setFunding'; dept: Dept; pct: number }
+  | { type: 'takeLoan'; amount: number }
+  | { type: 'repayLoan'; id: number };
 
 export type CommandType = Command['type'];
 

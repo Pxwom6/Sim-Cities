@@ -1,6 +1,7 @@
 import { TerrainGen, sampleHeights } from '../sim/terrain/generate';
-import type { CityStats, FrameDiff, NetDiff, Snapshot } from '../sim/protocol';
+import type { BuildingData, CityStats, FrameDiff, NetDiff, Snapshot } from '../sim/protocol';
 import { Network, type NetworkState, type RoadSegment, type ZoneBlock } from '../sim/world/network';
+import { SpatialHash } from '../sim/world/spatial';
 import type { GameOptions } from '../sim/state';
 import { MAP_SIZE } from '../data/world';
 
@@ -30,6 +31,12 @@ export class ClientWorld {
   readonly net: Network;
   readonly highway: Snapshot['highway'];
   private netListeners: ((c: NetChanges) => void)[] = [];
+  readonly buildings = new Map<number, BuildingData>();
+  /** Spatial index of building footprints (by bounding circle). */
+  readonly bldHash = new SpatialHash(32);
+  private buildingListeners: ((changed: number[], removed: number[]) => void)[] = [];
+  /** Recent sim events (built, abandoned, ...) for notifications and sounds. */
+  events: { kind: string; id: number }[] = [];
   /** Fractional tick, advanced smoothly between frames for lighting. */
   displayTick: number;
   private listeners = new Map<string, Set<Listener>>();
@@ -50,6 +57,35 @@ export class ClientWorld {
     for (const sg of snap.net.segments) this.netState.segments.set(sg.id, { ...sg });
     for (const b of snap.net.blocks) this.netState.blocks.set(b.id, { ...b });
     this.net = new Network(this.netState, null, null);
+    for (const b of snap.buildings) this.setBuilding(b);
+  }
+
+  private setBuilding(b: BuildingData): void {
+    this.buildings.set(b.id, b);
+    const r = Math.hypot(b.w * 4, b.d * 4);
+    this.bldHash.insert(b.id, { minX: b.x - r, minZ: b.z - r, maxX: b.x + r, maxZ: b.z + r });
+  }
+
+  /** Building whose lot contains (x, z), if any. */
+  buildingAt(x: number, z: number, margin = 0): BuildingData | null {
+    for (const id of this.bldHash.queryPoint(x, z, 1)) {
+      const b = this.buildings.get(id)!;
+      const c = Math.cos(b.angle);
+      const s = Math.sin(b.angle);
+      const dx = x - b.x;
+      const dz = z - b.z;
+      const lx = dx * c + dz * s;
+      const lz = -dx * s + dz * c;
+      if (Math.abs(lx) <= b.w * 4 + margin && Math.abs(lz) <= b.d * 4 + margin) return b;
+    }
+    return null;
+  }
+
+  onBuildings(l: (changed: number[], removed: number[]) => void): () => void {
+    this.buildingListeners.push(l);
+    return () => {
+      this.buildingListeners = this.buildingListeners.filter((x) => x !== l);
+    };
   }
 
   /** Subscribe to network changes (ids of touched segments, nodes and blocks, including removals). */
@@ -149,6 +185,20 @@ export class ClientWorld {
   applyFrame(diff: FrameDiff): void {
     this.stats = diff.stats;
     if (diff.net) this.applyNet(diff.net);
+    if (diff.buildings) {
+      for (const id of diff.buildings.removed) {
+        this.buildings.delete(id);
+        this.bldHash.remove(id);
+      }
+      for (const b of diff.buildings.upserts) this.setBuilding(b);
+      const changed = diff.buildings.upserts.map((b) => b.id);
+      for (const l of this.buildingListeners) l(changed, diff.buildings.removed);
+      this.emit('buildings');
+    }
+    if (diff.events) {
+      this.events = diff.events;
+      this.emit('events');
+    }
     if (diff.trees) {
       for (let k = 0; k < diff.trees.idx.length; k++) this.trees[diff.trees.idx[k]!] = diff.trees.val[k]!;
       this.emit('trees');

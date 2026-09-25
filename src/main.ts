@@ -8,18 +8,23 @@ import { GameRenderer } from './render/renderer';
 import { Game } from './game';
 import { App } from './ui/App';
 import type { MapPreset } from './data/world';
+import { readSlot } from './client/saves';
 
 async function boot(): Promise<void> {
   document.title = GAME_TITLE;
   const params = new URLSearchParams(location.search);
   const client = new SimClient();
-  const snap = await client.init(
-    {
-      seed: params.get('seed') ?? 'citybloom',
-      preset: (params.get('preset') as MapPreset | null) ?? 'river',
-    },
-    IS_TEST_BUILD,
-  );
+  const loadSlot = params.get('load');
+  const save = loadSlot ? await readSlot(loadSlot).catch(() => null) : null;
+  const snap = save
+    ? await client.load(save, IS_TEST_BUILD)
+    : await client.init(
+        {
+          seed: params.get('seed') ?? 'citybloom',
+          preset: (params.get('preset') as MapPreset | null) ?? 'river',
+        },
+        IS_TEST_BUILD,
+      );
   const world = new ClientWorld(snap);
   const canvas = document.getElementById('scene') as HTMLCanvasElement;
   const renderer = new GameRenderer(canvas, world);

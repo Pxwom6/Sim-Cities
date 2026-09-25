@@ -5,6 +5,7 @@ import type { UndoRecord } from './undo';
 import type { Building } from './world/buildings';
 import type { CityTotals } from './systems/totals';
 import type { DemandState } from './systems/demand';
+import type { EconomyState } from './systems/economy';
 
 export type Difficulty = 'easy' | 'normal' | 'hard';
 
@@ -55,4 +56,5 @@ export interface SimState {
   landValue: Float32Array;
   /** Round-robin positions of sliced systems. */
   cursors: { growth: number; matchRound: number };
+  economy: EconomyState;
 }

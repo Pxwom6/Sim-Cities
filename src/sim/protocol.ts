@@ -23,6 +23,32 @@ export interface CityStats {
   buildings: number;
   abandoned: number;
   highwayConnected: boolean;
+  netMonthly: number;
+  loans: number;
+  bankrupt: boolean;
+  negativeHours: number;
+}
+
+export interface BudgetReport {
+  treasury: number;
+  /** Ledger for the month so far (signed integer dollars per category). */
+  month: Record<string, number>;
+  /** Monthly rates at current conditions. */
+  projection: Record<string, number>;
+  history: { month: number; lines: Record<string, number>; treasury: number }[];
+  taxes: Record<'R' | 'C' | 'I', [number, number, number]>;
+  funding: Record<string, number>;
+  loans: {
+    id: number;
+    principal: number;
+    annualRate: number;
+    months: number;
+    payment: number;
+    balance: number;
+  }[];
+  negativeHours: number;
+  bankrupt: boolean;
+  monthStartTreasury: number;
 }
 
 /** Render-relevant building fields (details come from the `building` query). */
@@ -137,7 +163,8 @@ export interface WorkerPerf {
   droppedTicks: number;
 }
 
-export type Query = { type: 'hash' } | { type: 'summary' } | { type: 'building'; id: number };
+export type Query =
+  { type: 'hash' } | { type: 'summary' } | { type: 'building'; id: number } | { type: 'budget' };
 
 export type MainToWorker =
   | { type: 'init'; options: Partial<GameOptions>; testMode?: boolean }
