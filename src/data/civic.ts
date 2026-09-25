@@ -52,6 +52,8 @@ export interface CivicDef {
     revenuePerUnit?: number;
     powerPerUnit?: number;
   };
+  /** Bus depot (M6): buses it runs and passengers per bus. */
+  transit?: { buses: number; capacity: number };
   /** Service coverage and capacity (M5). */
   service?: {
     kind: ServiceKind;
@@ -420,6 +422,21 @@ export const CIVIC_DEFS: CivicDef[] = [
     model: 'park_large',
   },
 ];
+
+CIVIC_DEFS.push({
+  id: 'busdepot',
+  name: 'Bus depot',
+  category: 'transit',
+  dept: 'transit',
+  w: 32,
+  d: 28,
+  cost: 16_000,
+  upkeep: 520,
+  transit: { buses: 6, capacity: 50 },
+  blurb: 'Runs buses round the bus stops you place, in one loop. Riders leave their cars at home.',
+  unlockPopulation: 800,
+  model: 'busdepot',
+});
 
 export const CIVIC = new Map(CIVIC_DEFS.map((d) => [d.id, d]));
 

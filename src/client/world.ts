@@ -7,6 +7,7 @@ import type {
   NetDiff,
   Snapshot,
   TrafficData,
+  TransitData,
   VehicleData,
 } from '../sim/protocol';
 import { Network, type NetworkState, type RoadSegment, type ZoneBlock } from '../sim/world/network';
@@ -59,6 +60,10 @@ export class ClientWorld {
   trips: TripSample[] = [];
   /** Bumped whenever traffic data arrives. */
   trafficVersion = 0;
+  /** Bus stops and lines. */
+  stops = new Map<number, TransitData['stops'][number]>();
+  lines: TransitData['lines'] = [];
+  transitVersion = 0;
   /** Recent sim events (built, abandoned, ...) for notifications and sounds. */
   events: { kind: string; id: number }[] = [];
   /** Fractional tick, advanced smoothly between frames for lighting. */
@@ -86,6 +91,27 @@ export class ClientWorld {
     this.vehicles = snap.vehicles;
     this.vehiclesTick = snap.stats.tick;
     this.setTraffic(snap.traffic);
+    this.setTransit(snap.transit);
+  }
+
+  private setTransit(t: TransitData): void {
+    this.stops = new Map(t.stops.map((x) => [x.id, x]));
+    this.lines = t.lines;
+    this.transitVersion++;
+  }
+
+  /** Bus stop within `r` metres of (x, z). */
+  stopAt(x: number, z: number, r = 7): TransitData['stops'][number] | null {
+    let best: TransitData['stops'][number] | null = null;
+    let bd = r;
+    for (const st of this.stops.values()) {
+      const d = Math.hypot(st.x - x, st.z - z);
+      if (d < bd) {
+        bd = d;
+        best = st;
+      }
+    }
+    return best;
   }
 
   private setTraffic(t: TrafficData): void {
@@ -299,6 +325,10 @@ export class ClientWorld {
     if (diff.traffic) {
       this.setTraffic(diff.traffic);
       this.emit('traffic');
+    }
+    if (diff.transit) {
+      this.setTransit(diff.transit);
+      this.emit('transit');
     }
     if (diff.events) {
       this.events = diff.events;

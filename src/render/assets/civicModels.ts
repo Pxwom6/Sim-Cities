@@ -538,6 +538,30 @@ export function buildCivicModel(def: CivicDef, variant: number, fill = 0): Model
       });
       break;
     }
+    case 'busdepot': {
+      base(m, W, D, CONCRETE);
+      // Bus shed with open bays facing the road, an office, and buses parked in the yard.
+      const z0 = -D / 2 + 4;
+      m.box(-W / 2 + 2, W / 4, 0, 7, z0 + 8, D / 2 - 2, C('#d7dade'), SLATE);
+      for (let k = 0; k < 3; k++) {
+        const x = -W / 2 + 3.5 + k * 5.6;
+        m.box(x, x + 4.4, 0, 5, z0 + 7.9, z0 + 8, C('#3b4148'));
+      }
+      m.box(-W / 2 + 2, W / 4, 7, 7.5, z0 + 7.8, z0 + 8, C('#f2b31b'));
+      m.box(W / 4 + 1, W / 2 - 2, 0, 6, z0, z0 + 7, C('#e9e6de'), SLATE);
+      allWindows(m, W / 4 + 1, W / 2 - 2, z0, z0 + 7, 0, 2, 3, {
+        col: GLASS,
+        lit: lit(r, 0.7),
+        spacing: 2.4,
+      });
+      m.ground(-W / 2 + 1, W / 4, -D / 2 + 1, z0 + 7.5, 0.08, C('#8d8f93'));
+      for (let k = 0; k < 3; k++) {
+        const x = -W / 2 + 3 + k * 4.5;
+        m.box(x, x + 2.5, 0.4, 3.1, -D / 2 + 1.5, -D / 2 + 1.5 + 10, C('#f2b31b'));
+        m.box(x - 0.02, x + 2.52, 1.7, 2.5, -D / 2 + 1.6, -D / 2 + 1.4 + 10, GLASS);
+      }
+      break;
+    }
     case 'park_small': {
       m.box(-W / 2 + 0.2, W / 2 - 0.2, -5, 0.05, -D / 2 + 0.2, D / 2 - 0.2, STONE, GRASS);
       m.ground(-1, 1, -D / 2 + 0.2, D / 2 - 0.2, 0.08, PATH);

@@ -18,6 +18,7 @@ import type {
   SegmentData,
   Snapshot,
   TrafficData,
+  TransitData,
   BuildingDetails,
   Query,
 } from './protocol';
@@ -47,8 +48,16 @@ import { growthPass, lifecycle } from './systems/growth';
 import { happinessFactors, updateHappiness } from './systems/happiness';
 import { runMatcher } from './systems/commute';
 import { deckProfile, type DeckProfile } from './world/bridge';
+import {
+  computeLines,
+  emptyTransit,
+  placeStop,
+  relocateStops,
+  removeStop,
+  type BusLine,
+} from './systems/transit';
 import { congestedEdgeCosts, congestedSeconds, hourShare, segVC, type TripSample } from './systems/traffic';
-import { GROWTH, HAPPINESS } from '../data/balance';
+import { GROWTH, HAPPINESS, TRANSIT } from '../data/balance';
 import { ZONE_R } from '../data/zones';
 import { TICKS_PER_HOUR, dateOf, isMonthStart } from './time';
 import { bulldozeCivic, civicDef, civicRect, findAccess, placeCivic, type Civic } from './world/civic';
@@ -192,6 +201,7 @@ export class Sim {
       incidents: new Map(),
       crime: new Float32Array(GRID_RES * GRID_RES),
       traffic: new Map(),
+      transit: emptyTransit(),
     };
     const sim = new Sim(state, terrain);
     sim.buildHighway();
@@ -248,10 +258,11 @@ export class Sim {
       const d = civicDef(c);
       out[d.dept] = (out[d.dept] ?? 0) + d.upkeep;
     }
+    if (this.state.transit.stops.size)
+      out.transit = (out.transit ?? 0) + this.state.transit.stops.size * TRANSIT.stopUpkeep;
     return out;
   }
 
-  /** Travel-time multiplier on a segment from congestion and road maintenance (traffic in M6). */
   /** Speed factor (≤ 1) on a segment from its traffic at the current hour. */
   congestionFactor(segId: number): number {
     const t0 = this.graph().segSeconds.get(segId) ?? 1;
@@ -284,6 +295,47 @@ export class Sim {
   /** New volumes and trip samples are ready for the client. */
   trafficChanged(): void {
     this.trafficDirty = true;
+    this.linesCache = null;
+    this.peakCache = null;
+  }
+
+  private peakCache: Float64Array | null = null;
+
+  /** Rush-hour seconds per graph edge (cached until roads or traffic change). */
+  peakCosts(): Float64Array {
+    if (!this.peakCache || this.peakCache.length !== this.graph().cost.length)
+      this.peakCache = congestedEdgeCosts(this, this.graph(), 1);
+    return this.peakCache;
+  }
+
+  private linesCache: BusLine[] | null = null;
+  private transitDirty = true;
+
+  /** Bus lines (cached; a pure function of roads, depots, stops, funding and traffic). */
+  lines(): BusLine[] {
+    if (!this.linesCache) this.linesCache = computeLines(this);
+    return this.linesCache;
+  }
+
+  /** Stops or depots changed: rebuild the lines and tell the client. */
+  transitChanged(): void {
+    this.linesCache = null;
+    this.transitDirty = true;
+  }
+
+  transitData(): TransitData {
+    const t = this.state.transit;
+    return {
+      stops: [...t.stops.values()].sort((a, b) => a.id - b.id).map((x) => ({ ...x })),
+      lines: this.lines().map((l) => ({
+        depot: l.depot,
+        stops: [...l.stops],
+        legs: l.legs.map((x) => ({ ...x })),
+        loopTime: l.loopTime,
+        buses: l.buses,
+        riders: t.riders.get(l.depot) ?? 0,
+      })),
+    };
   }
 
   trafficData(): TrafficData {
@@ -370,6 +422,9 @@ export class Sim {
   markNetworkChanged(): void {
     this.graphCache = null;
     this.coverageCache = null;
+    this.peakCache = null;
+    this.transitChanged();
+    relocateStops(this);
     this.blockOrderCache = null;
     // Civic buildings re-attach to whatever road now runs past their front.
     for (const c of this.state.civics.values()) {
@@ -399,6 +454,7 @@ export class Sim {
   addCivic(c: Civic): void {
     this.state.civics.set(c.id, c);
     this.coverageCache = null;
+    this.transitChanged();
     this.indexCivic(c);
     this.dirtyCivics.add(c.id);
     const r = civicRect(c);
@@ -413,6 +469,7 @@ export class Sim {
     for (const v of [...this.state.vehicles.values()]) if (v.home === id) this.state.vehicles.delete(v.id);
     this.state.civics.delete(id);
     this.coverageCache = null;
+    this.transitChanged();
     this.civHash.remove(id);
     this.dirtyCivics.delete(id);
     this.removedCivics.add(id);
@@ -529,6 +586,8 @@ export class Sim {
         return bulldoze(this, cmd.target, dryRun);
       case 'upgradeRoad':
         return upgradeRoad(this, cmd.seg, cmd.road, dryRun);
+      case 'placeStop':
+        return placeStop(this, cmd.x, cmd.z, dryRun);
       case 'zone':
         return zone(this, cmd.zone, cmd.area, dryRun, cmd.stroke);
       case 'undo':
@@ -559,7 +618,10 @@ export class Sim {
     let res: CommandResult;
     if (rec.kind === 'road') res = undoRoad(this, rec, dryRun);
     else if (rec.kind === 'upgrade') res = undoUpgrade(this, rec, dryRun);
-    else if (rec.kind === 'zone') res = undoZone(this, rec.cells, dryRun);
+    else if (rec.kind === 'stop') {
+      if (!this.state.transit.stops.has(rec.id)) return fail("Can't undo: that stop is gone");
+      res = removeStop(this, rec.id, dryRun, 1);
+    } else if (rec.kind === 'zone') res = undoZone(this, rec.cells, dryRun);
     else {
       if (!this.state.civics.has(rec.id)) return fail("Can't undo: that building is gone");
       res = bulldozeCivic(this, rec.id, dryRun, 1);
@@ -736,6 +798,7 @@ export class Sim {
       set.clear();
     this.vehiclesDirty = false;
     this.trafficDirty = false;
+    this.transitDirty = false;
     this.events = [];
     return {
       options: { ...this.state.options },
@@ -752,6 +815,7 @@ export class Sim {
       civics: [...this.state.civics.values()].map((c) => this.civicData(c)),
       vehicles: this.vehicleData(),
       traffic: this.trafficData(),
+      transit: this.transitData(),
     };
   }
 
@@ -901,6 +965,10 @@ export class Sim {
       frame.traffic = this.trafficData();
       this.trafficDirty = false;
     }
+    if (this.transitDirty) {
+      frame.transit = this.transitData();
+      this.transitDirty = false;
+    }
     if (this.events.length) {
       frame.events = this.events;
       this.events = [];
@@ -976,7 +1044,19 @@ export class Sim {
           }
         : null,
       service: d.service ? this.serviceDetails(c) : null,
+      transit: d.transit ? this.transitDetails(c) : null,
       refund: Math.round(c.cost * 0.25),
+    };
+  }
+
+  private transitDetails(c: Civic): NonNullable<CivicDetails['transit']> {
+    const line = this.lines().find((l) => l.depot === c.id);
+    return {
+      stops: line?.stops.length ?? 0,
+      buses: line?.buses ?? 0,
+      loopMinutes: line ? Math.round(line.loopTime / 6) / 10 : 0,
+      riders: this.state.transit.riders.get(c.id) ?? 0,
+      full: (this.state.transit.load.get(c.id) ?? 1) < 0.95,
     };
   }
 

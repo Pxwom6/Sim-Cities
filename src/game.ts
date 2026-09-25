@@ -87,12 +87,14 @@ export class Game {
   select(sel: { kind: 'building' | 'civic' | 'car'; id: number } | null): void {
     this.selected = sel;
     let rect: { x: number; z: number; hw: number; hd: number; angle: number } | null = null;
-    // A selected car shows its whole route.
+    // A selected car shows its whole route; a selected depot shows its bus loop.
     const car = sel?.kind === 'car' ? this.renderer.traffic.car(sel.id) : undefined;
+    const line = sel?.kind === 'civic' ? this.world.lines.find((l) => l.depot === sel.id) : undefined;
+    const legs = car?.legs ?? line?.legs;
     const net = this.world.net;
     this.renderer.routeTint.show(
-      car
-        ? [...new Set(car.legs.map((l) => l.seg))]
+      legs
+        ? [...new Set(legs.map((l) => l.seg))]
             .filter((id) => this.world.netState.segments.has(id))
             .map((id) => ({ curve: net.curve(id), v: [1, 1], half: 2.5 }))
         : null,

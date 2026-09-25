@@ -12,6 +12,7 @@ import {
   legsThroughTree,
   type TripSample,
 } from './traffic';
+import { busShare, busTime, busTraffic, stopsNearNodes } from './transit';
 
 /** Where a building joins the graph: nearest end node and the travel seconds to it. */
 export interface Attachment {
@@ -97,6 +98,11 @@ export function runMatcher(sim: Sim): void {
   }
   const order = [...origins.keys()].sort((a, b) => a - b);
   const car = TRAFFIC.carShare / TRAFFIC.occupancy;
+  // Buses: stops near each junction, riders per line this round.
+  const lines = sim.lines();
+  const near = lines.length ? stopsNearNodes(sim, lines) : new Map();
+  const riders = new Float64Array(lines.length);
+  const loadOf = lines.map((l) => s.transit.load.get(l.depot) ?? 1);
   if (order.length) {
     const startAt = s.cursors.matchRound % order.length;
     s.cursors.matchRound++;
@@ -128,8 +134,11 @@ export function runMatcher(sim: Sim): void {
               j.b.pop += take;
               workersLeft -= take;
               employed += take;
-              commuteSum += take * t;
-              const n = take * TRAFFIC.tripsPerWorker * car;
+              const bus = lines.length ? busTime(lines, near, node, u) : null;
+              const share = bus && bus.line >= 0 ? busShare(t, bus.t, loadOf[bus.line]!) : 0;
+              commuteSum += take * (share > 0 ? share * bus!.t + (1 - share) * t : t);
+              if (share > 0) riders[bus!.line] += take * share * TRAFFIC.tripsPerWorker;
+              const n = take * TRAFFIC.tripsPerWorker * car * (1 - share);
               flows.addLoad(u, n);
               flows.addSegment(accessOf(sim, j.b)?.seg ?? -1, n);
               trips.offer(n, () => trip(sim, g, home(), j.b, u, 'work'));
@@ -186,6 +195,18 @@ export function runMatcher(sim: Sim): void {
     }
   }
   runFreight(sim, g, costs, flows, trips, jobsAt);
+  // Buses add a little traffic along their loops; full buses turn riders away next round.
+  busTraffic(lines, (seg, pcu) => flows.addSegment(seg, pcu));
+  s.transit.riders = new Map();
+  s.transit.load = new Map();
+  lines.forEach((line, i) => {
+    const r = Math.round(riders[i]!);
+    s.transit.riders.set(line.depot, r);
+    const load = loadOf[i]!;
+    const demand = ((riders[i]! / Math.max(0.05, load)) * TRAFFIC.peakShare) / 2;
+    const target = demand > 0 ? Math.min(1, line.capacityPerHour / demand) : 1;
+    s.transit.load.set(line.depot, Math.round((load + 0.5 * (target - load)) * 1000) / 1000);
+  });
   applyVolumes(sim, flows.next);
   sim.tripSamples = trips.samples;
   sim.trafficChanged();

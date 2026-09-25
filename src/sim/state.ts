@@ -10,6 +10,7 @@ import type { Civic } from './world/civic';
 import type { Vehicle } from './systems/vehicles';
 import type { UtilityStats } from './systems/utilities';
 import type { Incident } from './systems/incidents';
+import type { TransitState } from './systems/transit';
 
 export type Difficulty = 'easy' | 'normal' | 'hard';
 
@@ -75,4 +76,6 @@ export interface SimState {
   crime: Float32Array;
   /** Daily traffic per road segment (passenger-car units, both directions). */
   traffic: Map<number, number>;
+  /** Bus stops and last round's ridership. */
+  transit: TransitState;
 }

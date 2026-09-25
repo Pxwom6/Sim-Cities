@@ -52,6 +52,9 @@ try {
       ['primary', 408, -110],
     ])
       await g.placeCivic(def, { x, z: c.z + dz });
+    await g.placeCivic('busdepot', { x: 450, z: c.z - 150 });
+    for (const [x, dz] of [[96, -80], [192, 70], [288, -80], [384, 70], [384, -100], [150, 6], [330, -6]])
+      console.log(JSON.stringify(await g.dispatch({ type: 'placeStop', x: c.x + x, z: c.z + dz })));
     await g.advance(ticks);
     // To 07:30 so the morning rush is on.
     const st = await g.getState();
@@ -81,6 +84,11 @@ try {
     await page.evaluate(() => window.__game.waitFrames(2));
     await page.screenshot({ path: `${out}/${name}.png` });
   };
+  const lines = await page.evaluate(() => window.__game.getState().then((s) => s.renderStats.buses));
+  console.log('buses on screen', lines);
+  const depot = await page.evaluate(() => window.__game.getCivics().find((c) => c.def === 'busdepot'));
+  if (depot) await snap('depot', { x: depot.x, z: depot.z, distance: 80, yaw: 0.7, tilt: 0 });
+  await snap('stop', { x: 120, z: cz - 80, distance: 45, yaw: 0.9, tilt: 0 });
   await snap('cars-close', { x: 216, z: cz - 20, distance: 90, yaw: 0.6, tilt: 0 });
   await snap('cars-mid', { x: 250, z: cz, distance: 260, yaw: 0.3, tilt: 0 });
   await page.evaluate(() => window.__game.setOverlay('traffic'));

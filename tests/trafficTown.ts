@@ -10,7 +10,7 @@ import { connectPoint, placeAlong, road } from './helpers';
 export function twoDistricts(
   sim: Sim,
   link: 'dirt' | 'street' = 'dirt',
-): { link: number; bypass: () => number[]; c: Vec2 } {
+): { link: number; bypass: () => number[]; buses: () => number[]; c: Vec2 } {
   sim.dispatch({ type: 'cheat', cheat: 'unlockAll' });
   sim.dispatch({ type: 'cheat', cheat: 'addMoney', amount: 400_000 });
   const c = connectPoint(sim);
@@ -89,6 +89,24 @@ export function twoDistricts(
   return {
     link: linkIds[0]!,
     c,
+    // A depot on the utility street and stops through both districts: one loop over the link.
+    buses: () => {
+      placeOnAny(sim, 'busdepot', utilSegs.length ? [...utilSegs, ...util] : [...util]);
+      const ids: number[] = [];
+      for (const [x, dz] of [
+        [70, -60],
+        [130, 60],
+        [190, -60],
+        [70, 60],
+        [410, -40],
+        [470, -120],
+        [530, -40],
+      ] as const) {
+        const r = sim.dispatch({ type: 'placeStop', x: c.x + x, z: z + dz });
+        if (r.ok) ids.push(r.created![0]!);
+      }
+      return ids;
+    },
     // From the east end of the utility street to the north end of the first job street.
     bypass: () =>
       road(

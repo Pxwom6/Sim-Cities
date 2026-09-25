@@ -105,6 +105,24 @@ export const TRAFFIC = {
   samples: 320,
 };
 
+/** Buses (DESIGN §3.8). */
+export const TRANSIT = {
+  stopCost: 400,
+  stopUpkeep: 12,
+  /** Farthest walk to a stop, metres (straight line; walking distance is 1.3× that). */
+  walkRadius: 360,
+  walkSpeed: 1.4,
+  /** Seconds a bus spends at each stop. */
+  dwell: 20,
+  /** Most commuters who'd ever take the bus, and how sharply the share responds to time saved. */
+  maxShare: 0.7,
+  shareScale: 240,
+  /** Seconds of car hassle (parking, fuel) a bus rider saves; tilts the choice towards buses. */
+  carPenalty: 300,
+  /** A bus counts as this many cars on the road. */
+  busPcu: 2.5,
+};
+
 export const HAPPINESS = {
   base: 0.55,
   unemployment: -0.15,

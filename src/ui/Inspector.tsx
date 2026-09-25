@@ -192,6 +192,9 @@ function CivicInspector({ id }: { id: number }) {
         </button>
       </header>
       {!d.access && <div class="warn">Not facing a road: it can't reach anyone.</div>}
+      {d.transit && d.transit.stops < 2 && (
+        <div class="warn">Place at least two bus stops on roads this depot can reach to start a line.</div>
+      )}
       {d.polluted && (
         <div class="warn">
           The ground here is polluted, so this pump's water is too. Move it away from outflows, landfills and
@@ -249,6 +252,20 @@ function CivicInspector({ id }: { id: number }) {
             )}
             <dt>Buildings covered</dt>
             <dd data-testid="civic-reach">{d.service.reach.toLocaleString('en-US')}</dd>
+          </>
+        )}
+        {d.transit && (
+          <>
+            <dt>Stops served</dt>
+            <dd data-testid="depot-stops">{d.transit.stops}</dd>
+            <dt>Buses</dt>
+            <dd>{d.transit.buses}</dd>
+            <dt>Round trip</dt>
+            <dd>{d.transit.loopMinutes ? `${d.transit.loopMinutes} min` : '—'}</dd>
+            <dt>Riders</dt>
+            <dd data-testid="depot-riders" class={d.transit.full ? 'neg' : ''}>
+              {d.transit.riders.toLocaleString('en-US')} trips/day{d.transit.full ? ' (buses full)' : ''}
+            </dd>
           </>
         )}
         <dt>Upkeep</dt>

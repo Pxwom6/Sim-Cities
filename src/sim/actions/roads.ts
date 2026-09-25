@@ -7,6 +7,7 @@ import { bulldozeCivic, civicRect } from '../world/civic';
 import type { Sim } from '../sim';
 import { UNDO_LIMIT } from '../undo';
 import { applyRoadPlan, planRoad } from '../world/roadPlanner';
+import { removeStop } from '../systems/transit';
 
 /** Refusal reason if a road type isn't available yet, else null. */
 function roadLocked(sim: Sim, road: RoadTypeId): string | null {
@@ -141,6 +142,7 @@ export function bulldoze(sim: Sim, target: BulldozeTarget, dryRun: boolean): Com
     return ok(-refund, { info });
   }
   if (target.kind === 'civic') return bulldozeCivic(sim, target.id, dryRun);
+  if (target.kind === 'stop') return removeStop(sim, target.id, dryRun);
   if (target.kind === 'building') {
     const b = sim.state.buildings.get(target.id);
     if (!b) return fail('Nothing to bulldoze');

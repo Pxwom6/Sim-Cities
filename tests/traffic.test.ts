@@ -5,7 +5,8 @@ import { TICKS_PER_HOUR, TICKS_PER_MONTH, ticksUntilHour } from '../src/sim/time
 import { segVC } from '../src/sim/systems/traffic';
 import { segSpeed } from '../src/sim/systems/vehicles';
 import { ROAD_TYPES } from '../src/data/roads';
-import { buildTown, newSim, serveTown } from './helpers';
+import { buildTown, newSim, placeAlong, road, serveTown } from './helpers';
+import { TRANSIT } from '../src/data/balance';
 import { twoDistricts } from './trafficTown';
 
 function avgCommute(sim: Sim): number {
@@ -169,12 +170,67 @@ describe('traffic', () => {
     expect(avgCommute(sim)).toBeLessThan(before * 0.6);
   });
 
+  it('a bus line takes cars off a jammed link and cuts commutes', () => {
+    const sim = newSim();
+    const t = twoDistricts(sim, 'dirt');
+    sim.advance(TICKS_PER_MONTH * 5);
+    const jam = segVC(sim, t.link, 1);
+    const before = avgCommute(sim);
+    expect(sim.lines().length).toBe(0);
+    expect(t.buses().length).toBeGreaterThanOrEqual(6);
+    sim.advance(TICKS_PER_MONTH * 2);
+    const lines = sim.lines();
+    expect(lines.length).toBe(1);
+    const riders = sim.state.transit.riders.get(lines[0]!.depot) ?? 0;
+    expect(riders).toBeGreaterThan(500);
+    expect(segVC(sim, t.link, 1)).toBeLessThan(jam * 0.85);
+    expect(avgCommute(sim)).toBeLessThan(before * 0.95);
+  });
+
+  it('bus stops snap to roads, cost money, can be undone, and follow their road', () => {
+    const sim = newSim();
+    buildTown(sim);
+    sim.dispatch({ type: 'cheat', cheat: 'unlockAll' });
+    const c = { x: 24, z: sim.state.net.nodes.get(sim.state.highway.connect)!.z };
+    expect(sim.dispatch({ type: 'placeStop', x: c.x + 150, z: c.z - 60 }).ok).toBe(false); // mid-block
+    const t0 = sim.state.treasury;
+    const r = sim.dispatch({ type: 'placeStop', x: c.x + 150, z: c.z + 6 });
+    if (!r.ok) throw new Error(r.reason);
+    const id = r.created![0]!;
+    expect(t0 - sim.state.treasury).toBe(TRANSIT.stopCost);
+    const stop = sim.state.transit.stops.get(id)!;
+    expect(sim.net.curve(stop.seg).project({ x: stop.x, z: stop.z }).d).toBeLessThan(0.5);
+    expect(sim.dispatch({ type: 'placeStop', x: c.x + 160, z: c.z + 6 }).ok).toBe(false); // too close
+    expect(sim.dispatch({ type: 'undo' }).ok).toBe(true);
+    expect(sim.state.transit.stops.has(id)).toBe(false);
+    expect(sim.state.treasury).toBe(t0);
+    // A stop on a road that gets split moves to the piece it stands on; bulldozed roads take it.
+    const r2 = sim.dispatch({ type: 'placeStop', x: c.x + 150, z: c.z + 6 });
+    if (!r2.ok) throw new Error(r2.reason);
+    const id2 = r2.created![0]!;
+    const segBefore = sim.state.transit.stops.get(id2)!.seg;
+    road(sim, [
+      { x: c.x + 170, z: c.z - 60 },
+      { x: c.x + 170, z: c.z + 60 },
+    ]);
+    const moved = sim.state.transit.stops.get(id2)!;
+    expect(sim.state.net.segments.has(moved.seg)).toBe(true);
+    expect(moved.seg === segBefore || !sim.state.net.segments.has(segBefore)).toBe(true);
+    expect(sim.dispatch({ type: 'bulldoze', target: { kind: 'segment', id: moved.seg } }).ok).toBe(true);
+    expect(sim.state.transit.stops.has(id2)).toBe(false);
+  });
+
   it('saves keep the traffic exactly', () => {
     const sim = Sim.create({ seed: 'citybloom', preset: 'river' });
     sim.testMode = true;
-    buildTown(sim);
+    const town = buildTown(sim);
     serveTown(sim);
+    placeAlong(sim, 'busdepot', town.avenue[town.avenue.length - 1]!);
+    const hz = sim.state.net.nodes.get(sim.state.highway.connect)!.z;
+    for (const x of [120, 300, 440]) sim.dispatch({ type: 'placeStop', x, z: hz + 6 });
+    expect(sim.state.transit.stops.size).toBe(3);
     sim.advance(TICKS_PER_MONTH + 331);
+    expect(sim.lines().length).toBe(1);
     const loaded = Sim.fromSave(JSON.parse(JSON.stringify(sim.save())));
     expect(loaded.hash()).toBe(sim.hash());
     sim.advance(TICKS_PER_HOUR * 7);

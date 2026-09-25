@@ -5,7 +5,10 @@ import type { Dept } from '../data/economy';
 
 export type ZoneArea = { kind: 'brush'; points: Vec2[]; radius: number } | { kind: 'segment'; id: number };
 export type BulldozeTarget =
-  { kind: 'segment'; id: number } | { kind: 'building'; id: number } | { kind: 'civic'; id: number };
+  | { kind: 'segment'; id: number }
+  | { kind: 'building'; id: number }
+  | { kind: 'civic'; id: number }
+  | { kind: 'stop'; id: number };
 
 /** Every player (and test, debug, replay) action is one of these. DESIGN.md §1.4. */
 export type Command =
@@ -14,6 +17,8 @@ export type Command =
   /** points = [a, c, b, c, b, ...] (anchors and quadratic control points) or [a, b] for a straight road. */
   | { type: 'buildRoad'; road: RoadTypeId; points: Vec2[] }
   | { type: 'bulldoze'; target: BulldozeTarget }
+  /** Place a bus stop beside the road nearest (x, z). */
+  | { type: 'placeStop'; x: number; z: number }
   /** Change a road segment to another type in place. */
   | { type: 'upgradeRoad'; seg: number; road: RoadTypeId }
   /** `stroke` groups several paint commands from one drag into a single undo step. */

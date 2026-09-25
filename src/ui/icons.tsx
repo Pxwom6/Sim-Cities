@@ -165,3 +165,11 @@ export const IconUpgrade = (p: P) => (
     <path d="M12 8v12" stroke-dasharray="2 2" />
   </svg>
 );
+export const IconBus = (p: P) => (
+  <svg {...base} {...p}>
+    <rect x="4" y="4" width="16" height="13" rx="2" />
+    <path d="M4 11h16M8 20v-3M16 20v-3" />
+    <circle cx="8" cy="14" r="0.6" fill="currentColor" />
+    <circle cx="16" cy="14" r="0.6" fill="currentColor" />
+  </svg>
+);

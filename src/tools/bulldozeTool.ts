@@ -28,9 +28,11 @@ export class BulldozeTool implements Tool {
 
   private pick(p: ToolPointer): BulldozeTarget | null {
     const hitB = this.game.renderer.pick(p.clientX, p.clientY);
-    if (hitB)
+    if (hitB && hitB.kind !== 'car')
       return hitB.kind === 'civic' ? { kind: 'civic', id: hitB.id } : { kind: 'building', id: hitB.id };
     if (!p.ground) return null;
+    const stop = this.game.world.stopAt(p.ground.x, p.ground.z, 8);
+    if (stop) return { kind: 'stop', id: stop.id };
     const net = this.game.world.net;
     const hit = net.nearestSegment(p.ground, 14);
     if (!hit || hit.d > net.halfWidth(hit.seg) + 1) return null;
@@ -41,6 +43,7 @@ export class BulldozeTool implements Tool {
     const money = refund > 0 ? ` · refund $${refund.toLocaleString('en-US')}` : '';
     if (t.kind === 'segment')
       return `Bulldoze road${money}${buildings ? ` · demolishes ${buildings} building${buildings > 1 ? 's' : ''}` : ''}`;
+    if (t.kind === 'stop') return `Remove bus stop${money}`;
     if (t.kind === 'civic')
       return `Bulldoze ${CIVIC.get(this.game.world.civics.get(t.id)?.def ?? '')?.name ?? 'building'}${money}`;
     return 'Bulldoze building';
@@ -60,6 +63,9 @@ export class BulldozeTool implements Tool {
       const c = this.game.world.civics.get(t.id);
       const d = c ? CIVIC.get(c.def) : undefined;
       g.showSelection(c && d ? { x: c.x, z: c.z, hw: d.w / 2, hd: d.d / 2, angle: c.angle } : null);
+    } else if (t?.kind === 'stop') {
+      const st = this.game.world.stops.get(t.id);
+      g.showSelection(st ? { x: st.x, z: st.z, hw: 4, hd: 4, angle: 0 } : null);
     } else g.showSelection(null);
   }
 

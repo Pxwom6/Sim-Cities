@@ -9,6 +9,8 @@ import type { Factor } from './systems/demand';
 import type { UtilityStats } from './systems/utilities';
 import type { OverlayMap } from './systems/overlays';
 import type { TripSample } from './systems/traffic';
+import type { BusStop } from './systems/transit';
+import type { Leg } from './systems/graph';
 import type { ServiceKind } from '../data/civic';
 
 export interface CityStats {
@@ -67,6 +69,8 @@ export interface CivicDetails {
     seats: number;
     used: number;
   } | null;
+  /** Bus depots: its line. */
+  transit: { stops: number; buses: number; loopMinutes: number; riders: number; full: boolean } | null;
   refund: number;
 }
 
@@ -199,6 +203,7 @@ export interface Snapshot {
   civics: CivicData[];
   vehicles: VehicleData[];
   traffic: TrafficData;
+  transit: TransitData;
 }
 
 export interface CivicData {
@@ -238,6 +243,7 @@ export interface FrameDiff {
   vehicles?: VehicleData[];
   events?: { kind: string; id: number }[];
   traffic?: TrafficData;
+  transit?: TransitData;
 }
 
 /** Traffic for the client: daily volumes per segment and sampled trips for visible vehicles. */
@@ -246,6 +252,12 @@ export interface TrafficData {
   trips: TripSample[];
   /** Capacity factor from road maintenance funding. */
   capScale: number;
+}
+
+/** Bus stops and lines for the client. */
+export interface TransitData {
+  stops: BusStop[];
+  lines: { depot: number; stops: number[]; legs: Leg[]; loopTime: number; buses: number; riders: number }[];
 }
 
 export interface WorkerPerf {

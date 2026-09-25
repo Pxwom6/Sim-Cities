@@ -6,6 +6,7 @@ import type { RoadMode } from '../tools/roadTool';
 import type { ToolId } from '../tools/manager';
 import { useGameUpdates } from './hooks';
 import { CIVIC_DEFS, type CivicCategory, type CivicDef } from '../data/civic';
+import { TRANSIT } from '../data/balance';
 import { MAPS } from '../client/overlay';
 import {
   IconBolt,
@@ -18,6 +19,7 @@ import {
   IconHealth,
   IconBook,
   IconTree,
+  IconBus,
   IconCurve,
   IconUpgrade,
   IconEraser,
@@ -256,18 +258,23 @@ export function Toolbar() {
           </label>
         </div>
       )}
-      {active === 'place' && (
+      {(active === 'place' || active === 'stop') && (
         <div class="subbar panel" data-testid="place-options">
-          {CIVIC_DEFS.filter((d) => d.category === tools.place.category).map((d) => {
+          {CIVIC_DEFS.filter(
+            (d) => d.category === (active === 'stop' ? 'transit' : tools.place.category),
+          ).map((d) => {
             const locked = pop < d.unlockPopulation && !game.world.stats.unlockAll;
             const out = d.output ? Object.entries(d.output).map(([k, v]) => `${v} ${k} units`) : [];
             return (
               <ToolButton
                 key={d.id}
                 id={`place-${d.id}`}
-                active={tools.place.def === d.id}
+                active={active === 'place' && tools.place.def === d.id}
                 disabled={locked}
-                onClick={() => tools.place.setDef(d.id)}
+                onClick={() => {
+                  tools.place.setDef(d.id);
+                  tools.use('place');
+                }}
                 tip={{
                   title: d.name,
                   lines: [
@@ -285,6 +292,23 @@ export function Toolbar() {
               </ToolButton>
             );
           })}
+          {(active === 'stop' || tools.place.category === 'transit') && (
+            <ToolButton
+              id="place-busstop"
+              active={active === 'stop'}
+              onClick={() => tools.use('stop')}
+              tip={{
+                title: 'Bus stop',
+                lines: [
+                  `$${TRANSIT.stopCost} each · $${TRANSIT.stopUpkeep}/month`,
+                  'Click beside a road. Homes and jobs within a few minutes’ walk can use it.',
+                  'Stops need a bus depot; its buses loop through every stop they can reach.',
+                ],
+              }}
+            >
+              <span class="tool-label">Bus stop</span>
+            </ToolButton>
+          )}
         </div>
       )}
       {mapsOpen && <MapsMenu onClose={() => setMapsOpen(false)} />}
@@ -341,14 +365,26 @@ export function Toolbar() {
               'Schools seat the children of nearby homes; libraries help too.',
             ],
             ['parks', IconTree, 'Parks and plazas', 'Lift moods and land value in the streets around them.'],
+            [
+              'transit',
+              IconBus,
+              'Buses',
+              'A depot runs buses round the stops you place. Riders leave their cars at home.',
+            ],
           ] as [CivicCategory, typeof IconBolt, string, string][]
         ).map(([cat, Icon, name, blurb]) => (
           <ToolButton
             key={cat}
             id={`tool-${cat}`}
-            active={active === 'place' && tools.place.category === cat}
+            active={
+              (active === 'place' && tools.place.category === cat) || (cat === 'transit' && active === 'stop')
+            }
             onClick={() => {
-              if (active === 'place' && tools.place.category === cat) tools.use('select');
+              if (
+                (active === 'place' && tools.place.category === cat) ||
+                (cat === 'transit' && active === 'stop')
+              )
+                tools.use('select');
               else {
                 const first = CIVIC_DEFS.find((d) => d.category === cat)!;
                 tools.place.setDef(first.id);

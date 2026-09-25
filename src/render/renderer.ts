@@ -26,6 +26,7 @@ import { GarbageProps } from './props';
 import { EffectsRenderer } from './effects';
 import { RoadTint } from './roadTint';
 import { TrafficRenderer } from './traffic';
+import { TransitRenderer } from './transit';
 
 export interface RenderStats {
   calls: number;
@@ -37,6 +38,7 @@ export interface RenderStats {
   vehicles: number;
   fires: number;
   cars: number;
+  buses: number;
 }
 
 /** Owns the Three.js scene. Reads ClientWorld; never mutates the simulation. */
@@ -59,6 +61,7 @@ export class GameRenderer {
   readonly garbage: GarbageProps;
   readonly effects: EffectsRenderer;
   readonly traffic: TrafficRenderer;
+  readonly transit: TransitRenderer;
   /** Route of the selected car. */
   readonly routeTint: RoadTint;
   /** Road ribbons for the service coverage data maps. */
@@ -77,6 +80,7 @@ export class GameRenderer {
     vehicles: 0,
     fires: 0,
     cars: 0,
+    buses: 0,
   };
 
   constructor(
@@ -117,6 +121,8 @@ export class GameRenderer {
     this.scene.add(this.coverageMap.group);
     this.traffic = new TrafficRenderer(world, (seg, s, x, z) => world.roadHeight(seg, s, x, z));
     this.scene.add(this.traffic.group);
+    this.transit = new TransitRenderer(world, (seg, s, x, z) => world.roadHeight(seg, s, x, z));
+    this.scene.add(this.transit.group);
     this.routeTint = new RoadTint((x, z) => world.heightAt(x, z), 'sequential', 0.7);
     this.scene.add(this.routeTint.group);
     this.ghost = new GhostRenderer((x, z) => world.heightAt(x, z));
@@ -242,6 +248,7 @@ export class GameRenderer {
     this.buildings.update(l.night);
     this.vehicles.update(this.world.displayTick);
     this.traffic.update(this.world.displayTick);
+    this.transit.update(this.world.displayTick);
     this.icons.update(this.time, this.buildings.heights);
     this.garbage.update();
     const bufH = this.renderer.getDrawingBufferSize(this.tmpSize).y;
@@ -273,6 +280,7 @@ export class GameRenderer {
       vehicles: this.vehicles.positions.size,
       fires: this.effects.fires,
       cars: this.traffic.count,
+      buses: this.transit.busCount,
     };
   }
 }
