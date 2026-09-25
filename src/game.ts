@@ -12,11 +12,9 @@ import { OverlayController } from './client/overlay';
 import { StreetNames } from './client/names';
 import { StreetLabels } from './client/labels';
 import type { ToolHint } from './tools/tool';
-
-/** Minimal audio interface (procedural audio arrives in M8). */
-export interface AudioSink {
-  play(name: 'build' | 'zone' | 'bulldoze' | 'error' | 'click' | 'alert' | 'siren'): void;
-}
+import type { AudioEngine } from './audio/engine';
+import { ambientScene } from './audio/scene';
+import { loadSettings, saveSettings, type Settings } from './client/settings';
 
 type Listener = () => void;
 
@@ -55,7 +53,10 @@ export class Game {
   notifications: Notice[] = [];
   private noticeId = 1;
   private toastId = 1;
-  audio: AudioSink | null = null;
+  audio: AudioEngine | null = null;
+  /** Player settings (volumes now; graphics and controls with the game shell). */
+  settings: Settings = loadSettings();
+  private ambientAt = 0;
   readonly tools: ToolManager;
   readonly overlay: OverlayController;
   private listeners = new Set<Listener>();
@@ -181,7 +182,7 @@ export class Game {
     if (toast && now - (this.lastAlert.get(kind) ?? -1e9) >= 20_000) {
       this.lastAlert.set(kind, now);
       this.toast(text, tone, 5000, at);
-      if (tone === 'bad') this.audio?.play('alert');
+      this.audio?.play(tone === 'bad' ? 'alert' : tone === 'ok' ? 'good' : 'click');
     }
     this.notify();
   }
@@ -224,6 +225,13 @@ export class Game {
       if (!this.lastAdviceKeys.has(key)) this.notice(key, `${a.title}. ${a.text}`, 'bad', a.at);
     }
     this.lastAdviceKeys = keys;
+  }
+
+  updateSettings(patch: Partial<Settings>): void {
+    this.settings = { ...this.settings, ...patch };
+    saveSettings(this.settings);
+    this.audio?.apply(this.settings);
+    this.notify();
   }
 
   setHint(h: ToolHint | null): void {
@@ -291,6 +299,10 @@ export class Game {
     }
     this.renderer.frame(dt);
     this.labels.update();
+    if (this.audio && now - this.ambientAt > 250) {
+      this.ambientAt = now;
+      this.audio.update(ambientScene(w, this.renderer, this.speed === 0));
+    }
     this.frameMs = this.frameMs * 0.9 + (performance.now() - t0) * 0.1;
   }
 }

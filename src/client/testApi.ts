@@ -6,6 +6,8 @@ import type { Command, CommandResult } from '../sim/commands';
 import type { CameraPose, CameraPresetName } from '../render/camera';
 import type { RenderStats } from '../render/renderer';
 import type { CityStats } from '../sim/protocol';
+import { renderSounds, type SoundCheck } from '../audio/check';
+import type { AmbientMix } from '../audio/mix';
 
 export interface TestApi {
   ready: boolean;
@@ -55,6 +57,14 @@ export interface TestApi {
   /** Resolves after n rendered frames (lets screenshots settle). */
   waitFrames(n: number): Promise<void>;
   errors: string[];
+  /** Render every sound effect and the ambient bed offline, and measure them. */
+  renderSounds(): Promise<SoundCheck[]>;
+  /** Live audio state: context running, effects played, ambient mix and scheduled events. */
+  getAudio(): {
+    running: boolean;
+    played: Record<string, number>;
+    ambient: { mix: AmbientMix; events: Record<string, number> } | null;
+  };
 }
 
 declare global {
@@ -159,6 +169,12 @@ export function installTestApi(game: Game): TestApi {
         requestAnimationFrame(step);
       }),
     errors: [],
+    renderSounds,
+    getAudio: () => ({
+      running: game.audio?.running ?? false,
+      played: { ...game.audio?.played },
+      ambient: game.audio?.ambient ?? null,
+    }),
   };
   window.__game = api;
   return api;

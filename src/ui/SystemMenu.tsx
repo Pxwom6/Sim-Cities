@@ -1,6 +1,51 @@
 import { useRef, useState } from 'preact/hooks';
 import { exportSave, importSaveFile, writeSlot } from '../client/saves';
 import { useGame } from './hooks';
+import type { Settings } from '../client/settings';
+
+const VOLUMES: [keyof Settings, string][] = [
+  ['masterVolume', 'Master'],
+  ['effectsVolume', 'Effects'],
+  ['ambientVolume', 'Ambience'],
+];
+
+/** Volume sliders and mute (the full settings screen arrives with the game shell in M11). */
+function SoundSettings() {
+  const game = useGame();
+  const s = game.settings;
+  return (
+    <div class="menu-sound" data-testid="sound-settings">
+      <div class="menu-heading">Sound</div>
+      {VOLUMES.map(([key, name]) => (
+        <label key={key} class="volume-row">
+          <span>{name}</span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={1}
+            value={Math.round((s[key] as number) * 100)}
+            disabled={s.muted}
+            data-testid={`vol-${key}`}
+            onInput={(e) =>
+              game.updateSettings({ [key]: Number((e.target as HTMLInputElement).value) / 100 })
+            }
+          />
+          <span class="val">{Math.round((s[key] as number) * 100)}</span>
+        </label>
+      ))}
+      <label class="volume-mute">
+        <input
+          type="checkbox"
+          checked={s.muted}
+          data-testid="mute"
+          onChange={(e) => game.updateSettings({ muted: (e.target as HTMLInputElement).checked })}
+        />
+        Mute all sound
+      </label>
+    </div>
+  );
+}
 
 /** Save / load / export / import (a fuller slots screen arrives with the game shell in M11). */
 export function SystemMenu() {
@@ -62,6 +107,7 @@ export function SystemMenu() {
               }
             }}
           />
+          <SoundSettings />
         </div>
       )}
     </div>

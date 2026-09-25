@@ -156,7 +156,7 @@ export class PlaceTool implements Tool {
     if (!cmd) return;
     void this.game.dispatch(cmd).then((r) => {
       if (r.ok) {
-        this.game.audio?.play('build');
+        this.game.audio?.play('place');
         this.game.toast(`${CIVIC.get(this.def)!.name} built`, 'ok', 2000);
       } else {
         this.game.audio?.play('error');

@@ -54,11 +54,11 @@ export class StreetLightRenderer {
         void main() {
           float d = length(vUv - 0.5) * 2.0;
           float a = smoothstep(1.0, 0.0, d);
-          a = a * a * uNight * 0.9;
+          a = a * a * uNight * 0.75;
           gl_FragColor = vec4(vec3(1.0, 0.78, 0.45) * a, a);
         }`,
     });
-    const pool = new PlaneGeometry(20, 20).rotateX(-Math.PI / 2);
+    const pool = new PlaneGeometry(22, 22).rotateX(-Math.PI / 2);
     this.pools = new InstancedMesh(pool, this.poolMat, MAX);
     this.pools.renderOrder = 3;
     for (const m of [this.posts, this.heads, this.pools]) {
@@ -98,7 +98,8 @@ export class StreetLightRenderer {
         m.compose(p, q, s);
         this.posts.setMatrixAt(n, m);
         this.heads.setMatrixAt(n, m);
-        p.set(pt.x + nx * (half - 3), y + 0.08, pt.z + nz * (half - 3));
+        // Above the asphalt (0.2 m) and sidewalk (0.34 m) lifts.
+        p.set(pt.x + nx * (half - 3), y + 0.42, pt.z + nz * (half - 3));
         m.compose(p, new Quaternion(), s);
         this.pools.setMatrixAt(n, m);
         n++;

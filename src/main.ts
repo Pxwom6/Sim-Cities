@@ -9,6 +9,7 @@ import { Game } from './game';
 import { App } from './ui/App';
 import type { MapPreset } from './data/world';
 import { readSlot } from './client/saves';
+import { AudioEngine } from './audio/engine';
 
 async function boot(): Promise<void> {
   document.title = GAME_TITLE;
@@ -29,6 +30,7 @@ async function boot(): Promise<void> {
   const canvas = document.getElementById('scene') as HTMLCanvasElement;
   const renderer = new GameRenderer(canvas, world);
   const game = new Game(client, world, renderer);
+  game.audio = new AudioEngine(game.settings);
   const paused = params.get('paused') === '1';
   game.setSpeed(paused ? 0 : 1);
   game.setCamera('overview', true);
