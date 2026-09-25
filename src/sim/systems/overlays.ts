@@ -2,6 +2,7 @@ import { GRID_CELL, GRID_RES } from '../../data/world';
 import type { Sim } from '../sim';
 import { BState, footprint } from '../world/buildings';
 import { civicOutput } from './utilities';
+import { coverageOnSegment } from './services';
 
 /** Data maps (DESIGN §4): values in [0, 1] per raster cell, −1 where there is nothing to show. */
 export type OverlayMap =
@@ -132,23 +133,17 @@ export function computeOverlay(sim: Sim, map: OverlayMap): OverlayResult {
     case 'park': {
       const cov = sim.coverage;
       // Coverage follows the roads: stamp each road cell with its interpolated coverage.
-      if (cov) {
-        for (const seg of s.net.segments.values()) {
-          if (seg.type === 'highway') continue;
-          const ia = cov.graph.index.get(seg.a);
-          const ib = cov.graph.index.get(seg.b);
-          const ca = ia !== undefined ? cov.kinds[map][ia]! : 0;
-          const cb = ib !== undefined ? cov.kinds[map][ib]! : 0;
-          const c = sim.net.curve(seg.id);
-          for (let d = 0; d <= c.length; d += 6) {
-            const p = c.pointAt(d);
-            const i = Math.floor(p.x / GRID_CELL);
-            const j = Math.floor(p.z / GRID_CELL);
-            if (i < 0 || j < 0 || i >= GRID_RES || j >= GRID_RES) continue;
-            const v = ca + (cb - ca) * (d / c.length);
-            const k = j * GRID_RES + i;
-            values[k] = Math.max(values[k]!, v);
-          }
+      for (const seg of s.net.segments.values()) {
+        if (seg.type === 'highway') continue;
+        const c = sim.net.curve(seg.id);
+        for (let d = 0; d <= c.length; d += 6) {
+          const p = c.pointAt(d);
+          const i = Math.floor(p.x / GRID_CELL);
+          const j = Math.floor(p.z / GRID_CELL);
+          if (i < 0 || j < 0 || i >= GRID_RES || j >= GRID_RES) continue;
+          const v = coverageOnSegment(cov, map, seg.id, d, c.length);
+          const k = j * GRID_RES + i;
+          values[k] = Math.max(values[k]!, v);
         }
       }
       const key = {

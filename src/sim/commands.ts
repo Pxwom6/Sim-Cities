@@ -23,7 +23,9 @@ export type Command =
   | { type: 'repayLoan'; id: number }
   /** Place a civic building: centre, road tangent angle and which side of the road it stands on. */
   | { type: 'placeBuilding'; def: string; x: number; z: number; angle: number; side: 1 | -1 }
-  | { type: 'cheat'; cheat: 'unlockAll' };
+  | { type: 'cheat'; cheat: 'unlockAll' }
+  /** Start a fire in a building (debug panel, tests; the M9 disasters menu builds on it). */
+  | { type: 'cheat'; cheat: 'ignite'; id: number };
 
 export type CommandType = Command['type'];
 

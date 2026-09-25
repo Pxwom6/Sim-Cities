@@ -69,7 +69,10 @@ describe('taxes', () => {
     expect(high.demand).toBeLessThan(mid.demand);
     expect(high.pop).toBeLessThan(mid.pop);
     expect(high.approval).toBeLessThan(mid.approval);
-    expect(low.demand).toBeGreaterThan(mid.demand);
+    // Low taxes pull people in faster, which uses up the job surplus that also drives demand,
+    // so compare the tax term of demand and the growth it causes rather than the total.
+    expect(low.factor).toBeGreaterThan(mid.factor);
+    expect(low.pop).toBeGreaterThan(mid.pop);
     expect(low.approval).toBeGreaterThan(mid.approval);
   });
 

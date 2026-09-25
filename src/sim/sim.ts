@@ -53,8 +53,14 @@ import { civicOutput, emptyUtilityStats, updateUtilities, utilityConsequences } 
 import { dispatchGarbage, garbageHour } from './systems/garbage';
 import { segSpeed, stepVehicles } from './systems/vehicles';
 import { computeOverlay } from './systems/overlays';
-import { coverageNear, coveragePreview, updateCoverage, type NodeCoverage } from './systems/services';
-import { incidentsHour, incidentsTick } from './systems/incidents';
+import {
+  applyCoverage,
+  computeCoverage,
+  coverageNear,
+  coveragePreview,
+  type Coverage,
+} from './systems/services';
+import { ignite, incidentsHour, incidentsTick } from './systems/incidents';
 import { decayCrime, splatField } from './systems/pollution';
 import type { ServiceKind } from '../data/civic';
 import { GARBAGE, UTILITIES, VEHICLE_SPEED_SCALE } from '../data/civic';
@@ -254,11 +260,15 @@ export class Sim {
     for (let k = 0; k < this.state.crime.length; k++) if (this.state.crime[k]! > 1) this.state.crime[k] = 1;
   }
 
-  /** Latest per-node service coverage (null until the first hourly update). */
-  coverage: NodeCoverage | null = null;
+  private coverageCache: Coverage | null = null;
+
+  /** Per-node service coverage; cached, and dropped whenever roads, services or funding change. */
+  get coverage(): Coverage {
+    if (!this.coverageCache) this.coverageCache = computeCoverage(this);
+    return this.coverageCache;
+  }
 
   serviceCoverageNear(x: number, z: number, kind: ServiceKind): number {
-    if (!this.coverage) this.coverage = updateCoverage(this);
     return coverageNear(this, this.coverage, x, z, kind);
   }
 
@@ -311,6 +321,7 @@ export class Sim {
 
   markNetworkChanged(): void {
     this.graphCache = null;
+    this.coverageCache = null;
     this.blockOrderCache = null;
     // Civic buildings re-attach to whatever road now runs past their front.
     for (const c of this.state.civics.values()) {
@@ -339,6 +350,7 @@ export class Sim {
 
   addCivic(c: Civic): void {
     this.state.civics.set(c.id, c);
+    this.coverageCache = null;
     this.indexCivic(c);
     this.dirtyCivics.add(c.id);
     const r = civicRect(c);
@@ -352,6 +364,7 @@ export class Sim {
     if (!c) return;
     for (const v of [...this.state.vehicles.values()]) if (v.home === id) this.state.vehicles.delete(v.id);
     this.state.civics.delete(id);
+    this.coverageCache = null;
     this.civHash.remove(id);
     this.dirtyCivics.delete(id);
     this.removedCivics.add(id);
@@ -425,6 +438,14 @@ export class Sim {
       case 'cheat': {
         if (cmd.cheat === 'unlockAll') {
           if (!dryRun) this.state.unlockAll = true;
+          return ok(0);
+        }
+        if (cmd.cheat === 'ignite') {
+          const b = this.state.buildings.get(cmd.id);
+          if (!b || (b.state !== BState.Active && b.state !== BState.Abandoned))
+            return fail('Nothing to burn');
+          if (b.fire > 0) return fail('Already on fire');
+          if (!dryRun) ignite(this, b);
           return ok(0);
         }
         if (!Number.isFinite(cmd.amount)) return fail('Invalid amount');
@@ -504,7 +525,7 @@ export class Sim {
     if (t % TICKS_PER_HOUR === 0) {
       updateUtilities(this);
       utilityConsequences(this);
-      this.coverage = updateCoverage(this);
+      applyCoverage(this, this.coverage);
       this.refreshFlags();
       garbageHour(this);
       dispatchGarbage(this);
