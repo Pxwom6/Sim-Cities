@@ -48,7 +48,9 @@ export const MAPS: { id: OverlayMap; name: string; group: string }[] = [
   { id: 'landValue', name: 'Land value', group: 'City' },
   { id: 'wealth', name: 'Wealth', group: 'City' },
   { id: 'crime', name: 'Crime', group: 'City' },
+  { id: 'airPollution', name: 'Air pollution', group: 'Environment' },
   { id: 'groundPollution', name: 'Ground pollution', group: 'Environment' },
+  { id: 'eduLevel', name: 'Education level', group: 'City' },
   { id: 'groundwater', name: 'Groundwater', group: 'Resources' },
   { id: 'resources', name: 'Ore and oil', group: 'Resources' },
 ];

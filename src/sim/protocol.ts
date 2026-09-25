@@ -118,7 +118,10 @@ export interface BuildingData {
   state: number;
   progress: number;
   variant: number;
-  /** Bit flags: 1 no highway link, 2 no power, 4 no water, 8 no sewage, 16 garbage, 32 closed, 64 polluted water, 128 on fire. */
+  /**
+   * Bit flags: 1 no highway link, 2 no power, 4 no water, 8 no sewage, 16 garbage, 32 closed,
+   * 64 polluted water, 128 on fire, 256 sick without care, 512 smog.
+   */
   flags: number;
   /** Fire intensity 0..1 (tenths). */
   fire: number;

@@ -441,18 +441,27 @@ area redevelop to the higher wealth (gentrification); decline lowers it.
 
 ### 3.11 Environment, health and education
 
-- **Air pollution** raster, every 3 h: add sources (industry by tier, power plants, incinerators,
-  traffic `volume·k` along segments) → semi-Lagrangian advection by the wind (prevailing direction
-  from the seed, slowly wobbling) → diffusion (k = 0.15) → decay ×0.9 → absorption by trees and parks.
-- **Ground pollution**: industry, landfill, sewage outflow, unserved sewage; slow spread; decays ×0.995.
-- **Sickness**: per hour `newSick = residents · (0.0005 + 0.004·air + 0.003·ground + 0.004·[polluted
-  water] + 0.002·[garbage])`. Clinics/hospitals treat sick residents in their coverage up to bed
-  capacity (nearest-first). Untreated sick for > 24 h: some leave or die (population loss), and the
-  happiness penalty applies. Emergencies (a share of new cases) dispatch ambulances.
-- **Education**: students = 20 % of residents. Seats allocated nearest-first. Each month
-  `edu += 0.08·primaryCov (to 1) + 0.06·highCov (to 2) + 0.04·uniCov (to 3) + library`, with newcomers
-  arriving at edu 0.5. Workforce education decides which industry tiers can grow: tier 1 needs
-  ≥ 40 % of workers at edu ≥ 1, tier 2 (high-tech, clean) ≥ 30 % at edu ≥ 2 and medium LV.
+- **Wind**: a prevailing direction from the map seed, wobbling ±20° over five months
+  (`windAngle(seed, tick)`, a pure function, so nothing is saved).
+- **Air pollution** raster (16 m), every 3 h: sources (industry by tier `[0.03, 0.01, 0.0015]` per lot
+  cell × occupancy, plants and incinerators `1.1 × airPollution`, traffic `3e-7 × PCU` per metre of
+  road) → move the field 2.5 cells downwind (semi-Lagrangian, bilinear) → diffuse (0.22) → decay ×0.95 →
+  trees absorb up to 30 % per update, parks up to 50 % within their grounds. The plume from a coal
+  plant is ~0.3 at the stacks, ~0.1 some 150 m downwind.
+- **Ground pollution**: industry, landfill, sewage outflow, unserved sewage; slow spread; decays ×0.994.
+- **Sickness**, hourly per home: `new = healthy · (0.0004 + 0.015·air + 0.003·ground + 0.004·polluted
+  water + 0.002·garbage)`. Clinic and hospital beds (funding-scaled capacity) go to the nearest sick
+  first by road; recovery is 25 %/h in a bed and 5 %/h without; 0.4 %/h of the untreated sick die.
+  Moods: `−1.5 × untreated share` and `−0.2 × air × sensitivity[wealth]`; 15 % of pollution-driven
+  cases need an ambulance.
+- **Education**: pupils are 10 % / 6 % / 4 % of residents at primary / high school / university; each
+  school fills its level's seats nearest-first (libraries count as primary seats). A home's average
+  education moves 0.4 %/h towards `0.3 + 0.7·primary + highSchool + university` (seated shares);
+  newcomers arrive at 0.5. Shares educated to ≥ 1 and ≥ 2 come from the average
+  (`(e − 0.3)/0.7` and `e − 1`, clamped). The workforce (by employed residents) sets which industry
+  tier grows or retools (2 %/h per building): manufacturing with ≥ 40 % at level 1, high-tech with
+  ≥ 30 % at level 2 and land value ≥ 0.4; offices (high-wealth commerce) need ≥ 20 % at level 2.
+- Air pollution lowers land value (`−0.3 × air`). Problem icons show untreated sickness and smog.
 
 ### 3.12 Disasters (M9)
 

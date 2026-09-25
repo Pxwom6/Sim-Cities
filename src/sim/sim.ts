@@ -58,7 +58,7 @@ import {
 } from './systems/transit';
 import { congestedEdgeCosts, congestedSeconds, hourShare, segVC, type TripSample } from './systems/traffic';
 import { GROWTH, HAPPINESS, TRANSIT } from '../data/balance';
-import { ZONE_R } from '../data/zones';
+import { ZONE_I, ZONE_R } from '../data/zones';
 import { TICKS_PER_HOUR, dateOf, isMonthStart } from './time';
 import { bulldozeCivic, civicDef, civicRect, findAccess, placeCivic, type Civic } from './world/civic';
 import { civicOutput, emptyUtilityStats, updateUtilities, utilityConsequences } from './systems/utilities';
@@ -847,6 +847,8 @@ export class Sim {
       if (b.garbage >= GARBAGE.visible) f |= 16;
       if (b.closed) f |= 32;
       if (b.polluted > 0.2) f |= 64;
+      if (b.zone === ZONE_R && b.pop > 0 && (b.sick * (1 - b.treated)) / b.pop > 0.04) f |= 256;
+      if (b.zone !== ZONE_I && fieldAt(this.state.airPollution, b.x, b.z) > 0.35) f |= 512;
     }
     if (b.fire > 0) f |= 128;
     return f;
@@ -1100,7 +1102,7 @@ export class Sim {
       vehicles: svc.vehicles ? Math.max(0, Math.round(svc.vehicles * eff)) : 0,
       out: [...this.state.vehicles.values()].filter((v) => v.home === c.id).length,
       reach,
-      seats: svc.capacity && svc.kind === 'education' ? Math.round(svc.capacity * eff) : 0,
+      seats: svc.capacity ? Math.round(svc.capacity * eff) : 0,
       used: this.schoolUse.get(c.id) ?? 0,
     };
   }

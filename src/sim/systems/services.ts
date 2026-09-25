@@ -172,7 +172,7 @@ export function applyCoverage(sim: Sim, cov: Coverage): void {
     const [need, have] =
       svc.kind === 'health' ? [sick, beds] : [want[(svc.level ?? 1) - 1]!, got[(svc.level ?? 1) - 1]!];
     const used = fill(sim, g, c, svc.range, total, byNode, need, have);
-    if (svc.kind === 'education') sim.schoolUse.set(c.id, Math.round(used));
+    sim.schoolUse.set(c.id, Math.round(used));
   }
   for (const b of sim.state.buildings.values()) {
     const acc = b.state !== BState.Rubble ? sim.buildingAccess(b) : null;

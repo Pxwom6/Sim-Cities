@@ -90,3 +90,13 @@ One line each: what was decided and why. Newest at the bottom of each section.
 - Bridges need at least a street, span at most 360 m and need ~68 m of dry land at each end for ramps; roads can't meet on a bridge.
 - Buses follow SimCity 2013: a depot plus stops, no hand-drawn lines. Each depot runs one loop through the stops it reaches first, visiting them nearest-first. Commuters choose by door-to-door time with a 300 s car-hassle allowance; shopping trips stay by car.
 - Road unlocks (boulevards at 20k) are now enforced by the sim as well as the UI.
+
+## M7
+- The wind is a pure function of the seed and the tick (a prevailing direction with a seasonal wobble), so it needs no saved state and the renderer's smoke drifts the same way as the sim's pollution.
+- Sickness is aggregated per home as a fractional count (no individual residents); deaths come off the population as whole residents, the fraction by chance.
+- Hospital and clinic "beds" use the M5 capacity field; beds go to the nearest sick first, like school seats.
+- Education is an average level per home rather than per-resident degrees; the shares at each level are read off the average. This keeps saves small and still lets schooling visibly move industry up the tiers.
+- Industry retools to the tier the workforce supports without needing the usual upgrade conditions (2 % chance per building per hour): tiers track education, not mood.
+- Trees and parks absorb air pollution; there's no tree-planting tool (SimCity 2013 had none either) — parks are the player's lever.
+- Unprotected fires spread much less than in M5 (spread chance 0.06 → 0.02 per 30 ticks, collapse after 450 ticks instead of 700): the e2e screenshots showed whole streets burning in towns without a fire station.
+- The air pollution map shows values ×2.5 so that the thin but harmful downwind plume (0.05–0.2) is visible.

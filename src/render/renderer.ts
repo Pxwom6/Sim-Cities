@@ -10,6 +10,7 @@ import {
 } from 'three';
 import type { ClientWorld } from '../client/world';
 import { hourOfDay } from '../sim/time';
+import { windAngle } from '../sim/systems/pollution';
 import { CameraController } from './camera';
 import { Lighting } from './lighting';
 import { TerrainRenderer } from './terrain';
@@ -39,6 +40,7 @@ export interface RenderStats {
   fires: number;
   cars: number;
   buses: number;
+  smoke: number;
 }
 
 /** Owns the Three.js scene. Reads ClientWorld; never mutates the simulation. */
@@ -81,6 +83,7 @@ export class GameRenderer {
     fires: 0,
     cars: 0,
     buses: 0,
+    smoke: 0,
   };
 
   constructor(
@@ -115,7 +118,7 @@ export class GameRenderer {
     this.scene.add(this.icons.points);
     this.garbage = new GarbageProps(world);
     this.scene.add(this.garbage.mesh);
-    this.effects = new EffectsRenderer(world, this.vehicles, this.buildings.heights);
+    this.effects = new EffectsRenderer(world, this.vehicles, this.buildings.heights, this.civics.heights);
     this.scene.add(this.effects.group);
     this.coverageMap = new RoadTint((x, z) => world.heightAt(x, z), 'diverging', 0.85);
     this.scene.add(this.coverageMap.group);
@@ -252,7 +255,11 @@ export class GameRenderer {
     this.icons.update(this.time, this.buildings.heights);
     this.garbage.update();
     const bufH = this.renderer.getDrawingBufferSize(this.tmpSize).y;
-    this.effects.update(this.time, bufH / (2 * Math.tan((this.camera.fov * Math.PI) / 360)));
+    this.effects.update(
+      this.time,
+      bufH / (2 * Math.tan((this.camera.fov * Math.PI) / 360)),
+      windAngle(this.world.options.seed, this.world.displayTick),
+    );
     // Trees under new buildings: rebuilt at most twice a second.
     if (this.treePoints.length && this.time - this.treeRebuildAt > 0.5) {
       this.treeRebuildAt = this.time;
@@ -281,6 +288,7 @@ export class GameRenderer {
       fires: this.effects.fires,
       cars: this.traffic.count,
       buses: this.transit.busCount,
+      smoke: this.effects.smokeParticles,
     };
   }
 }

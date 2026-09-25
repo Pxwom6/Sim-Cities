@@ -7,7 +7,7 @@
 - [x] M4 Utilities
 - [x] M5 Services and happiness
 - [x] M6 Traffic and transport
-- [ ] M7 Environment, health and education
+- [x] M7 Environment, health and education
 - [ ] M8 Life and feedback
 - [ ] M9 Disasters
 - [ ] M10 Progression and specialisations
@@ -15,14 +15,15 @@
 - [ ] M12 Balance, performance and polish
 
 ## In progress
-M7 Environment, health and education (not started).
+M8 Life and feedback (not started).
 
 ## Next tasks
-1. Air pollution raster with a prevailing wind (industry, power plants, traffic volumes as sources; trees and parks absorb); ground pollution already exists (M4).
-2. Health: sickness per building from air/ground pollution and polluted water; clinics/hospitals treat within bed capacity (the M5 `capacity` on health defs); untreated sickness lowers happiness and population; a health data map.
-3. Education levels per building (from school seats over time); educated workforce lets industry tiers rise (manufacturing, high-tech); university/library effects.
-4. Trees and parks: absorb air pollution, raise land value (partly there); planting trees tool? (decide).
-5. Scenario tests: a polluting district measurably harms health downwind (not upwind), and cleaner choices (wind/solar, parks, moving industry) measurably help; e2e + screenshots (air pollution map, sickness icons).
+1. Advisors (finance, utilities, safety, health, education, transport, environment): each reads the sim's stats and names the worst problem with a concrete suggestion; notification feed with rate limits.
+2. Resident thoughts feed ("Third day without water. We're moving out.") generated from real building states, clickable to the building.
+3. Full set of data maps with legends (check SPEC list: power, water, sewage, garbage, fire, police, health, education, crime, air, ground, land value, wealth, happiness, traffic, resources — mostly done) + natural resources map polish.
+4. Street names (procedural, original), shown on hover/inspector and as labels at close zoom.
+5. Day/night: street lights, lit windows (partly there), headlights; construction animation polish; procedural audio (Web Audio): UI clicks, build/zone/bulldoze, alerts, sirens, ambient bed by zoom; a building-variety pass.
+6. e2e + screenshots (night city, advisors panel); a new player can find what's wrong from advisors and data maps alone.
 
 ## Known issues
 - A town without utilities drops to ~0 % approval quickly; balance the early-game grace in M12 (e.g. softer penalties for the first days).
@@ -31,13 +32,14 @@ M7 Environment, health and education (not started).
 - Homes without power or water are abandoned after about two days, even in a brand-new town; M12 should consider a grace period for buildings that never had power.
 - Visible cars don't queue or yield at junctions; they overlap when paths cross. Speeds do follow congestion.
 - Bus riders' door-to-door time includes walking and waiting, so a bus line mainly helps by taking cars off jammed roads (≈10–20 % less traffic in the test town), not by being faster than driving.
+- Towns without services still lose many residents over time (approval ≈ 50 %); fire outbreaks are now contained but crime and unanswered emergencies pile up. Part of the M12 balance pass.
 - Commercial demand runs slightly negative in small towns (0.12 shop jobs per resident); revisit in balance.
 - Night lighting is serviceable but plain until M8 (lit windows, street lights).
 - Tree count is high in forests (~25k in-map); LOD switches to low-poly beyond 750 m.
 
-## Performance (M6)
-- `npx tsx scripts/bench.ts 12 9`: peaks at 15k residents / 608 buildings; sim tick avg 0.18–0.32 ms, p99 ≤ 12.6 ms, worst ~37 ms (hourly systems + the 2-hourly matcher with traffic assignment). A full year runs in 4.2 s.
-- Served test town with traffic and buses: ~175 draw calls, ~0.8M triangles on SwiftShader (trees dominate); up to 360 cars + buses as instanced meshes (4 car models + buses = 5 draw calls).
+## Performance (M7)
+- `npx tsx scripts/bench.ts 12 9`: tick avg ~0.2–0.3 ms, worst ~40 ms (3-hourly air pollution + land value + hourly systems). Air pollution update ≈ 3 ms at 128² cells.
+- Served town: ~180 draw calls (smoke/flames/sirens are 4 point systems), ~0.8M triangles on SwiftShader.
 
 ## To check on the Mac
 - Frame rate while panning the overview and street presets (expect 60 fps).

@@ -22,7 +22,9 @@ export type OverlayMap =
   | 'crime'
   | 'happiness'
   | 'wealth'
-  | 'traffic';
+  | 'traffic'
+  | 'airPollution'
+  | 'eduLevel';
 
 export interface OverlayResult {
   map: OverlayMap;
@@ -124,6 +126,15 @@ export function computeOverlay(sim: Sim, map: OverlayMap): OverlayResult {
       for (let k = 0; k < n; k++)
         values[k] = s.groundPollution[k]! > 0.01 ? Math.min(1, s.groundPollution[k]!) : -1;
       return { map, values, ramp: 'sequential', legend: ['Clean', 'Polluted'] };
+    case 'airPollution':
+      for (let k = 0; k < n; k++)
+        values[k] = s.airPollution[k]! > 0.01 ? Math.min(1, s.airPollution[k]! * 2.5) : -1;
+      return { map, values, ramp: 'sequential', legend: ['Clean air', 'Smog'] };
+    case 'eduLevel':
+      stampBuildings(sim, values, (b) =>
+        b.state === BState.Active && b.zone === 1 ? Math.min(1, b.edu / 2) : null,
+      );
+      return { map, values, ramp: 'sequential', legend: ['Little schooling', 'High school and up'] };
     case 'landValue':
       for (let k = 0; k < n; k++) values[k] = s.landValue[k]!;
       return { map, values, ramp: 'sequential', legend: ['Low', 'High'] };

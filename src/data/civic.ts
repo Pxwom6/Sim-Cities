@@ -449,11 +449,11 @@ export const SERVICES = {
   fireCoverageCut: 0.75,
   /** Intensity growth per tick and ticks at full intensity before collapse. */
   fireGrowth: 0.004,
-  fireDestroyTicks: 700,
+  fireDestroyTicks: 450,
   /** Every `fireSpreadEvery` ticks a strong fire may jump to buildings within `fireSpreadRange` m. */
   fireSpreadEvery: 30,
   fireSpreadRange: 14,
-  fireSpreadChance: 0.06,
+  fireSpreadChance: 0.02,
   /** Intensity removed per tick by one engine on site (× funding). */
   extinguishRate: 0.012,
   /** Crimes per building per hour at the base rate. */

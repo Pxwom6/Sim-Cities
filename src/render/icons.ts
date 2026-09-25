@@ -10,16 +10,39 @@ import {
 import type { ClientWorld } from '../client/world';
 
 /** Icon atlas order (index = cell). */
-export const ICONS = ['road', 'power', 'water', 'closed', 'sewage', 'garbage', 'polluted', 'fire'] as const;
+export const ICONS = [
+  'road',
+  'power',
+  'water',
+  'closed',
+  'sewage',
+  'garbage',
+  'polluted',
+  'fire',
+  'sick',
+  'smog',
+] as const;
+const ROWS = 3;
 const CELL = 64;
 const COLS = 4;
 
 function drawAtlas(): HTMLCanvasElement {
   const cv = document.createElement('canvas');
   cv.width = CELL * COLS;
-  cv.height = CELL * 2;
+  cv.height = CELL * ROWS;
   const g = cv.getContext('2d')!;
-  const bg = ['#d2493b', '#e39a21', '#2f86c9', '#7b4fb0', '#8a6a3a', '#5b6b3a', '#3a8f8f', '#e5552b'];
+  const bg = [
+    '#d2493b',
+    '#e39a21',
+    '#2f86c9',
+    '#7b4fb0',
+    '#8a6a3a',
+    '#5b6b3a',
+    '#3a8f8f',
+    '#e5552b',
+    '#1f9e8f',
+    '#6b6f76',
+  ];
   ICONS.forEach((name, i) => {
     const cx = (i % COLS) * CELL + CELL / 2;
     const cy = Math.floor(i / COLS) * CELL + CELL / 2;
@@ -104,6 +127,35 @@ function drawAtlas(): HTMLCanvasElement {
         g.arc(5, -3, 3.5, 0, Math.PI * 2);
         g.fill();
         break;
+      case 'sick': {
+        // A thermometer.
+        g.lineWidth = 5;
+        g.beginPath();
+        g.moveTo(0, -16);
+        g.lineTo(0, 6);
+        g.stroke();
+        g.beginPath();
+        g.arc(0, 10, 7, 0, Math.PI * 2);
+        g.fill();
+        g.lineWidth = 2.5;
+        for (const y of [-12, -6, 0]) {
+          g.beginPath();
+          g.moveTo(5, y);
+          g.lineTo(10, y);
+          g.stroke();
+        }
+        break;
+      }
+      case 'smog': {
+        // A cloud.
+        g.beginPath();
+        g.arc(-8, 4, 8, 0, Math.PI * 2);
+        g.arc(2, -3, 10, 0, Math.PI * 2);
+        g.arc(11, 5, 7, 0, Math.PI * 2);
+        g.fill();
+        g.fillRect(-8, 4, 19, 8);
+        break;
+      }
       case 'fire':
         g.beginPath();
         g.moveTo(0, -18);
@@ -121,13 +173,16 @@ function drawAtlas(): HTMLCanvasElement {
 
 /** Which icon a building shows (most urgent first), or −1. */
 export function iconFor(flags: number): number {
+  if (flags & 128) return 7;
   if (flags & 1) return 0;
   if (flags & 2) return 1;
   if (flags & 4) return 2;
   if (flags & 32) return 3;
   if (flags & 8) return 4;
   if (flags & 16) return 5;
+  if (flags & 256) return 8;
   if (flags & 64) return 6;
+  if (flags & 512) return 9;
   return -1;
 }
 
@@ -165,7 +220,7 @@ export class IconRenderer {
         void main() {
           float col = mod(vIcon, 4.0);
           float row = floor(vIcon / 4.0);
-          vec2 uv = vec2((col + gl_PointCoord.x) / 4.0, 1.0 - (row + gl_PointCoord.y) / 2.0);
+          vec2 uv = vec2((col + gl_PointCoord.x) / 4.0, 1.0 - (row + gl_PointCoord.y) / 3.0);
           vec4 c = texture2D(uAtlas, uv);
           if (c.a < 0.05) discard;
           gl_FragColor = c;

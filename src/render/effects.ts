@@ -6,15 +6,19 @@ import {
   NormalBlending,
   Points,
   ShaderMaterial,
+  Vector2,
 } from 'three';
 import type { ClientWorld } from '../client/world';
 import { CELL } from '../data/zones';
+import { CIVIC } from '../data/civic';
 import type { VehicleRenderer } from './vehicles';
 
 const FLAMES_PER = 28;
 const SMOKE_PER = 22;
 const MAX_FIRES = 64;
 const MAX_SIRENS = 128;
+const MAX_CHIMNEYS = 96;
+const CHIMNEY_PER = 12;
 
 const VERT = /* glsl */ `
   attribute vec4 aSeed;   // phase, speed, dx, dz
@@ -23,6 +27,7 @@ const VERT = /* glsl */ `
   uniform float uRise;
   uniform float uDrift;
   uniform float uPixel;
+  uniform vec2 uWind;
   varying float vLife;
   varying float vSeed;
   void main() {
@@ -31,8 +36,8 @@ const VERT = /* glsl */ `
     vSeed = aSeed.x;
     vec3 p = position;
     float spread = 1.0 - 0.6 * life;
-    p.x += aSeed.z * spread + uDrift * life * life + sin(uTime * 3.0 + aSeed.x * 20.0) * 0.4 * life;
-    p.z += aSeed.w * spread + uDrift * 0.4 * life * life;
+    p.x += aSeed.z * spread + uWind.x * uDrift * life * life + sin(uTime * 3.0 + aSeed.x * 20.0) * 0.4 * life;
+    p.z += aSeed.w * spread + uWind.y * uDrift * life * life;
     p.y += life * uRise * (0.6 + aSeed.y);
     vec4 mv = modelViewMatrix * vec4(p, 1.0);
     gl_Position = projectionMatrix * mv;
@@ -109,6 +114,7 @@ function makePoints(max: number, frag: string, additive: boolean, rise: number, 
       uRise: { value: rise },
       uDrift: { value: drift },
       uPixel: { value: 1 },
+      uWind: { value: new Vector2(1, 0) },
     },
     transparent: true,
     depthWrite: false,
@@ -119,6 +125,19 @@ function makePoints(max: number, frag: string, additive: boolean, rise: number, 
   return pts;
 }
 
+/** Smoke stack tops in a civic model's local frame, [x, z, height], for the reference 40×48 lot. */
+const STACKS: Record<string, [number, number, number][]> = {
+  coal: [
+    [14, -14, 58],
+    [14, -4, 52],
+  ],
+  gas: [
+    [-8, -12, 30],
+    [8, -12, 30],
+  ],
+  incinerator: [[12, 19, 40]],
+};
+
 /**
  * Transient effects: flames and smoke over burning buildings, flashing lights on emergency
  * vehicles heading to a call. All particle motion runs in the vertex shader.
@@ -127,18 +146,25 @@ export class EffectsRenderer {
   readonly group = new Group();
   private flames = makePoints(MAX_FIRES * FLAMES_PER, FLAME_FRAG, true, 9, 0);
   private smoke = makePoints(MAX_FIRES * SMOKE_PER, SMOKE_FRAG, false, 34, 10);
+  /** Chimney smoke from power plants, incinerators and heavy industry, drifting downwind. */
+  private chimneys = makePoints(MAX_CHIMNEYS * CHIMNEY_PER, SMOKE_FRAG, false, 26, 30);
+  private chimneyKey = '';
   private sirens: Points;
   private key = '';
   fires = 0;
+  /** Chimney smoke particles in use. */
+  smokeParticles = 0;
 
   constructor(
     private world: ClientWorld,
     private vehicles: VehicleRenderer,
     private heights: Map<number, number>,
+    private civicHeights: Map<number, number>,
   ) {
     this.smoke.renderOrder = 6;
     this.flames.renderOrder = 7;
-    this.group.add(this.smoke, this.flames);
+    this.chimneys.renderOrder = 5;
+    this.group.add(this.smoke, this.flames, this.chimneys);
     const g = new BufferGeometry();
     g.setAttribute('position', new BufferAttribute(new Float32Array(MAX_SIRENS * 3), 3));
     g.setAttribute('aPhase', new BufferAttribute(new Float32Array(MAX_SIRENS), 1));
@@ -199,6 +225,56 @@ export class EffectsRenderer {
     }
   }
 
+  /** Emitters: stacks of plants and incinerators, and the roofs of busy heavy industry. */
+  private rebuildChimneys(): void {
+    const w = this.world;
+    const stacks: { x: number; y: number; z: number; size: number }[] = [];
+    for (const c of [...w.civics.values()].sort((a, b) => a.id - b.id)) {
+      const def = CIVIC.get(c.def);
+      if (!def?.airPollution || !c.access) continue;
+      const local = STACKS[def.model] ?? [[0, 0, (this.civicHeights.get(c.id) ?? 12) * 0.9]];
+      const yaw = -c.angle + (c.side === 1 ? Math.PI : 0);
+      const cs = Math.cos(yaw);
+      const sn = Math.sin(yaw);
+      for (const [lx0, lz0, h] of local) {
+        const lx = lx0 * (def.w / 40);
+        const lz = lz0 * (def.d / 48);
+        stacks.push({
+          x: c.x + lx * cs + lz * sn,
+          y: c.y + h,
+          z: c.z - lx * sn + lz * cs,
+          size: 2.2 * def.airPollution + 1,
+        });
+      }
+    }
+    for (const b of [...w.buildings.values()].sort((a, c) => a.id - c.id)) {
+      if (stacks.length >= MAX_CHIMNEYS) break;
+      if (b.zone !== 3 || b.wealth !== 0 || b.state !== 1 || b.id % 2) continue;
+      stacks.push({ x: b.x, y: b.y + (this.heights.get(b.id) ?? 8) + 1, z: b.z, size: 1 });
+    }
+    const key = stacks.map((st) => `${st.x.toFixed(0)},${st.z.toFixed(0)}`).join(';');
+    if (key === this.chimneyKey) return;
+    this.chimneyKey = key;
+    const g = this.chimneys.geometry;
+    const pos = g.getAttribute('position') as BufferAttribute;
+    const seed = g.getAttribute('aSeed') as BufferAttribute;
+    const size = g.getAttribute('aSize') as BufferAttribute;
+    let n = 0;
+    stacks.slice(0, MAX_CHIMNEYS).forEach((st, k) => {
+      let r = (k + 1) * 7919;
+      const rnd = () => (r = (r * 9301 + 49297) % 233280) / 233280;
+      for (let i = 0; i < CHIMNEY_PER; i++) {
+        pos.setXYZ(n, st.x, st.y, st.z);
+        seed.setXYZW(n, rnd(), 0.12 + rnd() * 0.12, (rnd() - 0.5) * 1.2, (rnd() - 0.5) * 1.2);
+        size.setX(n, st.size * (2 + rnd() * 1.5));
+        n++;
+      }
+    });
+    pos.needsUpdate = seed.needsUpdate = size.needsUpdate = true;
+    g.setDrawRange(0, n);
+    this.smokeParticles = n;
+  }
+
   private updateSirens(): void {
     const pos = this.sirens.geometry.getAttribute('position') as BufferAttribute;
     const ph = this.sirens.geometry.getAttribute('aPhase') as BufferAttribute;
@@ -216,13 +292,17 @@ export class EffectsRenderer {
   }
 
   /** `pxPerMetre` = drawing-buffer height / (2·tan(fov/2)): a 1 m sprite at 1 m distance, in pixels. */
-  update(time: number, pxPerMetre: number): void {
+  update(time: number, pxPerMetre: number, windAngle: number): void {
     this.rebuildFires();
     this.updateSirens();
-    for (const p of [this.flames, this.smoke, this.sirens]) {
+    if (++this.frameNo % 30 === 1) this.rebuildChimneys();
+    for (const p of [this.flames, this.smoke, this.sirens, this.chimneys]) {
       const u = (p.material as ShaderMaterial).uniforms;
       u.uTime!.value = time;
       u.uPixel!.value = pxPerMetre;
+      if (u.uWind) (u.uWind.value as Vector2).set(Math.cos(windAngle), Math.sin(windAngle));
     }
   }
+
+  private frameNo = 0;
 }

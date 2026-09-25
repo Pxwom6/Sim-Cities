@@ -5,6 +5,7 @@ import type { BuildingDetails, CivicDetails } from '../sim/protocol';
 import { formatNumber, useGameUpdates } from './hooks';
 
 const ZONE_NAMES = ['', 'Residential', 'Commercial', 'Industrial'];
+const EDU_NAMES = ['Little schooling', 'Primary school', 'High school', 'University'];
 const STATE_NAMES = ['Under construction', 'Occupied', 'Abandoned', 'Rubble'];
 
 function Mood({ value }: { value: number }) {
@@ -85,6 +86,8 @@ const NEEDS: [RegExp, string][] = [
   [/taxes are high/i, 'Lower taxes'],
   [/highway/i, 'A road link to the highway'],
   [/neighbourhood/i, 'Parks and services to raise land value'],
+  [/polluted air/i, 'Cleaner air: move heavy industry and plants downwind, plant parks'],
+  [/sick residents/i, 'A clinic or hospital with free beds nearby'],
 ];
 
 function needsOf(d: BuildingDetails): string[] {
@@ -244,7 +247,7 @@ function CivicInspector({ id }: { id: number }) {
             )}
             {d.service.seats > 0 && (
               <>
-                <dt>Seats filled</dt>
+                <dt>{d.service.kind === 'health' ? 'Beds filled' : 'Seats filled'}</dt>
                 <dd class={d.service.used >= d.service.seats ? 'neg' : ''}>
                   {d.service.used.toLocaleString('en-US')} / {d.service.seats.toLocaleString('en-US')}
                 </dd>
@@ -357,6 +360,24 @@ function BuildingInspector({ id }: { id: number | null }) {
           <>
             <dt>Customers</dt>
             <dd>{Math.round(d.shop * 100)}% of capacity</dd>
+          </>
+        )}
+        {d.state === 1 && d.isResidential && (
+          <>
+            <dt>Health</dt>
+            <dd class={d.sick > 0 && d.treated < 0.5 ? 'neg' : ''} data-testid="inspector-health">
+              {d.sick === 0 ? 'Everyone is well' : `${d.sick} sick · ${Math.round(d.treated * 100)}% in care`}
+            </dd>
+            <dt>Schooling</dt>
+            <dd>{EDU_NAMES[Math.min(3, Math.floor(d.edu + 0.25))]}</dd>
+          </>
+        )}
+        {d.state === 1 && d.zone !== 3 && (
+          <>
+            <dt>Air</dt>
+            <dd class={d.air > 0.2 ? 'neg' : ''}>
+              {d.air < 0.05 ? 'Clean' : d.air < 0.2 ? 'Hazy' : 'Smoggy'}
+            </dd>
           </>
         )}
         {d.state === 1 && (

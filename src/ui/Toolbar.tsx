@@ -442,7 +442,8 @@ function serviceLine(svc: NonNullable<CivicDef['service']>): string {
     parts.push(
       `${svc.vehicles} ${svc.vehicle === 'ambulance' ? 'ambulances' : svc.vehicle === 'police' ? 'patrol cars' : 'engines'}`,
     );
-  if (svc.capacity && svc.kind === 'education') parts.push(`${svc.capacity.toLocaleString('en-US')} seats`);
+  if (svc.capacity)
+    parts.push(`${svc.capacity.toLocaleString('en-US')} ${svc.kind === 'health' ? 'beds' : 'seats'}`);
   return parts.join(' · ');
 }
 
