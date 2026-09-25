@@ -38,7 +38,7 @@ export async function renderSounds(): Promise<SoundCheck[]> {
   }
   const ctx = new OfflineAudioContext(1, rate * 2, rate);
   let k = 0;
-  const bed = new AmbientBed(ctx, ctx.destination, () => ((k = (k * 9301 + 49297) % 233280) / 233280));
+  const bed = new AmbientBed(ctx, ctx.destination, () => (k = (k * 9301 + 49297) % 233280) / 233280);
   bed.setMix({ traffic: 1, wind: 1, birds: 1, crickets: 1, construction: 1, sirens: 1, fire: 1 });
   bed.tick();
   out.push(measure('ambient', await ctx.startRendering()));
