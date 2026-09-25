@@ -3,7 +3,7 @@ import type { ZoneLetter } from '../data/zones';
 import type { Vec2 } from './geom';
 
 export type ZoneArea = { kind: 'brush'; points: Vec2[]; radius: number } | { kind: 'segment'; id: number };
-export type BulldozeTarget = { kind: 'segment'; id: number };
+export type BulldozeTarget = { kind: 'segment'; id: number } | { kind: 'building'; id: number };
 
 /** Every player (and test, debug, replay) action is one of these. DESIGN.md §1.4. */
 export type Command =

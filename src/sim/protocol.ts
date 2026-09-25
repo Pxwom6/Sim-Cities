@@ -5,6 +5,7 @@ import type { GameOptions } from './state';
 import type { SaveFile } from './save';
 import type { Speed } from './time';
 import type { RoadTypeId } from '../data/roads';
+import type { Factor } from './systems/demand';
 
 export interface CityStats {
   tick: number;
@@ -12,6 +13,62 @@ export interface CityStats {
   cityName: string;
   population: number;
   undoAvailable: boolean;
+  jobs: number;
+  jobsFilled: number;
+  unemployed: number;
+  workers: number;
+  approval: number;
+  demand: { R: number; C: number; I: number };
+  demandFactors: { R: Factor[]; C: Factor[]; I: Factor[] };
+  buildings: number;
+  abandoned: number;
+  highwayConnected: boolean;
+}
+
+/** Render-relevant building fields (details come from the `building` query). */
+export interface BuildingData {
+  id: number;
+  def: string;
+  zone: number;
+  density: number;
+  wealth: number;
+  level: number;
+  x: number;
+  z: number;
+  y: number;
+  angle: number;
+  side: 1 | -1;
+  w: number;
+  d: number;
+  state: number;
+  progress: number;
+  variant: number;
+  /** Bit flags: 1 = no link to the highway. */
+  flags: number;
+}
+
+export interface BuildingDetails {
+  id: number;
+  name: string;
+  zone: number;
+  density: number;
+  wealth: number;
+  level: number;
+  state: number;
+  progress: number;
+  pop: number;
+  cap: number;
+  employed: number;
+  commute: number;
+  shop: number;
+  happiness: number;
+  base: number;
+  factors: Factor[];
+  distress: number;
+  abandonAt: number;
+  isResidential: boolean;
+  connected: boolean;
+  born: number;
 }
 
 export interface NodeData {
@@ -60,6 +117,7 @@ export interface Snapshot {
   stats: CityStats;
   net: { nodes: NodeData[]; segments: SegmentData[]; blocks: BlockData[] };
   highway: { outside: number; connect: number; segment: number };
+  buildings: BuildingData[];
 }
 
 export interface FrameDiff {
@@ -68,6 +126,8 @@ export interface FrameDiff {
   /** Tree density changes: raster index → new density. */
   trees?: { idx: number[]; val: number[] };
   net?: NetDiff;
+  buildings?: { upserts: BuildingData[]; removed: number[] };
+  events?: { kind: string; id: number }[];
 }
 
 export interface WorkerPerf {
@@ -77,7 +137,7 @@ export interface WorkerPerf {
   droppedTicks: number;
 }
 
-export type Query = { type: 'hash' } | { type: 'summary' };
+export type Query = { type: 'hash' } | { type: 'summary' } | { type: 'building'; id: number };
 
 export type MainToWorker =
   | { type: 'init'; options: Partial<GameOptions>; testMode?: boolean }

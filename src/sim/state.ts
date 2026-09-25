@@ -2,6 +2,9 @@ import type { MapPreset } from '../data/world';
 import type { RngState } from './rng';
 import type { NetworkState } from './world/network';
 import type { UndoRecord } from './undo';
+import type { Building } from './world/buildings';
+import type { CityTotals } from './systems/totals';
+import type { DemandState } from './systems/demand';
 
 export type Difficulty = 'easy' | 'normal' | 'hard';
 
@@ -45,4 +48,11 @@ export interface SimState {
   /** The regional highway: off-map node and the connection node inside the map. */
   highway: { outside: number; connect: number; segment: number };
   undo: UndoRecord[];
+  buildings: Map<number, Building>;
+  totals: CityTotals;
+  demand: DemandState;
+  /** Land value raster (GRID_RES²), 0..1. */
+  landValue: Float32Array;
+  /** Round-robin positions of sliced systems. */
+  cursors: { growth: number; matchRound: number };
 }

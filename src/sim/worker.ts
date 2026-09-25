@@ -97,8 +97,7 @@ function handle(msg: MainToWorker): void {
       break;
     case 'query':
       if (!sim) return;
-      if (msg.q.type === 'hash') post({ type: 'reply', id: msg.id, result: sim.hash() });
-      else post({ type: 'reply', id: msg.id, result: sim.stats() });
+      post({ type: 'reply', id: msg.id, result: sim.query(msg.q) });
       break;
     case 'setSpeed':
       speed = msg.speed;

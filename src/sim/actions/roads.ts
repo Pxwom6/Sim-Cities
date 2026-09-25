@@ -1,7 +1,8 @@
 import { ROAD_RULES, ROAD_TYPES, roadHalfWidth, type RoadTypeId } from '../../data/roads';
 import { GRID_CELL, GRID_RES } from '../../data/world';
 import { fail, ok, type BulldozeTarget, type CommandResult } from '../commands';
-import type { Vec2 } from '../geom';
+import { Curve, pointRectDistance, type Vec2 } from '../geom';
+import { footprint } from '../world/buildings';
 import type { Sim } from '../sim';
 import { UNDO_LIMIT } from '../undo';
 import { applyRoadPlan, planRoad } from '../world/roadPlanner';
@@ -13,6 +14,7 @@ export function buildRoad(sim: Sim, road: RoadTypeId, points: Vec2[], dryRun: bo
     pieces: plan.pieces.map((p) => ({ a: p.a, c: p.c, b: p.b })),
     length: plan.length,
     splits: plan.splits.length,
+    demolish: plan.ok ? buildingsInTheWay(sim, plan.pieces, road).length : 0,
   };
   if (!plan.ok) return fail(plan.reason ?? 'Invalid road', { at: plan.at, info: preview });
   if (dryRun) return ok(plan.cost, { info: preview });
@@ -55,7 +57,39 @@ export function bulldoze(sim: Sim, target: BulldozeTarget, dryRun: boolean): Com
     sim.markNetworkChanged();
     return ok(-refund, { info });
   }
+  if (target.kind === 'building') {
+    const b = sim.state.buildings.get(target.id);
+    if (!b) return fail('Nothing to bulldoze');
+    if (dryRun) return ok(0, { info: { refund: 0, buildings: [b.id] } });
+    sim.removeBuilding(b.id);
+    return ok(0, { info: { refund: 0, buildings: [b.id] } });
+  }
   return fail('Nothing to bulldoze');
+}
+
+/** Buildings whose footprints a planned road would run through (they get demolished). */
+export function buildingsInTheWay(
+  sim: Sim,
+  pieces: { a: Vec2; c: Vec2; b: Vec2 }[],
+  type: RoadTypeId,
+): number[] {
+  const hw = roadHalfWidth(type);
+  const out = new Set<number>();
+  for (const p of pieces) {
+    const curve = new Curve(p.a, p.c, p.b, 2);
+    const box = curve.bbox(hw + 40);
+    for (const id of sim.bldHash.query(box)) {
+      const b = sim.state.buildings.get(id)!;
+      const r = footprint(b, 0.5);
+      for (let i = 0; i < curve.xs.length; i++) {
+        if (pointRectDistance({ x: curve.xs[i]!, z: curve.zs[i]! }, r) < hw) {
+          out.add(id);
+          break;
+        }
+      }
+    }
+  }
+  return [...out].sort((a, b) => a - b);
 }
 
 /** Thin the tree-density grid under new roads (the renderer also hides individual trees). */
