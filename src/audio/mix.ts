@@ -14,6 +14,9 @@ export interface AmbientScene {
   trees: number;
   /** 0 by day, 1 at night. */
   night: number;
+  /** Nearest tornado (m, Infinity if none) and flood water in view (0–1). */
+  tornado: number;
+  flood: number;
   /** Simulation paused (traffic and building work stop). */
   paused: boolean;
 }
@@ -27,6 +30,8 @@ export interface AmbientMix {
   construction: number;
   sirens: number;
   fire: number;
+  storm: number;
+  water: number;
 }
 
 const clamp = (v: number, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, v));
@@ -55,5 +60,8 @@ export function ambientMix(s: AmbientScene): AmbientMix {
     construction: running * close * clamp(s.construction / 4) * (1 - 0.8 * night),
     sirens: running * clamp(s.sirens / 2) * (0.35 + 0.65 * close),
     fire: clamp(s.fires / 2) * close,
+    // A tornado roars from well over a kilometre away; flood water rushes where it's in view.
+    storm: clamp(1 - s.tornado / 1400),
+    water: clamp(s.flood) * (0.4 + 0.6 * close),
   };
 }

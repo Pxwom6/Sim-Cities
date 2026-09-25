@@ -189,3 +189,29 @@ export const IconChat = (p: P) => (
     <path d="M4 5h16v11H9l-5 4z" />
   </svg>
 );
+export const IconAlert = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M12 3l10 18H2zM12 10v5M12 18v.5" />
+  </svg>
+);
+export const IconQuake = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M2 12h4l2-5 3 10 3-8 2 5 2-2h4" />
+  </svg>
+);
+export const IconTornado = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M3 5h18M5 9h13M8 13h9M10 17h5M12 21h2" />
+  </svg>
+);
+export const IconWaves = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M2 8c3-3 5 3 8 0s5 3 8 0 3-1 4 0M2 13c3-3 5 3 8 0s5 3 8 0 3-1 4 0M2 18c3-3 5 3 8 0s5 3 8 0 3-1 4 0" />
+  </svg>
+);
+export const IconMeteor = (p: P) => (
+  <svg {...base} {...p}>
+    <circle cx="15" cy="15" r="5" />
+    <path d="M11 11L3 3M13 9L7 3M9 13L3 7" />
+  </svg>
+);

@@ -9,6 +9,7 @@ import type {
   TrafficData,
   TransitData,
   VehicleData,
+  DisasterData,
 } from '../sim/protocol';
 import { Network, type NetworkState, type RoadSegment, type ZoneBlock } from '../sim/world/network';
 import { SpatialHash } from '../sim/world/spatial';
@@ -66,8 +67,11 @@ export class ClientWorld {
   stops = new Map<number, TransitData['stops'][number]>();
   lines: TransitData['lines'] = [];
   transitVersion = 0;
+  /** Disasters under way, damaged and flooded roads, craters (bumped version on change). */
+  disasters: DisasterData = { active: [], damaged: [], flooded: [], craters: [] };
+  disastersVersion = 0;
   /** Recent sim events (built, abandoned, ...) for notifications and sounds. */
-  events: { kind: string; id: number }[] = [];
+  events: { kind: string; id: number; info?: Record<string, number | string> }[] = [];
   /** Fractional tick, advanced smoothly between frames for lighting. */
   displayTick: number;
   private listeners = new Map<string, Set<Listener>>();
@@ -94,6 +98,12 @@ export class ClientWorld {
     this.vehiclesTick = snap.stats.tick;
     this.setTraffic(snap.traffic);
     this.setTransit(snap.transit);
+    this.setDisasters(snap.disasters);
+  }
+
+  private setDisasters(d: DisasterData): void {
+    this.disasters = d;
+    this.disastersVersion++;
   }
 
   private setTransit(t: TransitData): void {
@@ -332,6 +342,10 @@ export class ClientWorld {
     if (diff.transit) {
       this.setTransit(diff.transit);
       this.emit('transit');
+    }
+    if (diff.disasters) {
+      this.setDisasters(diff.disasters);
+      this.emit('disasters');
     }
     if (diff.events) {
       this.events = diff.events;

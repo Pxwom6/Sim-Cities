@@ -152,7 +152,58 @@ export function advise(sim: Sim): Advice[] {
       text: 'Power, water and sewage reach every building.',
     });
 
-  // Safety.
+  // Safety: disasters first.
+  const NAMES = { earthquake: 'Earthquake', tornado: 'Tornado', flood: 'Flood', meteor: 'Meteor strike' };
+  const ADVICE = {
+    earthquake:
+      'Fire engines and ambulances will answer the collapses; damaged roads and services are being repaired.',
+    tornado: 'It will blow itself out soon. Keep fire and health services funded so they can respond.',
+    flood:
+      'The water will drain in a day or so. Flooded homes and businesses are closed; roads under water are impassable.',
+    meteor: 'Brace for impact. Fire engines will be needed around the crater.',
+  };
+  for (const d of s.disasters)
+    out.push({
+      advisor: 'safety',
+      severity: 3,
+      title: `${NAMES[d.kind]} under way`,
+      text: ADVICE[d.kind],
+      at: { x: d.x, z: d.z },
+    });
+  const rubble = [...s.buildings.values()]
+    .filter((b) => b.state === BState.Rubble)
+    .sort((a, b) => a.id - b.id);
+  if (rubble.length >= 3)
+    out.push({
+      advisor: 'safety',
+      severity: rubble.length > 20 ? 2 : 1,
+      title: `${plural(rubble.length, 'lot')} of rubble`,
+      text: 'Crews clear rubble within a day or two, faster near a fire station. Bulldoze it to clear a lot now.',
+      at: centre(rubble.slice(0, 20)),
+    });
+  const offline = [...s.civics.values()].filter((c) => c.damage > 0 || c.flooded).sort((a, b) => a.id - b.id);
+  if (offline.length) {
+    const c = offline[0]!;
+    out.push({
+      advisor: 'utilities',
+      severity: 2,
+      title: `${plural(offline.length, 'city building')} out of action`,
+      text: `The ${civicDef(c).name.toLowerCase()} is ${c.flooded ? 'under water' : `being repaired (${c.damage} h left)`}. Its services are down until then.`,
+      at: { x: c.x, z: c.z },
+    });
+  }
+  if (s.roadDamage.size) {
+    const first = [...s.roadDamage.keys()].sort((a, b) => a - b)[0]!;
+    const mid = sim.net.curve(first).pointAt(sim.net.curve(first).length / 2);
+    out.push({
+      advisor: 'transport',
+      severity: 2,
+      title: `${plural(s.roadDamage.size, 'road')} closed for repairs`,
+      text: 'Traffic, services and utilities detour around them until the crews are done.',
+      at: { x: mid.x, z: mid.z },
+      map: 'traffic',
+    });
+  }
   const burning = s.burning.map((id) => s.buildings.get(id)).filter((b): b is Building => !!b);
   if (burning.length)
     out.push({

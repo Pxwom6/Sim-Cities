@@ -2,6 +2,7 @@ import type { ClientWorld } from '../client/world';
 import type { GameRenderer } from '../render/renderer';
 import { GRID_CELL, GRID_RES } from '../data/world';
 import { listenRadius, type AmbientScene } from './mix';
+import { floodLevel, tornadoAt } from '../sim/systems/disasters';
 
 const STATE_CONSTRUCTION = 0;
 const EMERGENCY = new Set(['fire', 'police', 'ambulance']);
@@ -40,7 +41,22 @@ export function ambientScene(world: ClientWorld, renderer: GameRenderer, paused:
       n++;
       if (i >= 0 && j >= 0 && i < GRID_RES && j < GRID_RES) sum += world.trees[j * GRID_RES + i]! / 255;
     }
+  // Disasters: how close the nearest tornado is, and whether flood water is in view.
+  let tornado = Infinity;
+  let flood = 0;
+  const tick = world.displayTick;
+  for (const d of world.disasters.active) {
+    if (d.kind === 'tornado' && tick >= d.start && tick <= d.end) {
+      const p = tornadoAt(d, tick);
+      tornado = Math.min(tornado, Math.hypot(p.x - cx, p.z - cz));
+    } else if (d.kind === 'flood' && floodLevel(d, tick) > 0.5) {
+      const dist = Math.hypot(d.x - cx, d.z - cz);
+      flood = Math.max(flood, Math.min(1, Math.max(0, 1 - (dist - 300) / 900)));
+    }
+  }
   return {
+    tornado,
+    flood,
     distance: cam.distance,
     cars,
     buildings,

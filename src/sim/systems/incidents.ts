@@ -217,7 +217,11 @@ export function incidentsTick(sim: Sim): void {
   }
 }
 
-export function toRubble(sim: Sim, b: Building, why: 'destroyed' | 'decayed' = 'destroyed'): void {
+export function toRubble(
+  sim: Sim,
+  b: Building,
+  why: 'destroyed' | 'decayed' | 'collapsed' = 'destroyed',
+): void {
   b.state = BState.Rubble;
   b.fire = 0;
   b.burn = 0;

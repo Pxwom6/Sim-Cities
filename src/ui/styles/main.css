@@ -1067,6 +1067,15 @@ body {
   background: var(--color-accent);
   color: #fff;
 }
+.disaster-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.disaster-random {
+  max-width: 12rem;
+  font-size: var(--font-size-sm);
+}
 .map-item.off {
   align-self: flex-end;
   color: var(--color-text-muted);

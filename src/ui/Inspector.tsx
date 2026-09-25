@@ -219,6 +219,22 @@ function CivicInspector({ id }: { id: number }) {
         </button>
       </header>
       {!d.access && <div class="warn">Not facing a road: it can't reach anyone.</div>}
+      {(() => {
+        const c = game.world.civics.get(d.id);
+        if (c?.flooded)
+          return (
+            <div class="warn" data-testid="inspector-damage">
+              Under flood water: out of action until it drains.
+            </div>
+          );
+        if (c && c.damage > 0)
+          return (
+            <div class="warn" data-testid="inspector-damage">
+              Damaged: out of action while it's repaired ({c.damage} h left).
+            </div>
+          );
+        return null;
+      })()}
       {d.transit && d.transit.stops < 2 && (
         <div class="warn">Place at least two bus stops on roads this depot can reach to start a line.</div>
       )}
@@ -370,7 +386,13 @@ function BuildingInspector({ id }: { id: number | null }) {
           {d.coverage.fire > 0 ? 'Fire engines are on their way.' : 'No fire station can reach it quickly.'}
         </div>
       )}
-      {d.state === 3 && <div class="warn">Burned down. The rubble is cleared after a day or so.</div>}
+      {d.state === 3 && <div class="warn">In ruins. The rubble is cleared after a day or so.</div>}
+      {(game.world.buildings.get(d.id)?.flags ?? 0) & 1024 ? (
+        <div class="warn" data-testid="inspector-flooded">
+          Flooded.{' '}
+          {d.zone === 1 ? 'The residents are sitting it out upstairs.' : 'Closed until the water drains.'}
+        </div>
+      ) : null}
       <dl>
         <dt>{people}</dt>
         <dd data-testid="inspector-pop">

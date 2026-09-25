@@ -128,7 +128,8 @@ export type SimEvent = {
     | 'civicRepaired'
     | 'civicDestroyed'
     | 'roadRepaired'
-    | 'decayed';
+    | 'decayed'
+    | 'collapsed';
   id: number;
   /** Extra details for the notification (disaster reports, destroyed buildings). */
   info?: Record<string, number | string>;
@@ -455,11 +456,31 @@ export class Sim {
     return this.graphCache;
   }
 
+  private fullGraphCache: RoadGraph | null = null;
+  private fullHighwayComponent = -1;
+
+  /**
+   * The network as built, ignoring temporary closures (damaged or flooded roads): whether a place is
+   * linked to the highway at all. Routing uses `graph()`, which leaves closed roads out.
+   */
+  private fullGraph(): RoadGraph {
+    if (!this.blockedSegments().size) {
+      const g = this.graph();
+      this.fullHighwayComponent = this.highwayComponent;
+      return g;
+    }
+    if (!this.fullGraphCache) {
+      this.fullGraphCache = new RoadGraph(this.net);
+      this.fullHighwayComponent = this.fullGraphCache.componentOfNode(this.state.highway.connect);
+    }
+    return this.fullGraphCache;
+  }
+
   isSegmentConnected(segId: number): boolean {
     const seg = this.state.net.segments.get(segId);
     if (!seg) return false;
-    const g = this.graph();
-    return g.componentOfNode(seg.a) === this.highwayComponent;
+    const g = this.fullGraph();
+    return g.componentOfNode(seg.a) === this.fullHighwayComponent;
   }
 
   isBuildingConnected(b: Building): boolean {
@@ -485,6 +506,7 @@ export class Sim {
 
   markNetworkChanged(): void {
     this.graphCache = null;
+    this.fullGraphCache = null;
     this.blockedCache = null;
     this.disastersDirty = true;
     // A damaged road that was bulldozed or rebuilt is no longer damaged.
@@ -928,6 +950,7 @@ export class Sim {
 
   /** Problem flags shown as icons: see BuildingData.flags. */
   buildingFlags(b: Building): number {
+    if (b.state === BState.Rubble) return b.fire > 0 ? 128 : 0;
     let f = this.isBuildingConnected(b) ? 0 : 1;
     if (b.state === BState.Active) {
       if (b.power < 0.99) f |= 2;

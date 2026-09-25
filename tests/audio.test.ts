@@ -12,6 +12,8 @@ const scene = (s: Partial<AmbientScene>): AmbientScene => ({
   trees: 0,
   night: 0,
   paused: false,
+  tornado: Infinity,
+  flood: 0,
   ...s,
 });
 

@@ -5,7 +5,7 @@ import type { Game } from '../game';
 import type { Command, CommandResult } from '../sim/commands';
 import type { CameraPose, CameraPresetName } from '../render/camera';
 import type { RenderStats } from '../render/renderer';
-import type { BuildingData, CityStats } from '../sim/protocol';
+import type { BuildingData, CityStats, DisasterData } from '../sim/protocol';
 import { ZONED_DEFS } from '../data/buildings';
 import { CELL } from '../data/zones';
 import { renderSounds, type SoundCheck } from '../audio/check';
@@ -66,6 +66,8 @@ export interface TestApi {
    * row per def and `variants` columns. Screenshots only; the sim knows nothing about them.
    */
   showGallery(defs: string[], at: { x: number; z: number }, variants: number): void;
+  /** Disasters under way, damaged and flooded roads and craters, as the client sees them. */
+  getDisasters(): DisasterData;
   /** What a click at this screen position would select. */
   pickAt(x: number, y: number): { kind: string; id: number } | null;
   /** Change player settings (as the menu does); returns the tilt-shift frame count. */
@@ -192,6 +194,7 @@ export function installTestApi(game: Game): TestApi {
     errors: [],
     renderSounds,
     pickAt: (x, y) => game.renderer.pick(x, y),
+    getDisasters: () => game.world.disasters,
     setSettings: (patch) => {
       game.updateSettings(patch);
       return game.renderer.tiltShift.frames;

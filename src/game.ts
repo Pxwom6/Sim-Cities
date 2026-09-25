@@ -60,6 +60,8 @@ export class Game {
   private noticeId = 1;
   private toastId = 1;
   audio: AudioEngine | null = null;
+  /** Random disasters on (a per-city option; the disasters menu toggles it). */
+  randomDisasters: boolean;
   /** Player settings (volumes now; graphics and controls with the game shell). */
   settings: Settings = loadSettings();
   private ambientAt = 0;
@@ -89,6 +91,8 @@ export class Game {
         this.world.displayTick = diff.tick;
       this.notify();
     });
+    this.randomDisasters = world.options.disasters;
+    renderer.disasters.onImpact = () => this.audio?.play('boom');
     this.names = new StreetNames(world);
     this.labels = new StreetLabels(this);
     this.tools = new ToolManager(this);
@@ -201,10 +205,56 @@ export class Game {
 
   private lastAdviceKeys = new Set<string>();
 
+  /** A disaster starting: notify, fly-to point, and a sound to match. */
+  private disasterNotice(id: number): void {
+    const d = this.world.disasters.active.find((x) => x.id === id);
+    if (!d) return;
+    const where = this.names.address(d.x, d.z);
+    const at = { x: d.x, z: d.z };
+    if (d.kind === 'earthquake') {
+      this.notice(`disaster:${id}`, `Earthquake! Magnitude ${d.size.toFixed(1)} near ${where}.`, 'bad', at);
+      this.audio?.play('quake');
+    } else if (d.kind === 'tornado') {
+      this.notice(`disaster:${id}`, `A tornado has touched down near ${where}!`, 'bad', at);
+      this.audio?.play('siren');
+    } else if (d.kind === 'flood') {
+      this.notice(`disaster:${id}`, `Flood warning: the water is rising near ${where}.`, 'bad', at);
+      this.audio?.play('alert');
+    } else {
+      this.notice(`disaster:${id}`, `Meteor incoming! It will strike near ${where}.`, 'bad', at);
+      this.audio?.play('whoosh');
+    }
+  }
+
+  /** What a disaster left behind, when it's over. */
+  private disasterReport(info: Record<string, number | string>): void {
+    const name = { earthquake: 'earthquake', tornado: 'tornado', flood: 'flood', meteor: 'meteor strike' }[
+      String(info.kind)
+    ];
+    const parts: string[] = [];
+    const n = (v: unknown) => Number(v) || 0;
+    const plural = (k: number, one: string) => `${k} ${one}${k === 1 ? '' : 's'}`;
+    if (n(info.destroyed)) parts.push(`${plural(n(info.destroyed), 'building')} destroyed`);
+    if (n(info.damaged)) parts.push(`${n(info.damaged)} damaged or flooded`);
+    if (n(info.roads)) parts.push(`${plural(n(info.roads), 'road')} closed for repairs`);
+    if (n(info.casualties)) parts.push(`${plural(n(info.casualties), 'home')} needing ambulances`);
+    const text = parts.length
+      ? `The ${name} is over: ${parts.join(', ')}. Crews are clearing up; the lots will be rebuilt.`
+      : `The ${name} is over, and the city came through unharmed.`;
+    this.notice(`over:${String(info.kind)}`, text, parts.length ? 'info' : 'ok', {
+      x: n(info.x),
+      z: n(info.z),
+    });
+  }
+
   /** Turn sim events into notifications (DESIGN §5). */
-  private onEvents(events: { kind: string; id: number }[]): void {
+  private onEvents(events: { kind: string; id: number; info?: Record<string, number | string> }[]): void {
     for (const e of events) {
       const at = this.placeOf(e.id);
+      const civicName = () => {
+        const c = this.world.civics.get(e.id);
+        return (c && CIVIC.get(c.def)?.name) ?? 'building';
+      };
       if (e.kind === 'closed')
         this.notice('closed', 'A business closed: no power or water for half a day.', 'bad', at);
       else if (e.kind === 'abandoned')
@@ -224,6 +274,32 @@ export class Game {
         this.notice('crimeStopped', 'Police stopped a crime.', 'ok', at, false);
       else if (e.kind === 'patientSaved')
         this.notice('patientSaved', 'An ambulance got a patient to care.', 'ok', at, false);
+      else if (e.kind === 'disaster') this.disasterNotice(e.id);
+      else if (e.kind === 'disasterOver' && e.info) this.disasterReport(e.info);
+      else if (e.kind === 'collapsed') this.notice('collapsed', 'A building collapsed.', 'bad', at, false);
+      else if (e.kind === 'civicDamaged')
+        this.notice(`civicDamaged`, `The ${civicName()} was damaged and is offline for repairs.`, 'bad', at);
+      else if (e.kind === 'civicDestroyed') {
+        const name = CIVIC.get(String(e.info?.def))?.name ?? 'building';
+        const where = e.info ? { x: Number(e.info.x), z: Number(e.info.z) } : undefined;
+        this.notice(
+          `civicDestroyed:${e.id}`,
+          `The ${name} was destroyed. It will have to be rebuilt.`,
+          'bad',
+          where,
+        );
+      } else if (e.kind === 'civicRepaired')
+        this.notice('civicRepaired', `The ${civicName()} is repaired and back in service.`, 'ok', at, false);
+      else if (e.kind === 'roadRepaired')
+        this.notice('roadRepaired', 'A damaged road reopened.', 'ok', undefined, false);
+      else if (e.kind === 'decayed')
+        this.notice(
+          'decayed',
+          'An abandoned building fell into ruin; the lot will clear.',
+          'info',
+          at,
+          false,
+        );
     }
   }
 
@@ -235,7 +311,8 @@ export class Game {
     const keys = new Set<string>();
     let toasted = false;
     for (const a of this.advice) {
-      if (a.severity < 3) continue;
+      // Disasters announce themselves; don't repeat them as advice.
+      if (a.severity < 3 || a.title.endsWith('under way')) continue;
       const key = `${a.advisor}:${a.title.replace(/[0-9,]+/g, '#')}`;
       keys.add(key);
       if (this.lastAdviceKeys.has(key)) continue;
@@ -243,6 +320,12 @@ export class Game {
       toasted = true;
     }
     this.lastAdviceKeys = keys;
+  }
+
+  setRandomDisasters(on: boolean): void {
+    this.randomDisasters = on;
+    void this.dispatch({ type: 'setDisasters', on });
+    this.notify();
   }
 
   updateSettings(patch: Partial<Settings>): void {

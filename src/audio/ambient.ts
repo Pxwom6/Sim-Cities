@@ -39,6 +39,8 @@ export class AmbientBed {
   private hiss: NoiseLayer;
   private wind: NoiseLayer;
   private roar: NoiseLayer;
+  private storm: NoiseLayer;
+  private water: NoiseLayer;
   private mix: AmbientMix = {
     traffic: 0,
     wind: 0,
@@ -47,6 +49,8 @@ export class AmbientBed {
     construction: 0,
     sirens: 0,
     fire: 0,
+    storm: 0,
+    water: 0,
   };
   /** Next time (ctx seconds) each kind of event may start. */
   private next = { birds: 0, crickets: 0, construction: 0, sirens: 0, fire: 0 };
@@ -63,6 +67,8 @@ export class AmbientBed {
     this.hiss = new NoiseLayer(ctx, out, 'pink', 'bandpass', 1300, 0.7);
     this.wind = new NoiseLayer(ctx, out, 'pink', 'bandpass', 420, 0.8);
     this.roar = new NoiseLayer(ctx, out, 'brown', 'lowpass', 260, 0.7);
+    this.storm = new NoiseLayer(ctx, out, 'pink', 'bandpass', 320, 1.6);
+    this.water = new NoiseLayer(ctx, out, 'white', 'lowpass', 900, 0.5);
   }
 
   get levels(): AmbientMix {
@@ -78,6 +84,8 @@ export class AmbientBed {
     ride(this.hiss.gain.gain, m.traffic * 0.12);
     ride(this.wind.gain.gain, m.wind * 0.22);
     ride(this.roar.gain.gain, m.fire * 0.5);
+    ride(this.storm.gain.gain, m.storm * 0.9);
+    ride(this.water.gain.gain, m.water * 0.18);
   }
 
   /** Schedule upcoming events; call a few times a second. */
@@ -95,6 +103,13 @@ export class AmbientBed {
       0.8,
     );
     this.traffic.filter.frequency.setTargetAtTime(360 + 120 * r(), now, 0.5);
+    // A tornado howls: its band sweeps up and down.
+    if (m.storm > 0.01)
+      this.storm.filter.frequency.setTargetAtTime(
+        260 + 260 * (0.5 + 0.5 * Math.sin(this.windPhase * 1.7)) + 80 * r(),
+        now,
+        0.3,
+      );
 
     // Bird song: short trills of rising chirps.
     if (m.birds > 0.03 && this.next.birds < until) {

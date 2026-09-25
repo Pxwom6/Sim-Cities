@@ -172,7 +172,9 @@ export function startDisaster(
     casualties: 0,
   };
   if (kind === 'earthquake') {
-    d.size = opts.size ?? between(DISASTERS.earthquake.magnitude);
+    // Most quakes are moderate; the big ones are rare.
+    const [lo, hi] = DISASTERS.earthquake.magnitude;
+    d.size = opts.size ?? lo + (hi - lo) * rng.next() ** 2;
     d.end = start + DISASTERS.earthquake.shakeTicks;
   } else if (kind === 'tornado') {
     d.size = opts.size ?? between(DISASTERS.tornado.halfWidth);
@@ -198,7 +200,7 @@ export function startDisaster(
 function collapse(sim: Sim, b: Building, d: Disaster): void {
   if (b.state === BState.Rubble) return;
   const occupied = b.pop > 0 && b.state === BState.Active;
-  toRubble(sim, b);
+  toRubble(sim, b, 'collapsed');
   d.destroyed++;
   if (!occupied) return;
   d.casualties++;

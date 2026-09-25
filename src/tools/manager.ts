@@ -6,8 +6,9 @@ import type { Tool, ToolPointer } from './tool';
 import { ZoneTool } from './zoneTool';
 import { PlaceTool } from './placeTool';
 import { StopTool } from './stopTool';
+import { DisasterTool } from './disasterTool';
 
-export type ToolId = 'select' | 'road' | 'zone' | 'bulldoze' | 'place' | 'stop';
+export type ToolId = 'select' | 'road' | 'zone' | 'bulldoze' | 'place' | 'stop' | 'disaster';
 
 /** Routes canvas pointer and keyboard input to the active tool. */
 export class ToolManager {
@@ -17,6 +18,7 @@ export class ToolManager {
   readonly bulldoze: BulldozeTool;
   readonly place: PlaceTool;
   readonly stop: StopTool;
+  readonly disaster: DisasterTool;
   active: Tool;
   private rightDown: { x: number; y: number } | null = null;
 
@@ -27,6 +29,7 @@ export class ToolManager {
     this.bulldoze = new BulldozeTool(game);
     this.place = new PlaceTool(game);
     this.stop = new StopTool(game);
+    this.disaster = new DisasterTool(game);
     this.active = this.select;
     const canvas = game.renderer.canvas;
     canvas.addEventListener('pointerdown', (e) => this.onDown(e));

@@ -31,6 +31,7 @@ import { TransitRenderer } from './transit';
 import { StreetLightRenderer } from './streetLights';
 import { PedestrianRenderer } from './pedestrians';
 import { TiltShift } from './tiltShift';
+import { DisasterRenderer } from './disasters';
 
 export interface RenderStats {
   calls: number;
@@ -46,6 +47,15 @@ export interface RenderStats {
   /** Street lamps placed, and how dark it is (0 day … 1 night). */
   lamps: number;
   night: number;
+  /** Disaster effects on screen: dust bursts so far, funnels, flood sheets, falling meteors, craters, closed roads. */
+  disasters: {
+    dust: number;
+    funnels: number;
+    floods: number;
+    meteors: number;
+    craters: number;
+    closures: number;
+  };
   buses: number;
   smoke: number;
 }
@@ -74,6 +84,7 @@ export class GameRenderer {
   readonly streetLights: StreetLightRenderer;
   readonly pedestrians: PedestrianRenderer;
   readonly tiltShift = new TiltShift();
+  readonly disasters: DisasterRenderer;
   /** Tilt-shift blur when zoomed in (a player setting). */
   tiltShiftOn = false;
   /** Route of the selected car. */
@@ -97,6 +108,7 @@ export class GameRenderer {
     walkers: 0,
     lamps: 0,
     night: 0,
+    disasters: { dust: 0, funnels: 0, floods: 0, meteors: 0, craters: 0, closures: 0 },
     buses: 0,
     smoke: 0,
   };
@@ -141,6 +153,8 @@ export class GameRenderer {
     this.scene.add(this.traffic.group);
     this.pedestrians = new PedestrianRenderer(world, (seg, s, x, z) => world.roadHeight(seg, s, x, z));
     this.scene.add(this.pedestrians.group);
+    this.disasters = new DisasterRenderer(world);
+    this.scene.add(this.disasters.group);
     this.transit = new TransitRenderer(world, (seg, s, x, z) => world.roadHeight(seg, s, x, z));
     this.scene.add(this.transit.group);
     this.streetLights = new StreetLightRenderer(world);
@@ -279,15 +293,14 @@ export class GameRenderer {
     this.pedestrians.update(this.world.displayTick, this.controller.current);
     this.streetLights.update(l.night);
     this.transit.update(this.world.displayTick);
-    this.icons.update(this.time, this.buildings.heights);
+    this.icons.update(this.time, this.buildings.heights, this.civics.heights);
     this.garbage.update();
     const bufH = this.renderer.getDrawingBufferSize(this.tmpSize).y;
     this.traffic.setScale(bufH / (2 * Math.tan((this.camera.fov * Math.PI) / 360)));
-    this.effects.update(
-      this.time,
-      bufH / (2 * Math.tan((this.camera.fov * Math.PI) / 360)),
-      windAngle(this.world.options.seed, this.world.displayTick),
-    );
+    const pxPerMetre = bufH / (2 * Math.tan((this.camera.fov * Math.PI) / 360));
+    this.effects.update(this.time, pxPerMetre, windAngle(this.world.options.seed, this.world.displayTick));
+    this.disasters.update(dt, this.world.displayTick, pxPerMetre);
+    this.camera.position.add(this.disasters.shake);
     // Trees under new buildings: rebuilt at most twice a second.
     if (this.treePoints.length && this.time - this.treeRebuildAt > 0.5) {
       this.treeRebuildAt = this.time;
@@ -323,6 +336,7 @@ export class GameRenderer {
       walkers: this.pedestrians.count,
       lamps: this.streetLights.count,
       night: this.lighting.night,
+      disasters: { ...this.disasters.stats },
       buses: this.transit.busCount,
       smoke: this.effects.smokeParticles,
     };

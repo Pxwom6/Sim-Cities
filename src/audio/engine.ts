@@ -4,7 +4,7 @@ import { ambientMix, type AmbientMix, type AmbientScene } from './mix';
 import { SOUNDS, type SoundName } from './sounds';
 
 /** Shortest gap between two plays of the same sound (s); sirens are rarer. */
-const MIN_GAP: Partial<Record<SoundName, number>> = { siren: 6, alert: 1.5, error: 0.15 };
+const MIN_GAP: Partial<Record<SoundName, number>> = { siren: 6, alert: 1.5, error: 0.15, quake: 3, boom: 1 };
 
 /**
  * Procedural audio: effects on demand and an ambient bed that follows the view. The browser only

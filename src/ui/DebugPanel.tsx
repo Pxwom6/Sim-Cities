@@ -78,6 +78,23 @@ export function DebugPanel() {
           → night
         </button>
       </div>
+      <h3 style={{ marginTop: '0.6rem' }}>Disasters at the view centre</h3>
+      <div class="row">
+        {(['earthquake', 'tornado', 'flood', 'meteor'] as const).map((kind) => (
+          <button
+            key={kind}
+            class="btn"
+            onClick={() => {
+              const c = game.renderer.controller.current;
+              void game.dispatch({ type: 'disaster', kind, at: { x: c.x, z: c.z } }).then((r) => {
+                if (!r.ok) game.toast(r.reason, 'bad');
+              });
+            }}
+          >
+            {kind}
+          </button>
+        ))}
+      </div>
       <h3 style={{ marginTop: '0.6rem' }}>Camera</h3>
       <div class="row">
         {PRESETS.map((name) => (

@@ -21,6 +21,8 @@ export const ICONS = [
   'fire',
   'sick',
   'smog',
+  'flood',
+  'repair',
 ] as const;
 const ROWS = 3;
 const CELL = 64;
@@ -42,6 +44,8 @@ function drawAtlas(): HTMLCanvasElement {
     '#e5552b',
     '#1f9e8f',
     '#6b6f76',
+    '#2c6fb0',
+    '#c27a1a',
   ];
   ICONS.forEach((name, i) => {
     const cx = (i % COLS) * CELL + CELL / 2;
@@ -156,6 +160,38 @@ function drawAtlas(): HTMLCanvasElement {
         g.fillRect(-8, 4, 19, 8);
         break;
       }
+      case 'flood': {
+        // Waves.
+        g.lineWidth = 5;
+        for (const y of [-7, 3, 13]) {
+          g.beginPath();
+          g.moveTo(-16, y);
+          g.quadraticCurveTo(-8, y - 7, 0, y);
+          g.quadraticCurveTo(8, y + 7, 16, y);
+          g.stroke();
+        }
+        break;
+      }
+      case 'repair': {
+        // A spanner.
+        g.lineWidth = 7;
+        g.beginPath();
+        g.moveTo(-11, 11);
+        g.lineTo(5, -5);
+        g.stroke();
+        g.beginPath();
+        g.arc(8, -8, 9, 0, Math.PI * 2);
+        g.fill();
+        g.globalCompositeOperation = 'destination-out';
+        g.beginPath();
+        g.moveTo(8, -8);
+        g.lineTo(18, -18);
+        g.lineTo(14, -4);
+        g.closePath();
+        g.fill();
+        g.globalCompositeOperation = 'source-over';
+        break;
+      }
       case 'fire':
         g.beginPath();
         g.moveTo(0, -18);
@@ -174,6 +210,7 @@ function drawAtlas(): HTMLCanvasElement {
 /** Which icon a building shows (most urgent first), or −1. */
 export function iconFor(flags: number): number {
   if (flags & 128) return 7;
+  if (flags & 1024) return 10;
   if (flags & 1) return 0;
   if (flags & 2) return 1;
   if (flags & 4) return 2;
@@ -233,9 +270,10 @@ export class IconRenderer {
     this.points.renderOrder = 40;
     this.points.name = 'problem-icons';
     world.onBuildings(() => (this.dirty = true));
+    world.onCivics(() => (this.dirty = true));
   }
 
-  private rebuild(heights: Map<number, number>): void {
+  private rebuild(heights: Map<number, number>, civicHeights: Map<number, number>): void {
     const pos: number[] = [];
     const icon: number[] = [];
     for (const b of this.world.buildings.values()) {
@@ -244,18 +282,24 @@ export class IconRenderer {
       pos.push(b.x, b.y + (heights.get(b.id) ?? 8) + 6, b.z);
       icon.push(k);
     }
+    // Civic buildings knocked out by a disaster: under water, or waiting for repairs.
+    for (const c of this.world.civics.values()) {
+      if (!c.flooded && !(c.damage > 0)) continue;
+      pos.push(c.x, c.y + (civicHeights.get(c.id) ?? 12) + 8, c.z);
+      icon.push(c.flooded ? 10 : 11);
+    }
     this.geo.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
     this.geo.setAttribute('icon', new BufferAttribute(new Float32Array(icon), 1));
     this.geo.setDrawRange(0, icon.length);
     this.geo.computeBoundingSphere();
   }
 
-  update(time: number, heights: Map<number, number>): void {
+  update(time: number, heights: Map<number, number>, civicHeights: Map<number, number>): void {
     this.mat.uniforms.uTime!.value = time;
     this.points.visible = this.visible;
     if (this.dirty) {
       this.dirty = false;
-      this.rebuild(heights);
+      this.rebuild(heights, civicHeights);
     }
   }
 

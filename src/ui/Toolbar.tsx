@@ -34,7 +34,14 @@ import {
   IconStraight,
   IconUndo,
   IconZone,
+  IconAlert,
+  IconQuake,
+  IconTornado,
+  IconWaves,
+  IconMeteor,
 } from './icons';
+import { DISASTER_KINDS } from '../sim/systems/disasters';
+import { DISASTER_INFO } from '../tools/disasterTool';
 
 interface TipContent {
   title: string;
@@ -143,6 +150,7 @@ export function Toolbar() {
   const pop = game.world.stats.population;
   const use = (id: ToolId) => tools.use(active === id && id !== 'select' ? 'select' : id);
   const [mapsOpen, setMapsOpen] = useState(false);
+  const [disastersOpen, setDisastersOpen] = useState(false);
   return (
     <div class="toolbar-wrap">
       {active === 'road' && (
@@ -312,6 +320,7 @@ export function Toolbar() {
         </div>
       )}
       {mapsOpen && <MapsMenu onClose={() => setMapsOpen(false)} />}
+      {disastersOpen && <DisastersMenu onClose={() => setDisastersOpen(false)} />}
       <div class="toolbar panel" data-testid="toolbar">
         <ToolButton
           id="tool-select"
@@ -404,6 +413,22 @@ export function Toolbar() {
         >
           <IconBulldozer />
         </ToolButton>
+        <ToolButton
+          id="tool-disasters"
+          active={disastersOpen || active === 'disaster'}
+          onClick={() => {
+            if (active === 'disaster') tools.use('select');
+            setDisastersOpen(!disastersOpen);
+          }}
+          tip={{
+            title: 'Disasters',
+            lines: [
+              'Set off an earthquake, tornado, flood or meteor strike, or switch random disasters off.',
+            ],
+          }}
+        >
+          <IconAlert />
+        </ToolButton>
         <span class="sep" />
         <ToolButton
           id="tool-maps"
@@ -458,6 +483,52 @@ export function ToolHintLabel() {
       data-testid="tool-hint"
     >
       {h.text}
+    </div>
+  );
+}
+
+const DISASTER_ICONS = { earthquake: IconQuake, tornado: IconTornado, flood: IconWaves, meteor: IconMeteor };
+
+/** Pick a disaster to aim, and switch random disasters on or off. */
+function DisastersMenu({ onClose }: { onClose: () => void }) {
+  const game = useGameUpdates(200);
+  const on = game.randomDisasters;
+  return (
+    <div class="maps-menu disasters-menu panel" data-testid="disasters-menu">
+      <div class="maps-group">
+        <h4>Set off</h4>
+        {DISASTER_KINDS.map((k) => {
+          const Icon = DISASTER_ICONS[k];
+          return (
+            <button
+              key={k}
+              class="map-item disaster-item"
+              data-testid={`disaster-${k}`}
+              title={DISASTER_INFO[k].blurb}
+              onClick={() => {
+                game.tools.disaster.setKind(k);
+                game.tools.use('disaster');
+                onClose();
+              }}
+            >
+              <Icon width={16} height={16} />
+              {DISASTER_INFO[k].name}
+            </button>
+          );
+        })}
+      </div>
+      <div class="maps-group">
+        <h4>Random disasters</h4>
+        <label class="volume-mute disaster-random">
+          <input
+            type="checkbox"
+            checked={on}
+            data-testid="random-disasters"
+            onChange={(e) => game.setRandomDisasters((e.target as HTMLInputElement).checked)}
+          />
+          Now and then, once the city has grown
+        </label>
+      </div>
     </div>
   );
 }
