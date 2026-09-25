@@ -129,7 +129,7 @@ export const migrations: Record<number, (state: Record<string, unknown>) => Reco
     econ.funding = { ...econ.funding, tourism: 100, trade: 100 };
     return {
       ...s,
-      progress: { peak: pop, milestone, achievements: {} },
+      progress: { peak: pop, milestone, achievements: {}, recoverTo: 0 },
       policies: [],
       tourism: { visitors: 0, overnight: 0 },
     };

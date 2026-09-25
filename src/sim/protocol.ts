@@ -39,6 +39,10 @@ export interface CityStats {
   /** Highest population reached (what unlocks go by) and the milestone index. */
   peak: number;
   milestone: number;
+  /** Achievements earned (id → tick), visitors a day, policies in force. */
+  achievements: Record<string, number>;
+  visitors: number;
+  policies: string[];
   civics: number;
   vehicles: number;
   /** Average commute of employed residents, seconds. */

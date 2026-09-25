@@ -89,7 +89,13 @@ export interface SimState {
   /** Meteor craters (scorch marks fade after a while). */
   craters: Crater[];
   /** Progression: the highest population reached (unlocks keep), milestone index, achievements (id → tick). */
-  progress: { peak: number; milestone: number; achievements: Record<string, number> };
+  progress: {
+    peak: number;
+    milestone: number;
+    achievements: Record<string, number>;
+    /** Population to beat for the comeback achievement (0 until a big disaster). */
+    recoverTo: number;
+  };
   /** Policies in force. */
   policies: string[];
   /** Visitors a day and overnight guests (tourism specialisation). */

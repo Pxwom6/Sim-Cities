@@ -237,7 +237,7 @@ export class Sim {
       disasters: [],
       roadDamage: new Map(),
       craters: [],
-      progress: { peak: 0, milestone: 0, achievements: {} },
+      progress: { peak: 0, milestone: 0, achievements: {}, recoverTo: 0 },
       policies: [],
       tourism: { visitors: 0, overnight: 0 },
     };
@@ -898,6 +898,9 @@ export class Sim {
       unlockAll: this.state.unlockAll || this.state.options.sandbox,
       peak: Math.max(this.state.progress.peak, this.state.totals.population),
       milestone: this.state.progress.milestone,
+      achievements: { ...this.state.progress.achievements },
+      visitors: this.state.tourism.visitors,
+      policies: [...this.state.policies],
       civics: this.state.civics.size,
       vehicles: this.state.vehicles.size,
       avgCommute: this.avgCommute(),
