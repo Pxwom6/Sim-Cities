@@ -9,7 +9,7 @@ const VOLUMES: [keyof Settings, string][] = [
   ['ambientVolume', 'Ambience'],
 ];
 
-/** Volume sliders and mute (the full settings screen arrives with the game shell in M11). */
+/** Volume sliders, mute and tilt-shift (the full settings screen arrives with the game shell in M11). */
 function SoundSettings() {
   const game = useGame();
   const s = game.settings;
@@ -42,6 +42,16 @@ function SoundSettings() {
           onChange={(e) => game.updateSettings({ muted: (e.target as HTMLInputElement).checked })}
         />
         Mute all sound
+      </label>
+      <div class="menu-heading menu-heading-gap">Graphics</div>
+      <label class="volume-mute">
+        <input
+          type="checkbox"
+          checked={s.tiltShift}
+          data-testid="tilt-shift"
+          onChange={(e) => game.updateSettings({ tiltShift: (e.target as HTMLInputElement).checked })}
+        />
+        Tilt-shift blur when zoomed in
       </label>
     </div>
   );

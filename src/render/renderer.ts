@@ -30,6 +30,7 @@ import { TrafficRenderer } from './traffic';
 import { TransitRenderer } from './transit';
 import { StreetLightRenderer } from './streetLights';
 import { PedestrianRenderer } from './pedestrians';
+import { TiltShift } from './tiltShift';
 
 export interface RenderStats {
   calls: number;
@@ -69,6 +70,9 @@ export class GameRenderer {
   readonly transit: TransitRenderer;
   readonly streetLights: StreetLightRenderer;
   readonly pedestrians: PedestrianRenderer;
+  readonly tiltShift = new TiltShift();
+  /** Tilt-shift blur when zoomed in (a player setting). */
+  tiltShiftOn = false;
   /** Route of the selected car. */
   readonly routeTint: RoadTint;
   /** Road ribbons for the service coverage data maps. */
@@ -296,9 +300,14 @@ export class GameRenderer {
     this.renderer.info.reset();
     this.renderer.render(this.scene, this.camera);
     const info = this.renderer.info;
+    const stats = { calls: info.render.calls, triangles: info.render.triangles };
+    if (this.tiltShiftOn) {
+      const d = this.controller.current.distance;
+      this.tiltShift.apply(this.renderer, Math.min(1, Math.max(0, (520 - d) / 380)));
+    }
     this.lastStats = {
-      calls: info.render.calls,
-      triangles: info.render.triangles,
+      calls: stats.calls,
+      triangles: stats.triangles,
       geometries: info.memory.geometries,
       textures: info.memory.textures,
       trees: this.trees.instanceCount,

@@ -62,6 +62,7 @@ try {
   const st = await page.evaluate(() => window.__game.getState());
   console.log('pop', st.population, 'buildings', st.buildings);
   const cz = st.highwayZ;
+  if (process.env.TILT) await page.evaluate(() => window.__game.setSettings({ tiltShift: true }));
   const map = process.env.MAP;
   if (map) await page.evaluate((m) => window.__game.setOverlay(m), map);
   const shots = [

@@ -8,6 +8,8 @@ export interface Settings {
   effectsVolume: number;
   ambientVolume: number;
   muted: boolean;
+  /** Miniature-style blur at the top and bottom of the view when zoomed in. */
+  tiltShift: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -15,6 +17,7 @@ export const DEFAULT_SETTINGS: Settings = {
   effectsVolume: 0.8,
   ambientVolume: 0.6,
   muted: false,
+  tiltShift: false,
 };
 
 const KEY = 'citybloom.settings';
@@ -37,6 +40,7 @@ export function loadSettings(): Settings {
     effectsVolume: clamp01(raw.effectsVolume, d.effectsVolume),
     ambientVolume: clamp01(raw.ambientVolume, d.ambientVolume),
     muted: typeof raw.muted === 'boolean' ? raw.muted : d.muted,
+    tiltShift: typeof raw.tiltShift === 'boolean' ? raw.tiltShift : d.tiltShift,
   };
 }
 

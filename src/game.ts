@@ -97,6 +97,7 @@ export class Game {
       const hw = this.world.gen.params.highway;
       return { x: 260, z: hw.connectZ };
     };
+    renderer.tiltShiftOn = this.settings.tiltShift;
     void this.refreshAdvice();
     setInterval(() => void this.refreshAdvice(), 2000);
   }
@@ -242,6 +243,7 @@ export class Game {
     this.settings = { ...this.settings, ...patch };
     saveSettings(this.settings);
     this.audio?.apply(this.settings);
+    this.renderer.tiltShiftOn = this.settings.tiltShift;
     this.notify();
   }
 

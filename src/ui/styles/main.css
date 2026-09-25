@@ -528,6 +528,9 @@ body {
   color: var(--color-text-muted);
   margin-bottom: var(--space-1);
 }
+.menu-heading-gap {
+  margin-top: var(--space-3);
+}
 .volume-row {
   display: grid;
   grid-template-columns: 4.5rem 1fr 2rem;

@@ -66,6 +66,8 @@ export interface TestApi {
    * row per def and `variants` columns. Screenshots only; the sim knows nothing about them.
    */
   showGallery(defs: string[], at: { x: number; z: number }, variants: number): void;
+  /** Change player settings (as the menu does); returns the tilt-shift frame count. */
+  setSettings(patch: Record<string, unknown>): number;
   /** Render every sound effect and the ambient bed offline, and measure them. */
   renderSounds(): Promise<SoundCheck[]>;
   /** Live audio state: context running, effects played, ambient mix and scheduled events. */
@@ -187,6 +189,10 @@ export function installTestApi(game: Game): TestApi {
       }),
     errors: [],
     renderSounds,
+    setSettings: (patch) => {
+      game.updateSettings(patch);
+      return game.renderer.tiltShift.frames;
+    },
     showGallery: (defs, at, variants) => {
       const w = game.world;
       const upserts: BuildingData[] = [];
