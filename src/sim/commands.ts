@@ -1,6 +1,19 @@
+import type { RoadTypeId } from '../data/roads';
+import type { ZoneLetter } from '../data/zones';
+import type { Vec2 } from './geom';
+
+export type ZoneArea = { kind: 'brush'; points: Vec2[]; radius: number } | { kind: 'segment'; id: number };
+export type BulldozeTarget = { kind: 'segment'; id: number };
+
 /** Every player (and test, debug, replay) action is one of these. DESIGN.md §1.4. */
 export type Command =
-  { type: 'cheat'; cheat: 'addMoney'; amount: number } | { type: 'renameCity'; name: string };
+  | { type: 'cheat'; cheat: 'addMoney'; amount: number }
+  | { type: 'renameCity'; name: string }
+  /** points = [a, c, b, c, b, ...] (anchors and quadratic control points) or [a, b] for a straight road. */
+  | { type: 'buildRoad'; road: RoadTypeId; points: Vec2[] }
+  | { type: 'bulldoze'; target: BulldozeTarget }
+  | { type: 'zone'; zone: ZoneLetter | 'none'; area: ZoneArea }
+  | { type: 'undo' };
 
 export type CommandType = Command['type'];
 
@@ -14,6 +27,8 @@ export interface CommandOk {
 export interface CommandErr {
   ok: false;
   reason: string;
+  at?: Vec2;
+  info?: Record<string, unknown>;
 }
 export type CommandResult = CommandOk | CommandErr;
 
@@ -23,4 +38,8 @@ export interface CommandLogEntry {
 }
 
 export const ok = (cost = 0, extra: Partial<CommandOk> = {}): CommandOk => ({ ok: true, cost, ...extra });
-export const fail = (reason: string): CommandErr => ({ ok: false, reason });
+export const fail = (reason: string, extra: Partial<CommandErr> = {}): CommandErr => ({
+  ok: false,
+  reason,
+  ...extra,
+});

@@ -1,5 +1,7 @@
 import type { MapPreset } from '../data/world';
 import type { RngState } from './rng';
+import type { NetworkState } from './world/network';
+import type { UndoRecord } from './undo';
 
 export type Difficulty = 'easy' | 'normal' | 'hard';
 
@@ -32,9 +34,15 @@ export interface SimState {
   version: number;
   options: GameOptions;
   tick: number;
+  /** Next entity id (shared by every entity type; ids are never reused). */
+  nextId: number;
   rng: Record<RngStream, RngState>;
   treasury: number;
   cityName: string;
   /** Tree density per raster cell (0..255); roads and buildings clear it. */
   trees: Uint8Array;
+  net: NetworkState;
+  /** The regional highway: off-map node and the connection node inside the map. */
+  highway: { outside: number; connect: number; segment: number };
+  undo: UndoRecord[];
 }
