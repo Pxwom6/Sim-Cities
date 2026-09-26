@@ -47,9 +47,7 @@ export interface CollectionDay {
 
 /** Garbage trucks a facility has with its extra trucks (before funding). */
 export function civicTrucks(c: Civic): number {
-  return (
-    (civicDef(c).garbage?.trucks ?? 0) + c.modules.reduce((a, m) => a + (MODULE.get(m)?.trucks ?? 0), 0)
-  );
+  return (civicDef(c).garbage?.trucks ?? 0) + c.modules.reduce((a, m) => a + (MODULE.get(m)?.trucks ?? 0), 0);
 }
 
 /** Vehicles, seats or beds, and buses a building has with its modules (before funding). */
