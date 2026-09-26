@@ -175,7 +175,8 @@ export function applyHeights(
     const i = idx[n]!;
     before.push(delta[i]!);
     // Height is always seed + delta, computed the same way as on load, so saves match exactly.
-    delta[i] = asDelta ? to[n]! : to[n]! - terrain.base[i]!;
+    // Deltas are whole centimetres, which keeps saves small (they compress well).
+    delta[i] = asDelta ? to[n]! : Math.round((to[n]! - terrain.base[i]!) * 100) / 100;
     terrain.heights[i] = terrain.base[i]! + delta[i]!;
     mark(i);
   }

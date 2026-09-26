@@ -105,10 +105,10 @@ Each phase-2 milestone mapped to where it's done. Filled in as milestones comple
 | Item | Where |
 |---|---|
 | Smoothed vertical profile per road; grade measured on it | `src/sim/world/grading.ts` (40 m smoothing, fit within the limit, pinned at junctions); DESIGN.md §3.15 |
-| Cut and fill under the road and to each side, visible embankments and cuttings | `src/sim/world/earthworks.ts` (formation + bench, 1:1 cuttings, 1:3 embankments); terrain tint in `src/render/terrain.ts`; `docs/screenshots/m13-cutting.png` |
+| Cut and fill under the road and to each side, visible embankments and cuttings | `src/sim/world/earthworks.ts` (formation, a bench that widens with the cut or fill, 1:1 cuttings, 1:3 embankments); terrain tint in `src/render/terrain.ts`; `docs/screenshots/m13-cutting.png` |
 | Per-type grade limits; only extreme ground fails | `RoadType.maxGrade` in `src/data/roads.ts` (streets 16 %, boulevards 8 %); a cutting deeper than 14 m is the only land failure |
 | Bridge over dry ground where fill is very tall | viaducts (`RoadSegment.deck`) where fill passes 8 m |
-| Earthworks cost ∝ volume | $0.40/m³ in the road's price (`GRADING.costPerCubicMetre`); civic pads likewise |
+| Earthworks cost ∝ volume | $0.40/m³ in the road's price (`GRADING.costPerCubicMetre`): nothing extra at grade, a median 73 % on a street over 15 %+ ground; civic pads likewise |
 | Preview shows grade along the ghost, colours too-steep sections, says by how much and what fixes it | `src/render/ghost.ts` (graded ghost, colours, cut/fill posts), `src/tools/roadTool.ts` (hint), reasons in `grading.ts`; `docs/screenshots/m13-preview.png`, `m13-too-steep.png` |
 | Terrain edits saved as deltas on the seed | `SimState.terrainDelta`, save v12, `FrameDiff.terrain` |
 | Nearby zone cells, buildings and trees adapt; nothing floats or sinks | `Sim.groundMoved` (re-seat), cells revalidated, trees cleared on moved ground; level pads for civic buildings; tested in `tests/grading.test.ts` |

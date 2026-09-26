@@ -584,18 +584,20 @@ profile sampled every 4 m:
    the fix. Pieces over water keep the M6 bridge rules.
 
 `world/earthworks.ts` turns profiles into terrain edits. Each height sample within reach of the
-road is claimed by the nearest piece: out to the road's half-width plus a 1.5 m shoulder plus an
-8 m bench (the first row of lots, and enough that the road, draped on 8 m samples, comes out flat
-across) it is set to the profile; beyond, side slopes run back to the natural ground, 1:1 in
-cuttings and 1:3 on embankments (gentle enough that lots on them stay buildable). Water, other
+road is claimed by the nearest piece: out to the road's half-width plus a 1.5 m shoulder plus a
+bench (2 m per metre of cut or fill nearby, up to 8 m, so that in a cutting or on an embankment
+the road, draped on 8 m samples, comes out flat across and the first lots are level) it is set to
+the profile; beyond, side slopes run back to the natural ground, 1:1 in cuttings and 1:3 on
+embankments (gentle enough that lots on them stay buildable). Changes under 0.25 m are skipped,
+so a road at grade leaves the ground beside it alone and costs nothing extra. Water, other
 roads' corridors (road + shoulder), ground beyond an end that joins another road, samples under a
 viaduct, and ground under buildings that stay are left alone. Earth moved costs $0.40 per cubic
 metre, part of the road's price (not refunded by bulldozing). Civic buildings whose footprint
 varies by more than 1 m get a level pad at the height where they meet their road (4 m margin,
 same side slopes, same price); beyond 12 m the site is too steep.
 
-Edits are written as `terrainDelta` (height = seed terrain + delta, computed the same way live and
-on load, so saves and undo are exact) and sent to the client as `FrameDiff.terrain`. After any edit
+Edits are written as `terrainDelta` in whole centimetres (height = seed terrain + delta, computed
+the same way live and on load, so saves and undo are exact) and sent to the client as `FrameDiff.terrain`. After any edit
 the sim re-seats buildings and civic buildings (highest ground under their corners and centre),
 clears trees on ground that moved more than half a metre, forgets bridge decks and the water
 distance / land-setting cache, and rechecks zone cells there (a lot on a steep cut face loses its

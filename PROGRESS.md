@@ -13,7 +13,7 @@
 - [x] M10 Progression and specialisations
 - [x] M11 Game shell
 - [x] M12 Balance, performance and polish
-- [ ] M13 Gentler roads
+- [x] M13 Gentler roads
 - [ ] M14 Controls and editing
 - [ ] M15 Publish it
 - [ ] M16 Photo mode and city history
@@ -30,7 +30,7 @@
 Citybloom is a complete, playable city builder in the browser. From the main menu (over a living
 demo town) a player founds a city on one of four seeded maps with a difficulty, sandbox and
 disasters option and an optional tutorial, then lays straight, curved and free-form roads and
-bridges off the highway, zones homes, shops and industry, and keeps the city supplied with power
+bridges off the highway (graded into the hills with cuttings, embankments and viaducts, M13), zones homes, shops and industry, and keeps the city supplied with power
 (five plant types), water and sewage, garbage collection, fire, police, health, schools and parks.
 Residents are aggregated per building but travel for real: rush-hour commutes congest roads, buses
 take cars off them, service vehicles drive to incidents, and any car or walker can be clicked. Air
@@ -40,7 +40,7 @@ unlock buildings, landmarks and three specialisations (tourism, trade, technolog
 oil. Fires, earthquakes, tornadoes, floods and meteors strike and the city rebuilds. Saves are
 versioned and compressed with autosave, slots and file export. Everything runs from a deterministic
 sim in a Web Worker: ~0.7 ms per tick at 100k residents, with 288 draw calls at the city overview.
-Checked by 142 unit and scenario tests, 16 UI tests, a 10-minute soak and a full playthrough through the UI
+Checked by 155 unit and scenario tests, 17 UI tests, a 10-minute soak and a full playthrough through the UI
 (`docs/SPEC_REVIEW.md` maps every SPEC item to where it's done).
 
 ## Ideas for what's next
@@ -59,16 +59,18 @@ Checked by 142 unit and scenario tests, 16 UI tests, a 10-minute soak and a full
    surplus; a second tuning pass once real players have tried it.
 
 ## In progress
-Phase 2 (SPEC-2.md, M13–M24). M13 Gentler roads: graded profiles, earthworks, level pads for
-civic buildings, terrain deltas (save v12), graded road ghost and hints, unit and UI tests are in
-and pushed. Left: full e2e run, bench and balance, docs (DECISIONS, DESIGN §2.4, README,
-SPEC_REVIEW phase-2 section), then the `M13 complete:` commit.
+Phase 2 (SPEC-2.md, M13–M24). M13 Gentler roads is complete: roads are graded (per-type limits,
+cut and fill, viaducts over dry ground, earthworks priced by volume), civic buildings get level
+pads, terrain edits are saved as deltas (save v12) and the road ghost shows the grade. Next: M14.
 
 ## Next tasks
-1. M13: full checks, `npx tsx scripts/bench.ts 30 --big` and `npx tsx scripts/balance.ts 20`,
-   log the numbers here; docs; commit `M13 complete:`.
-2. Then M14 Controls and editing (trackpad, undo/redo ~30 actions incl. bulldoze, move
-   buildings, `?` cheat sheet).
+1. M14 Controls and editing: trackpad pan/pinch/rotate with auto-detection and a setting; Cmd on
+   macOS; undo and redo for ~30 actions including bulldozing (roads, civic and zoned buildings with
+   their modules), zoning, upgrades and moves, with a toast when an undo can't be clean; move civic,
+   landmark and specialisation buildings for a fee; a `?` shortcut sheet. Done when e2e pans, zooms
+   and rotates with synthesized trackpad events, undoes and redoes a bulldoze and a zoning stroke
+   to the same state hash, and moves a building.
+2. Then M15 Publish it.
 
 ## Known issues
 - Mature cities run a big surplus (≈ +$35k/month at 18k residents with 6 % taxes); intended as money for landmarks and big projects.
@@ -82,11 +84,15 @@ SPEC_REVIEW phase-2 section), then the `M13 complete:` commit.
 - Visitors (M10) are counted, spend money and shop, but don't drive through the traffic model yet.
 - Growth to 100k residents is exercised by the large-city benchmark (a sandbox grid); a scripted careful player tops out around 18k because its district plan runs out of land.
 - Tree count is high in forests (~25k in-map); LOD switches to low-poly beyond 750 m.
+- Cutting faces and embankments read softly: the terrain is 8 m height samples, so a 1:1 cut face shows as a brown bank over one cell rather than a crisp edge.
+- Roads can't join or cross a viaduct mid-span (no grade separation until M19); the planner says to meet it where it's back on the ground.
+- The benchmark grid still fails 5 avenue links whose junctions differ in height by more than 12 % of their length, and 26 bridges without land for ramps (81 failures before M13).
 
-## Performance (M12)
-- `npx tsx scripts/bench.ts 30 --big`: a 16×16 avenue grid grows to ~106k residents by month 5. At 84–110k (latest run, with garbage rounds): tick avg 0.68–0.81 ms, p99 6–7 ms, worst per month 11–14 ms (budget: avg < 1 ms, worst < 15 ms); before the playtest fixes 0.59–0.71 ms and 8–11 ms at 80–106k. One-off 25–30 ms ticks in the first game hour of a freshly built or loaded big city (cold caches, JIT).
+## Performance (latest: M13)
+- `npx tsx scripts/bench.ts 30 --big`: a 16×16 avenue grid grows to ~111k residents by month 5 (more of its roads build since M13). At 97–111k: tick avg 0.69–0.96 ms, p99 6–9 ms, worst per month 7–15 ms (budget: avg < 1 ms, worst < 15 ms). One run had a single 27 ms tick in month 8 that neither of two reruns (one profiled) reproduced (likely GC); one-off 45–50 ms ticks in the first game hour of a freshly built big city (cold caches, JIT). At M12: 0.68–0.81 ms and 11–14 ms at 84–110k.
+- `npx tsx scripts/balance.ts 20` (M13): careful 18,906 residents / 68 % approval at year 20 (22,214 / 69 % before; path-dependent, see DECISIONS M13: on seeds s1–s3 the careful city now reaches 16.5–17k by year 8 where the old roads left two of them at 700–1,050); greedy 102 / 14 %, neglectful 346 / 38 %, unchanged.
 - `npx tsx scripts/bench.ts 12 9` (the older ~12k town): tick avg ~0.12–0.21 ms.
-- Rendering the ~100k city (`scripts/dev/bigshot.mjs`, SwiftShader): 288 draw calls / 2.5M triangles at the whole-city overview (about half the triangles are the shadow pass), 156 / 1.8M at the city preset, 92 / 1.05M at street level. Was 1,241 draw calls before civic, building, road and zone chunks were enlarged.
+- Rendering the ~100k city (`scripts/dev/bigshot.mjs`, SwiftShader, M13 at 112k): 288 draw calls / 2.67M triangles at the whole-city overview (about half the triangles are the shadow pass), 158 / 1.85M at the city preset, 95 / 1.05M at street level (M12 at 106k: 288 / 2.5M, 156 / 1.8M, 92 / 1.05M). Was 1,241 draw calls before civic, building, road and zone chunks were enlarged.
 - Night town (720 residents, M9): ~95 draw calls, ~0.75M triangles on SwiftShader. A tornado adds 3 point systems (~2,200 points); flood water is one mesh; dust bursts share one point system.
 - Procedural models: mean triangles per building R0 139, R1 329, R2 622, C0 102, C1 254, C2 481, I 174–217 (`scripts/dev/modelstats.ts`).
 
@@ -98,6 +104,7 @@ SPEC_REVIEW phase-2 section), then the `M13 complete:` commit.
 - Audio: listen to the effects (build, zone, bulldoze, place, alert, siren) and the ambient bed over a busy street, woods by day and night, and from high up; check the mix and that nothing clips.
 - Tilt-shift (menu → Graphics): frame cost at 60 fps and whether the blur strength feels right.
 - Pedestrians at street level: frame time with 240 walkers.
+- Graded roads (M13): how cuttings, embankments and civic pads look at full resolution (`node scripts/dev/earthshot.mjs` scene, or build a street over a hill on the highlands preset), and whether the road ghost's grade colours and the see-through ghost read well while drawing.
 - Frame rate while panning the overview and street presets (expect 60 fps).
 - Fire/smoke particles and siren lights: check they read well and cost little at 60 fps.
 - Visible traffic at 360 cars: frame time while panning; cars overlap at junctions (no car-following model).
