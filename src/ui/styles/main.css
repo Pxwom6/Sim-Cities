@@ -583,7 +583,8 @@ body {
   border-color: var(--color-accent-strong);
   color: #fff;
 }
-.shell-btn.primary:hover {
+/* As specific as the plain hover rule, so hovering keeps the white label on blue. */
+.shell-btn.primary:hover:not(:disabled) {
   background: var(--color-accent-strong);
 }
 .shell-btn.quiet {
@@ -1023,8 +1024,33 @@ body {
   display: flex;
   justify-content: flex-end;
 }
-.btn.danger {
-  color: var(--color-negative);
+.inspector footer .btn.danger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.inspector footer .btn.danger svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.inspector footer.confirm {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: rgba(210, 73, 59, 0.08);
+  border: 1px solid rgba(210, 73, 59, 0.35);
+}
+.inspector footer.confirm p {
+  margin: 0;
+  font-size: var(--font-size-sm);
+}
+.inspector footer.confirm .actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
 }
 .warn {
   margin-top: var(--space-2);

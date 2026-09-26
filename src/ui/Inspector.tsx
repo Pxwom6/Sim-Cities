@@ -3,6 +3,7 @@ import { modulesFor } from '../data/modules';
 import { DENSITY_NAMES, INDUSTRY_TIER_NAMES, WEALTH_NAMES, ZONED_DEFS } from '../data/buildings';
 import type { BuildingDetails, CivicDetails } from '../sim/protocol';
 import { formatNumber, useGameUpdates } from './hooks';
+import { IconBulldozer } from './icons';
 
 const ZONE_NAMES = ['', 'Residential', 'Commercial', 'Industrial'];
 const EDU_NAMES = ['Little schooling', 'Primary school', 'High school', 'University'];
@@ -17,6 +18,42 @@ function Mood({ value }: { value: number }) {
       </div>
       <span>{Math.round(value * 100)}%</span>
     </div>
+  );
+}
+
+/**
+ * Demolish the inspected building. Bulldozing can't be undone, so the first click asks: the
+ * confirmation names the building and what the city gets back.
+ */
+function BulldozeButton(props: { name: string; refund: number; onConfirm: () => void }) {
+  const [asking, setAsking] = useState(false);
+  const refund = props.refund > 0 ? `refund $${props.refund.toLocaleString('en-US')}` : 'no refund';
+  if (!asking)
+    return (
+      <footer>
+        <button class="btn danger" data-testid="bulldoze" onClick={() => setAsking(true)}>
+          <IconBulldozer />
+          <span>Bulldoze ({refund})</span>
+        </button>
+      </footer>
+    );
+  return (
+    <footer class="confirm" data-testid="bulldoze-confirm" role="alertdialog" aria-label="Confirm bulldozing">
+      <p>
+        Bulldoze the {props.name.toLowerCase()}?{' '}
+        {props.refund > 0 ? `The city gets $${props.refund.toLocaleString('en-US')} back. ` : ''}This can't be
+        undone.
+      </p>
+      <div class="actions">
+        <button class="btn" data-testid="bulldoze-cancel" onClick={() => setAsking(false)} autoFocus>
+          Keep it
+        </button>
+        <button class="btn danger" data-testid="bulldoze-yes" onClick={props.onConfirm}>
+          <IconBulldozer />
+          <span>Bulldoze</span>
+        </button>
+      </div>
+    </footer>
   );
 }
 
@@ -344,17 +381,15 @@ function CivicInspector({ id }: { id: number }) {
         </dd>
       </dl>
       <ModuleList civicId={d.id} def={d.def} />
-      <footer>
-        <button
-          class="btn danger"
-          onClick={() => {
-            void game.dispatch({ type: 'bulldoze', target: { kind: 'civic', id: d.id } });
-            game.select(null);
-          }}
-        >
-          Bulldoze (refund ${d.refund.toLocaleString('en-US')})
-        </button>
-      </footer>
+      <BulldozeButton
+        key={d.id}
+        name={d.name}
+        refund={d.refund}
+        onConfirm={() => {
+          void game.dispatch({ type: 'bulldoze', target: { kind: 'civic', id: d.id } });
+          game.select(null);
+        }}
+      />
     </aside>
   );
 }
@@ -565,17 +600,15 @@ function BuildingInspector({ id }: { id: number | null }) {
           <div class="sub">Crime nearby: {d.crime < 0.05 ? 'low' : d.crime < 0.3 ? 'some' : 'high'}</div>
         </section>
       )}
-      <footer>
-        <button
-          class="btn danger"
-          onClick={() => {
-            void game.dispatch({ type: 'bulldoze', target: { kind: 'building', id: d.id } });
-            game.select(null);
-          }}
-        >
-          Bulldoze
-        </button>
-      </footer>
+      <BulldozeButton
+        key={d.id}
+        name={d.name}
+        refund={0}
+        onConfirm={() => {
+          void game.dispatch({ type: 'bulldoze', target: { kind: 'building', id: d.id } });
+          game.select(null);
+        }}
+      />
     </aside>
   );
 }
