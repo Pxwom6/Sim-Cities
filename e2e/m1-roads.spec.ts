@@ -41,7 +41,7 @@ test('M1: build straight, curved and crossing roads off the highway and zone the
   await waitFor(page, (s) => s.segments === s0.segments + 1, 'straight road built');
   const s1 = await state(page);
   expect(s1.treasury).toBeLessThan(s0.treasury);
-  await page.keyboard.press('Escape');
+  // A dragged road doesn't chain: the tool is ready for a new road anywhere (no Escape needed).
 
   // Curved street: start, bend, end.
   await page.getByTestId('mode-curve').click();
@@ -68,7 +68,6 @@ test('M1: build straight, curved and crossing roads off the highway and zone the
   await page.mouse.move(b.x, b.y, { steps: 3 });
   await page.mouse.up();
   await waitFor(page, (s) => s.segments === s2.segments + 3, 'crossing avenue built and split');
-  await page.keyboard.press('Escape');
 
   // Free-form dirt road.
   await page.getByTestId('road-dirt').click();

@@ -223,7 +223,12 @@ export class RoadTool implements Tool {
     this.refresh();
   }
 
-  private async commit(): Promise<boolean> {
+  /**
+   * Build the road being drawn. Click–click drawing keeps going from where the road ended (`chain`);
+   * a drag draws one road, so the next drag starts wherever the player presses. A drag that can't be
+   * built starts over too, with the reason in a toast (the ghost showed it red while dragging).
+   */
+  private async commit(chain = true): Promise<boolean> {
     const cmd = this.currentCommand();
     if (!cmd || cmd.type !== 'buildRoad') return false;
     const res = await this.game.dispatch(cmd);
@@ -231,13 +236,15 @@ export class RoadTool implements Tool {
       this.game.audio?.play('build');
       const end = cmd.points[cmd.points.length - 1]!;
       this.reset();
-      if (this.mode !== 'free') {
-        // Keep drawing from where this road ended.
-        this.start = this.snap(end, null);
-      }
+      if (this.mode !== 'free' && chain) this.start = this.snap(end, null);
     } else {
       this.game.audio?.play('error');
-      this.lastResult = { seq: this.previewSeq, res };
+      if (chain) this.lastResult = { seq: this.previewSeq, res };
+      else {
+        this.reset();
+        const why = res.reason.charAt(0).toLowerCase() + res.reason.slice(1);
+        this.game.toast(`Can't build that road: ${why}.`, 'bad', 3000);
+      }
     }
     this.refresh();
     return res.ok;
@@ -316,7 +323,7 @@ export class RoadTool implements Tool {
     if (this.mode === 'straight' && this.dragging) {
       this.dragging = false;
       const moved = this.downAt ? Math.hypot(p.clientX - this.downAt.x, p.clientY - this.downAt.y) : 0;
-      if (moved > 8) void this.commit();
+      if (moved > 8) void this.commit(false);
     }
   }
 
