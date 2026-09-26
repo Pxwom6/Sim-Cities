@@ -1,0 +1,309 @@
+import { MODULE } from '../../data/modules';
+import { CIVIC, SPECIALISATION, type CivicDef } from '../../data/civic';
+import { ROAD_RULES, ROAD_TYPES } from '../../data/roads';
+import { MAP_SIZE, SHORE_HEIGHT, GRID_CELL, GRID_RES } from '../../data/world';
+import { fail, ok, type CommandResult } from '../commands';
+import { pointRectDistance, rectsOverlap, type ORect, type Vec2 } from '../geom';
+import type { Sim } from '../sim';
+import { clearTreesUnder, footprint as zonedFootprint } from './buildings';
+
+/** A player-placed civic building (utility, service, park, landmark). */
+export interface Civic {
+  id: number;
+  def: string;
+  x: number;
+  z: number;
+  y: number;
+  /** Road tangent angle; the front faces the road (same convention as zoned buildings). */
+  angle: number;
+  side: 1 | -1;
+  access: { seg: number; s: number } | null;
+  /** Garbage stored (landfill) and processed today (recycling, incinerator). */
+  stored: number;
+  processedToday: number;
+  /** Garbage processed during the previous day (drives incinerator power). */
+  lastDay: number;
+  /** Vehicles currently out. */
+  out: number;
+  cost: number;
+  born: number;
+  variant: number;
+  /** Hours until disaster damage is repaired (offline until then), and under flood water now. */
+  damage: number;
+  flooded: boolean;
+  /** Add-on modules installed (M10). */
+  modules: string[];
+}
+
+/** Vehicles, seats or beds, and buses a building has with its modules (before funding). */
+export function civicVehicles(c: Civic): number {
+  return (
+    (civicDef(c).service?.vehicles ?? 0) + c.modules.reduce((a, m) => a + (MODULE.get(m)?.vehicles ?? 0), 0)
+  );
+}
+export function civicCapacity(c: Civic): number {
+  return (
+    (civicDef(c).service?.capacity ?? 0) + c.modules.reduce((a, m) => a + (MODULE.get(m)?.capacity ?? 0), 0)
+  );
+}
+export function civicBuses(c: Civic): number {
+  return (civicDef(c).transit?.buses ?? 0) + c.modules.reduce((a, m) => a + (MODULE.get(m)?.buses ?? 0), 0);
+}
+/** Monthly upkeep at 100 % funding, modules included. */
+export function civicUpkeep(c: Civic): number {
+  return civicDef(c).upkeep + c.modules.reduce((a, m) => a + (MODULE.get(m)?.upkeep ?? 0), 0);
+}
+
+/** Add a module to a civic building. */
+export function addModule(sim: Sim, civicId: number, moduleId: string, dryRun: boolean): CommandResult {
+  const c = sim.state.civics.get(civicId);
+  const m = MODULE.get(moduleId);
+  if (!c || !m) return { ok: false, reason: 'Nothing to add that to' };
+  if (!m.for.includes(c.def)) return { ok: false, reason: "That module doesn't fit this building" };
+  if (c.modules.includes(m.id)) return { ok: false, reason: 'Already added' };
+  if (!sim.isUnlocked(m.unlockPopulation))
+    return { ok: false, reason: `Unlocks at ${m.unlockPopulation.toLocaleString('en-US')} residents` };
+  if (!sim.state.options.sandbox && sim.state.treasury < m.cost)
+    return { ok: false, reason: 'Not enough money' };
+  if (dryRun) return { ok: true, cost: m.cost };
+  sim.spend(m.cost, 'construction');
+  c.modules = [...c.modules, m.id];
+  c.cost += m.cost;
+  sim.civicStatusChanged(c.id);
+  return { ok: true, cost: m.cost };
+}
+
+/** Mean richness (0–1) of an ore or oil deposit under a footprint. */
+export function resourceRichness(sim: Sim, kind: 'ore' | 'oil', r: ORect): number {
+  const raster = kind === 'ore' ? sim.terrain.ore : sim.terrain.oil;
+  const c = Math.cos(r.angle);
+  const s = Math.sin(r.angle);
+  let sum = 0;
+  let n = 0;
+  for (let u = -1; u <= 1; u += 0.5)
+    for (let v = -1; v <= 1; v += 0.5) {
+      const x = r.x + u * r.hw * c - v * r.hd * s;
+      const z = r.z + u * r.hw * s + v * r.hd * c;
+      const i = Math.min(GRID_RES - 1, Math.max(0, Math.floor(x / GRID_CELL)));
+      const j = Math.min(GRID_RES - 1, Math.max(0, Math.floor(z / GRID_CELL)));
+      sum += raster[j * GRID_RES + i]! / 255;
+      n++;
+    }
+  return sum / n;
+}
+
+/** A civic building works unless it's damaged or flooded. */
+export function civicOnline(c: Civic): boolean {
+  return c.damage <= 0 && !c.flooded;
+}
+
+export function civicDef(c: Civic): CivicDef {
+  return CIVIC.get(c.def)!;
+}
+
+export function civicRect(c: { x: number; z: number; angle: number; def: string }, shrink = 0): ORect {
+  const d = CIVIC.get(c.def)!;
+  return { x: c.x, z: c.z, hw: d.w / 2 - shrink, hd: d.d / 2 - shrink, angle: c.angle };
+}
+
+/** Unit vector from the road towards the back of the lot. */
+export function awayDir(angle: number, side: 1 | -1): Vec2 {
+  // Left normal of the tangent (cos a, sin a) is (sin a, −cos a); `side` picks the road side.
+  return { x: Math.sin(angle) * side, z: -Math.cos(angle) * side };
+}
+
+/** Middle of the front edge (the side facing the road). */
+export function frontPoint(c: { x: number; z: number; angle: number; side: 1 | -1; def: string }): Vec2 {
+  const d = CIVIC.get(c.def)!;
+  const a = awayDir(c.angle, c.side);
+  return { x: c.x - a.x * (d.d / 2), z: c.z - a.z * (d.d / 2) };
+}
+
+/** Nearest road the front edge touches (within its corridor plus a few metres). */
+export function findAccess(
+  sim: Sim,
+  c: { x: number; z: number; angle: number; side: 1 | -1; def: string },
+): { seg: number; s: number } | null {
+  const f = frontPoint(c);
+  const hit = sim.net.nearestSegment(f, 24, (id) => ROAD_TYPES[sim.net.segment(id).type].buildable);
+  if (!hit) return null;
+  if (hit.d > sim.net.halfWidth(hit.seg) + 4) return null;
+  return { seg: hit.seg, s: hit.s };
+}
+
+export interface PlacementCheck {
+  ok: boolean;
+  reason?: string;
+  demolish: number[];
+  access: { seg: number; s: number } | null;
+  y: number;
+}
+
+export function checkPlacement(
+  sim: Sim,
+  defId: string,
+  x: number,
+  z: number,
+  angle: number,
+  side: 1 | -1,
+  ignoreCivic = 0,
+): PlacementCheck {
+  const def = CIVIC.get(defId);
+  const res: PlacementCheck = { ok: false, demolish: [], access: null, y: 0 };
+  if (!def) return { ...res, reason: 'Unknown building' };
+  if (![x, z, angle].every(Number.isFinite)) return { ...res, reason: 'Invalid position' };
+  const rect: ORect = { x, z, hw: def.w / 2, hd: def.d / 2, angle };
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  const pts: Vec2[] = [{ x, z }];
+  for (const [u, v] of [
+    [-1, -1],
+    [1, -1],
+    [1, 1],
+    [-1, 1],
+    [0, -1],
+    [0, 1],
+    [-1, 0],
+    [1, 0],
+  ] as const) {
+    pts.push({ x: x + u * rect.hw * c - v * rect.hd * s, z: z + u * rect.hw * s + v * rect.hd * c });
+  }
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const p of pts) {
+    if (p.x < 4 || p.z < 4 || p.x > MAP_SIZE - 4 || p.z > MAP_SIZE - 4)
+      return { ...res, reason: 'Outside the city limits' };
+    const h = sim.terrain.heightAt(p.x, p.z);
+    if (h < SHORE_HEIGHT) return { ...res, reason: "Can't build on water" };
+    lo = Math.min(lo, h);
+    hi = Math.max(hi, h);
+  }
+  if (hi - lo > 7) return { ...res, reason: 'Ground is too steep' };
+  res.y = hi;
+  if (def.nearWater !== undefined) {
+    const i = Math.min(GRID_RES - 1, Math.max(0, Math.floor(x / GRID_CELL)));
+    const j = Math.min(GRID_RES - 1, Math.max(0, Math.floor(z / GRID_CELL)));
+    const wd = sim.waterDist()[j * GRID_RES + i]!;
+    if (wd > def.nearWater + Math.max(def.w, def.d) / 2)
+      return { ...res, reason: 'Must be next to a river, lake or the sea' };
+  }
+  if (def.unique)
+    for (const o of sim.state.civics.values())
+      if (o.def === def.id && o.id !== ignoreCivic)
+        return { ...res, reason: `The city already has a ${def.name.toLowerCase()}` };
+  if (def.requires && ![...sim.state.civics.values()].some((o) => o.def === def.requires))
+    return { ...res, reason: `Needs a ${CIVIC.get(def.requires)?.name.toLowerCase() ?? def.requires} first` };
+  if (def.resource && resourceRichness(sim, def.resource.kind, rect) < SPECIALISATION.minRichness)
+    return {
+      ...res,
+      reason: `Must stand on ${def.resource.kind === 'ore' ? 'an ore deposit' : 'an oil field'} (see the resources map)`,
+    };
+  // Roads crossing the footprint.
+  const shrunk: ORect = { ...rect, hw: rect.hw - 0.5, hd: rect.hd - 0.5 };
+  const rad = Math.hypot(rect.hw, rect.hd);
+  for (const sid of sim.net.segHash.queryPoint(x, z, rad + 16)) {
+    const curve = sim.net.curve(sid);
+    const hw = sim.net.halfWidth(sid);
+    for (let i = 0; i < curve.xs.length; i++) {
+      if (pointRectDistance({ x: curve.xs[i]!, z: curve.zs[i]! }, shrunk) < hw)
+        return { ...res, reason: 'Overlaps a road' };
+    }
+  }
+  // Other civic buildings.
+  for (const id of sim.civHash.queryPoint(x, z, rad + 80)) {
+    if (id === ignoreCivic) continue;
+    const other = sim.state.civics.get(id)!;
+    if (rectsOverlap(shrunk, civicRect(other))) return { ...res, reason: 'Overlaps another building' };
+  }
+  res.access = findAccess(sim, { x, z, angle, side, def: defId });
+  if (!res.access) return { ...res, reason: 'Must face a road' };
+  // Zoned buildings in the way are demolished.
+  for (const id of sim.bldHash.queryPoint(x, z, rad + 40)) {
+    const b = sim.state.buildings.get(id)!;
+    if (rectsOverlap(shrunk, zonedFootprint(b, 0.5))) res.demolish.push(id);
+  }
+  if (!sim.isUnlocked(def.unlockPopulation))
+    return { ...res, reason: `Unlocks at ${def.unlockPopulation.toLocaleString('en-US')} residents` };
+  if (!sim.state.options.sandbox && sim.state.treasury < def.cost)
+    return { ...res, reason: 'Not enough money' };
+  res.ok = true;
+  return res;
+}
+
+export function placeCivic(
+  sim: Sim,
+  defId: string,
+  x: number,
+  z: number,
+  angle: number,
+  side: 1 | -1,
+  dryRun: boolean,
+): CommandResult {
+  const chk = checkPlacement(sim, defId, x, z, angle, side);
+  const def = CIVIC.get(defId);
+  const info = { demolish: chk.demolish.length, access: !!chk.access };
+  if (!chk.ok || !def) return fail(chk.reason ?? 'Invalid placement', { at: { x, z }, info });
+  if (dryRun) return ok(def.cost, { info });
+  const s = sim.state;
+  const civ: Civic = {
+    id: s.nextId++,
+    def: defId,
+    x,
+    z,
+    y: chk.y,
+    angle,
+    side,
+    access: chk.access,
+    stored: 0,
+    processedToday: 0,
+    lastDay: 0,
+    out: 0,
+    cost: def.cost,
+    born: s.tick,
+    variant: sim.rng.world.int(1 << 16),
+    damage: 0,
+    flooded: false,
+    modules: [],
+  };
+  for (const id of chk.demolish) sim.removeBuilding(id);
+  sim.addCivic(civ);
+  sim.spend(def.cost, 'construction');
+  clearTreesUnder(sim, civicRect(civ, 0));
+  sim.pushUndo({ kind: 'civic', tick: s.tick, id: civ.id, cost: def.cost });
+  return ok(def.cost, { created: [civ.id], info });
+}
+
+export function bulldozeCivic(
+  sim: Sim,
+  id: number,
+  dryRun: boolean,
+  refundShare = ROAD_RULES.bulldozeRefund,
+): CommandResult {
+  const c = sim.state.civics.get(id);
+  if (!c) return fail('Nothing to bulldoze');
+  const refund = Math.round(c.cost * refundShare);
+  if (dryRun) return ok(-refund, { info: { refund, buildings: [] } });
+  sim.removeCivic(id);
+  sim.earn(refund, 'refunds');
+  return ok(-refund, { info: { refund, buildings: [] } });
+}
+
+/** Centre, angle and side for a civic building of depth `d` standing beside a segment at arc length s. */
+export function roadsidePose(
+  net: {
+    curve(id: number): { pointAt(s: number): Vec2; tangentAt(s: number): Vec2; length: number };
+    halfWidth(id: number): number;
+  },
+  segId: number,
+  s: number,
+  side: 1 | -1,
+  d: number,
+): { x: number; z: number; angle: number; side: 1 | -1 } {
+  const curve = net.curve(segId);
+  const p = curve.pointAt(s);
+  const t = curve.tangentAt(s);
+  const hw = net.halfWidth(segId);
+  const away = { x: t.z * side, z: -t.x * side };
+  const off = hw + d / 2 + 0.5;
+  return { x: p.x + away.x * off, z: p.z + away.z * off, angle: Math.atan2(t.z, t.x), side };
+}

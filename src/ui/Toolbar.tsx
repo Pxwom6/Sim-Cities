@@ -1,0 +1,613 @@
+import type { ComponentChildren } from 'preact';
+import { useState } from 'preact/hooks';
+import { BUILDABLE_ROADS, ROAD_TYPES, type RoadTypeId } from '../data/roads';
+import type { ZoneLetter } from '../data/zones';
+import type { RoadMode } from '../tools/roadTool';
+import type { ToolId } from '../tools/manager';
+import { useGameUpdates } from './hooks';
+import { CIVIC_DEFS, type CivicCategory, type CivicDef } from '../data/civic';
+import { TRANSIT } from '../data/balance';
+import { MAPS } from '../client/overlay';
+import {
+  IconBolt,
+  IconBulldozer,
+  IconDrop,
+  IconLayers,
+  IconTrash,
+  IconFlame,
+  IconShield,
+  IconHealth,
+  IconBook,
+  IconTree,
+  IconBus,
+  IconCurve,
+  IconUpgrade,
+  IconEraser,
+  IconFactory,
+  IconFreeform,
+  IconGrid,
+  IconHouse,
+  IconLock,
+  IconPointer,
+  IconRoad,
+  IconShop,
+  IconStraight,
+  IconUndo,
+  IconZone,
+  IconAlert,
+  IconQuake,
+  IconTornado,
+  IconWaves,
+  IconMeteor,
+  IconLandmark,
+  IconCrate,
+} from './icons';
+import { DISASTER_KINDS } from '../sim/systems/disasters';
+import { DISASTER_INFO } from '../tools/disasterTool';
+
+interface TipContent {
+  title: string;
+  lines?: string[];
+  key?: string;
+}
+
+function Tip({ tip, children }: { tip: TipContent; children: ComponentChildren }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span class="tip-anchor" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+      {children}
+      {open && (
+        <span class="tip" role="tooltip">
+          <strong>{tip.title}</strong>
+          {tip.key && <kbd>{tip.key}</kbd>}
+          {tip.lines?.map((l) => (
+            <span class="tip-line" key={l}>
+              {l}
+            </span>
+          ))}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function ToolButton(props: {
+  id: string;
+  active: boolean;
+  onClick: () => void;
+  tip: TipContent;
+  children: ComponentChildren;
+  disabled?: boolean;
+  class?: string;
+}) {
+  return (
+    <Tip tip={props.tip}>
+      <button
+        class={`tool-btn ${props.active ? 'active' : ''} ${props.class ?? ''}`}
+        data-testid={props.id}
+        aria-label={props.tip.title}
+        aria-pressed={props.active}
+        disabled={props.disabled}
+        onClick={props.onClick}
+      >
+        {props.children}
+      </button>
+    </Tip>
+  );
+}
+
+const ROAD_ICON_COLOURS: Record<RoadTypeId, string> = {
+  dirt: '#b59a6d',
+  street: '#6b7079',
+  avenue: '#4d5259',
+  boulevard: '#3a3f46',
+  highway: '#333',
+};
+const ZONES: {
+  z: ZoneLetter | 'none';
+  name: string;
+  Icon: typeof IconHouse;
+  key: string;
+  cls: string;
+  effect: string;
+}[] = [
+  {
+    z: 'R',
+    name: 'Residential',
+    Icon: IconHouse,
+    key: 'Z',
+    cls: 'zone-r',
+    effect: 'Homes. Residents want jobs, shops and services.',
+  },
+  {
+    z: 'C',
+    name: 'Commercial',
+    Icon: IconShop,
+    key: 'X',
+    cls: 'zone-c',
+    effect: 'Shops and offices. Need customers, workers and goods.',
+  },
+  {
+    z: 'I',
+    name: 'Industrial',
+    Icon: IconFactory,
+    key: 'C',
+    cls: 'zone-i',
+    effect: 'Factories. Need workers and a way to ship freight.',
+  },
+  {
+    z: 'none',
+    name: 'Dezone',
+    Icon: IconEraser,
+    key: 'V',
+    cls: '',
+    effect: 'Remove zoning from empty cells.',
+  },
+];
+
+export function Toolbar() {
+  const game = useGameUpdates(100);
+  const tools = game.tools;
+  const active: ToolId = tools.activeId;
+  // Unlocks go by the highest population reached (and the unlock-all cheat / sandbox).
+  const pop = game.world.stats.unlockAll ? Infinity : game.world.stats.peak;
+  const use = (id: ToolId) => tools.use(active === id && id !== 'select' ? 'select' : id);
+  const [mapsOpen, setMapsOpen] = useState(false);
+  const [disastersOpen, setDisastersOpen] = useState(false);
+  return (
+    <div class="toolbar-wrap">
+      {active === 'road' && (
+        <div class="subbar panel" data-testid="road-options">
+          {BUILDABLE_ROADS.map((id) => {
+            const rt = ROAD_TYPES[id];
+            const locked = pop < rt.unlockPopulation;
+            return (
+              <ToolButton
+                key={id}
+                id={`road-${id}`}
+                active={tools.road.type === id}
+                disabled={locked}
+                onClick={() => tools.road.setType(id)}
+                tip={{
+                  title: rt.name,
+                  lines: [
+                    `$${rt.costPerMetre}/m to build · $${(rt.upkeepPerMetre * 100).toFixed(0)}/100 m monthly upkeep`,
+                    `${rt.lanes} lanes · ${rt.speed} km/h · ${rt.capacity.toLocaleString('en-US')} vehicles/h`,
+                    `Density up to ${['low', 'medium', 'high'][rt.maxDensity]}`,
+                    rt.blurb,
+                    ...(locked
+                      ? [`Unlocks at ${rt.unlockPopulation.toLocaleString('en-US')} residents`]
+                      : []),
+                  ],
+                }}
+              >
+                {locked ? (
+                  <IconLock />
+                ) : (
+                  <span class="road-swatch" style={{ background: ROAD_ICON_COLOURS[id] }} />
+                )}
+                <span class="tool-label">{rt.name.replace(' road', '')}</span>
+              </ToolButton>
+            );
+          })}
+          <span class="sep" />
+          {(
+            [
+              [
+                'straight',
+                IconStraight,
+                'Straight',
+                'Drag, or click start and end. Keeps drawing from the last end.',
+              ],
+              ['curve', IconCurve, 'Curve', 'Click the start, the bend, then the end.'],
+              ['free', IconFreeform, 'Free-form', 'Press and draw any shape.'],
+              [
+                'upgrade',
+                IconUpgrade,
+                'Upgrade',
+                'Click a road to change it to the selected type. Buildings along it stay where they can.',
+              ],
+            ] as [RoadMode, typeof IconCurve, string, string][]
+          ).map(([m, Icon, name, how]) => (
+            <ToolButton
+              key={m}
+              id={`mode-${m}`}
+              active={tools.road.mode === m}
+              onClick={() => tools.road.setMode(m)}
+              tip={{ title: name, lines: [how], key: 'Tab' }}
+            >
+              <Icon />
+            </ToolButton>
+          ))}
+          <ToolButton
+            id="grid-snap"
+            active={tools.road.grid}
+            onClick={() => {
+              tools.road.grid = !tools.road.grid;
+              game.notify();
+            }}
+            tip={{ title: 'Grid snap', lines: ['Snap to an 8 m grid and 8 m lengths.'], key: 'G' }}
+          >
+            <IconGrid />
+          </ToolButton>
+        </div>
+      )}
+      {active === 'zone' && (
+        <div class="subbar panel" data-testid="zone-options">
+          {ZONES.map(({ z, name, Icon, key, cls, effect }) => (
+            <ToolButton
+              key={z}
+              id={`zone-${z}`}
+              class={cls}
+              active={tools.zone.zone === z}
+              onClick={() => tools.zone.setZone(z)}
+              tip={{
+                title: name,
+                lines: [effect, 'Zoning is free. Shift-click a road to fill both sides.'],
+                key,
+              }}
+            >
+              <Icon />
+              <span class="tool-label">{name}</span>
+            </ToolButton>
+          ))}
+          <span class="sep" />
+          <label class="brush">
+            Brush
+            <input
+              type="range"
+              min={8}
+              max={96}
+              step={8}
+              value={tools.zone.radius}
+              onInput={(e) => {
+                tools.zone.radius = Number((e.target as HTMLInputElement).value);
+                game.notify();
+              }}
+            />
+            <span>{tools.zone.radius} m</span>
+          </label>
+        </div>
+      )}
+      {(active === 'place' || active === 'stop') && (
+        <div class="subbar panel" data-testid="place-options">
+          {CIVIC_DEFS.filter(
+            (d) => d.category === (active === 'stop' ? 'transit' : tools.place.category),
+          ).map((d) => {
+            const locked = pop < d.unlockPopulation;
+            const out = d.output ? Object.entries(d.output).map(([k, v]) => `${v} ${k} units`) : [];
+            return (
+              <ToolButton
+                key={d.id}
+                id={`place-${d.id}`}
+                active={active === 'place' && tools.place.def === d.id}
+                disabled={locked}
+                onClick={() => {
+                  tools.place.setDef(d.id);
+                  tools.use('place');
+                }}
+                tip={{
+                  title: d.name,
+                  lines: [
+                    `$${d.cost.toLocaleString('en-US')} to build · $${d.upkeep.toLocaleString('en-US')}/month upkeep`,
+                    ...out,
+                    ...(d.garbage ? [`${d.garbage.trucks} trucks`] : []),
+                    ...(d.service ? [serviceLine(d.service)] : []),
+                    d.blurb,
+                    ...(locked ? [`Unlocks at ${d.unlockPopulation.toLocaleString('en-US')} residents`] : []),
+                  ],
+                }}
+              >
+                {locked ? <IconLock /> : null}
+                <span class="tool-label">{d.name}</span>
+              </ToolButton>
+            );
+          })}
+          {(active === 'stop' || tools.place.category === 'transit') && (
+            <ToolButton
+              id="place-busstop"
+              active={active === 'stop'}
+              onClick={() => tools.use('stop')}
+              tip={{
+                title: 'Bus stop',
+                lines: [
+                  `$${TRANSIT.stopCost} each · $${TRANSIT.stopUpkeep}/month`,
+                  'Click beside a road. Homes and jobs within a few minutes’ walk can use it.',
+                  'Stops need a bus depot; its buses loop through every stop they can reach.',
+                ],
+              }}
+            >
+              <span class="tool-label">Bus stop</span>
+            </ToolButton>
+          )}
+        </div>
+      )}
+      {mapsOpen && <MapsMenu onClose={() => setMapsOpen(false)} />}
+      {disastersOpen && <DisastersMenu onClose={() => setDisastersOpen(false)} />}
+      <div class="toolbar panel" data-testid="toolbar">
+        <ToolButton
+          id="tool-select"
+          active={active === 'select'}
+          onClick={() => use('select')}
+          tip={{ title: 'Select', lines: ['Drag to pan. Click things to inspect them.'], key: 'H / Esc' }}
+        >
+          <IconPointer />
+        </ToolButton>
+        <ToolButton
+          id="tool-road"
+          active={active === 'road'}
+          onClick={() => use('road')}
+          tip={{
+            title: 'Roads',
+            lines: ['Build roads off the highway. Buildings grow along them.'],
+            key: 'T',
+          }}
+        >
+          <IconRoad />
+        </ToolButton>
+        <ToolButton
+          id="tool-zone"
+          active={active === 'zone'}
+          onClick={() => use('zone')}
+          tip={{
+            title: 'Zoning',
+            lines: ['Paint residential, commercial and industrial zones.'],
+            key: 'Z X C V',
+          }}
+        >
+          <IconZone />
+        </ToolButton>
+        {(
+          [
+            ['power', IconBolt, 'Power', 'Power plants. Electricity flows along the roads.'],
+            [
+              'water',
+              IconDrop,
+              'Water and sewage',
+              'Pumps bring water in; outflows or treatment plants take sewage away.',
+            ],
+            ['garbage', IconTrash, 'Garbage', 'Trucks collect garbage from buildings in reach.'],
+            ['fire', IconFlame, 'Fire', 'Fire stations cover what their engines can reach quickly by road.'],
+            ['police', IconShield, 'Police', 'Police stations deter crime and answer calls along the roads.'],
+            ['health', IconHealth, 'Health', 'Clinics and hospitals treat the sick and run ambulances.'],
+            [
+              'education',
+              IconBook,
+              'Education',
+              'Schools seat the children of nearby homes; libraries help too.',
+            ],
+            ['parks', IconTree, 'Parks and plazas', 'Lift moods and land value in the streets around them.'],
+            [
+              'transit',
+              IconBus,
+              'Buses',
+              'A depot runs buses round the stops you place. Riders leave their cars at home.',
+            ],
+            [
+              'landmark',
+              IconLandmark,
+              'Tourism and landmarks',
+              'Landmarks draw visitors who spend money and shop; hotels keep them overnight.',
+            ],
+            [
+              'special',
+              IconCrate,
+              'Trade and research',
+              'Freight, ore mines and oil wells earn export income; a research park grows high-tech industry.',
+            ],
+          ] as [CivicCategory, typeof IconBolt, string, string][]
+        ).map(([cat, Icon, name, blurb]) => (
+          <ToolButton
+            key={cat}
+            id={`tool-${cat}`}
+            active={
+              (active === 'place' && tools.place.category === cat) || (cat === 'transit' && active === 'stop')
+            }
+            onClick={() => {
+              if (
+                (active === 'place' && tools.place.category === cat) ||
+                (cat === 'transit' && active === 'stop')
+              )
+                tools.use('select');
+              else {
+                const first = CIVIC_DEFS.find((d) => d.category === cat)!;
+                tools.place.setDef(first.id);
+                tools.use('place');
+              }
+            }}
+            tip={{ title: name, lines: [blurb] }}
+          >
+            <Icon />
+          </ToolButton>
+        ))}
+        <ToolButton
+          id="tool-bulldoze"
+          active={active === 'bulldoze'}
+          onClick={() => use('bulldoze')}
+          tip={{ title: 'Bulldoze', lines: ['Demolish roads and buildings. Roads refund 25%.'], key: 'B' }}
+        >
+          <IconBulldozer />
+        </ToolButton>
+        <ToolButton
+          id="tool-disasters"
+          active={disastersOpen || active === 'disaster'}
+          onClick={() => {
+            if (active === 'disaster') tools.use('select');
+            setDisastersOpen(!disastersOpen);
+          }}
+          tip={{
+            title: 'Disasters',
+            lines: [
+              'Set off an earthquake, tornado, flood or meteor strike, or switch random disasters off.',
+            ],
+          }}
+        >
+          <IconAlert />
+        </ToolButton>
+        <span class="sep" />
+        <ToolButton
+          id="tool-maps"
+          active={mapsOpen || game.overlay.active !== null}
+          onClick={() => setMapsOpen(!mapsOpen)}
+          tip={{
+            title: 'Data maps',
+            lines: ['See power, water, garbage, land value, pollution and resources at a glance.'],
+            key: 'L',
+          }}
+        >
+          <IconLayers />
+        </ToolButton>
+        <ToolButton
+          id="tool-undo"
+          active={false}
+          disabled={!game.world.stats.undoAvailable}
+          onClick={() => void game.undo()}
+          tip={{
+            title: 'Undo',
+            lines: ['Reverse the most recent placement, with a full refund.'],
+            key: 'Ctrl+Z',
+          }}
+        >
+          <IconUndo />
+        </ToolButton>
+      </div>
+    </div>
+  );
+}
+
+function serviceLine(svc: NonNullable<CivicDef['service']>): string {
+  const reach = `Reaches about ${Math.round((svc.range * 40) / 3.6 / 10) * 10} m of street`;
+  const parts = [reach];
+  if (svc.vehicles)
+    parts.push(
+      `${svc.vehicles} ${svc.vehicle === 'ambulance' ? 'ambulances' : svc.vehicle === 'police' ? 'patrol cars' : 'engines'}`,
+    );
+  if (svc.capacity)
+    parts.push(`${svc.capacity.toLocaleString('en-US')} ${svc.kind === 'health' ? 'beds' : 'seats'}`);
+  return parts.join(' · ');
+}
+
+export function ToolHintLabel() {
+  const game = useGameUpdates(30);
+  const h = game.hint;
+  if (!h) return null;
+  return (
+    <div
+      class={`tool-hint ${h.tone}`}
+      style={{ left: `${h.x + 18}px`, top: `${h.y + 18}px` }}
+      data-testid="tool-hint"
+    >
+      {h.text}
+    </div>
+  );
+}
+
+const DISASTER_ICONS = { earthquake: IconQuake, tornado: IconTornado, flood: IconWaves, meteor: IconMeteor };
+
+/** Pick a disaster to aim, and switch random disasters on or off. */
+function DisastersMenu({ onClose }: { onClose: () => void }) {
+  const game = useGameUpdates(200);
+  const on = game.randomDisasters;
+  return (
+    <div class="maps-menu disasters-menu panel" data-testid="disasters-menu">
+      <div class="maps-group">
+        <h4>Set off</h4>
+        {DISASTER_KINDS.map((k) => {
+          const Icon = DISASTER_ICONS[k];
+          return (
+            <button
+              key={k}
+              class="map-item disaster-item"
+              data-testid={`disaster-${k}`}
+              title={DISASTER_INFO[k].blurb}
+              onClick={() => {
+                game.tools.disaster.setKind(k);
+                game.tools.use('disaster');
+                onClose();
+              }}
+            >
+              <Icon width={16} height={16} />
+              {DISASTER_INFO[k].name}
+            </button>
+          );
+        })}
+      </div>
+      <div class="maps-group">
+        <h4>Random disasters</h4>
+        <label class="volume-mute disaster-random">
+          <input
+            type="checkbox"
+            checked={on}
+            data-testid="random-disasters"
+            onChange={(e) => game.setRandomDisasters((e.target as HTMLInputElement).checked)}
+          />
+          Now and then, once the city has grown
+        </label>
+      </div>
+    </div>
+  );
+}
+
+function MapsMenu({ onClose }: { onClose: () => void }) {
+  const game = useGameUpdates(200);
+  const groups = [...new Set(MAPS.map((m) => m.group))];
+  return (
+    <div class="maps-menu panel" data-testid="maps-menu">
+      {groups.map((g) => (
+        <div key={g} class="maps-group">
+          <h4>{g}</h4>
+          {MAPS.filter((m) => m.group === g).map((m) => (
+            <button
+              key={m.id}
+              class={`map-item ${game.overlay.active === m.id ? 'active' : ''}`}
+              data-testid={`map-${m.id}`}
+              onClick={() => {
+                game.overlay.set(game.overlay.active === m.id ? null : m.id);
+                onClose();
+              }}
+            >
+              {m.name}
+            </button>
+          ))}
+        </div>
+      ))}
+      {game.overlay.active && (
+        <button class="map-item off" onClick={() => (game.overlay.set(null), onClose())}>
+          Hide data map
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Legend for the active data map. */
+export function MapLegend() {
+  const game = useGameUpdates(300);
+  const res = game.overlay.last;
+  if (!game.overlay.active || !res) return null;
+  const name = MAPS.find((m) => m.id === game.overlay.active)?.name ?? '';
+  const grad =
+    res.ramp === 'traffic'
+      ? 'linear-gradient(90deg, #3a9e5c, #9cc24a, #e8b43a, #e0662f, #b3261e)'
+      : res.ramp === 'diverging'
+        ? 'linear-gradient(90deg, #e34948, #f0efec, #2a78d6)'
+        : 'linear-gradient(90deg, #cde2fb, #9ec5f4, #6da7ec, #3987e5, #256abf, #184f95, #0d366b)';
+  return (
+    <div
+      class={`legend panel ${game.panel === 'budget' ? 'beside-budget' : game.panel ? 'beside-panel' : ''}`}
+      data-testid="map-legend"
+    >
+      <div class="legend-head">
+        <strong>{name}</strong>
+        <button class="btn icon" aria-label="Hide data map" onClick={() => game.overlay.set(null)}>
+          ×
+        </button>
+      </div>
+      <div class="legend-bar" style={{ background: grad }} />
+      <div class="legend-labels">
+        <span>{res.legend[0]}</span>
+        <span>{res.legend[1]}</span>
+      </div>
+    </div>
+  );
+}

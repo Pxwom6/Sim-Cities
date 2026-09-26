@@ -1,0 +1,397 @@
+import {
+  ACESFilmicToneMapping,
+  PCFShadowMap,
+  PerspectiveCamera,
+  SRGBColorSpace,
+  Scene,
+  Vector2,
+  Vector3,
+  WebGLRenderer,
+} from 'three';
+import type { ClientWorld } from '../client/world';
+import { hourOfDay } from '../sim/time';
+import { windAngle } from '../sim/systems/pollution';
+import { CameraController } from './camera';
+import { Lighting } from './lighting';
+import { TerrainRenderer } from './terrain';
+import { TreeRenderer } from './trees';
+import { WaterRenderer } from './water';
+import { RoadRenderer } from './roads';
+import { ZoneRenderer } from './zones';
+import { GhostRenderer } from './ghost';
+import { BuildingRenderer } from './buildings';
+import { CivicRenderer } from './civics';
+import { VehicleRenderer } from './vehicles';
+import { IconRenderer } from './icons';
+import { GarbageProps } from './props';
+import { EffectsRenderer } from './effects';
+import { RoadTint } from './roadTint';
+import { TrafficRenderer } from './traffic';
+import { TransitRenderer } from './transit';
+import { StreetLightRenderer } from './streetLights';
+import { PedestrianRenderer } from './pedestrians';
+import { TiltShift } from './tiltShift';
+import { DisasterRenderer } from './disasters';
+
+export interface RenderStats {
+  calls: number;
+  triangles: number;
+  geometries: number;
+  textures: number;
+  trees: number;
+  icons: number;
+  vehicles: number;
+  fires: number;
+  cars: number;
+  walkers: number;
+  /** Street lamps placed, and how dark it is (0 day … 1 night). */
+  lamps: number;
+  night: number;
+  /** Disaster effects on screen: dust bursts so far, funnels, flood sheets, falling meteors, craters, closed roads. */
+  disasters: {
+    dust: number;
+    funnels: number;
+    floods: number;
+    meteors: number;
+    craters: number;
+    closures: number;
+  };
+  buses: number;
+  smoke: number;
+}
+
+/** Owns the Three.js scene. Reads ClientWorld; never mutates the simulation. */
+export class GameRenderer {
+  readonly renderer: WebGLRenderer;
+  readonly scene = new Scene();
+  readonly camera = new PerspectiveCamera(45, 1, 1, 14000);
+  readonly controller: CameraController;
+  readonly lighting: Lighting;
+  readonly terrain: TerrainRenderer;
+  readonly water: WaterRenderer;
+  readonly trees: TreeRenderer;
+  readonly roads: RoadRenderer;
+  readonly zones: ZoneRenderer;
+  readonly ghost: GhostRenderer;
+  readonly buildings: BuildingRenderer;
+  readonly civics: CivicRenderer;
+  readonly vehicles: VehicleRenderer;
+  readonly icons: IconRenderer;
+  readonly garbage: GarbageProps;
+  readonly effects: EffectsRenderer;
+  readonly traffic: TrafficRenderer;
+  readonly transit: TransitRenderer;
+  readonly streetLights: StreetLightRenderer;
+  readonly pedestrians: PedestrianRenderer;
+  readonly tiltShift = new TiltShift();
+  readonly disasters: DisasterRenderer;
+  /** Tilt-shift blur when zoomed in (a player setting). */
+  tiltShiftOn = false;
+  /** Draw-distance setting: scales how far the fog sits. */
+  fogScale = 1;
+  /** Route of the selected car. */
+  readonly routeTint: RoadTint;
+  /** Road ribbons for the service coverage data maps. */
+  readonly coverageMap: RoadTint;
+  private time = 0;
+  private tmpSize = new Vector2();
+  private treePoints: { x: number; z: number }[] = [];
+  private treeRebuildAt = 0;
+  lastStats: RenderStats = {
+    calls: 0,
+    triangles: 0,
+    geometries: 0,
+    textures: 0,
+    trees: 0,
+    icons: 0,
+    vehicles: 0,
+    fires: 0,
+    cars: 0,
+    walkers: 0,
+    lamps: 0,
+    night: 0,
+    disasters: { dust: 0, funnels: 0, floods: 0, meteors: 0, craters: 0, closures: 0 },
+    buses: 0,
+    smoke: 0,
+  };
+
+  constructor(
+    readonly canvas: HTMLCanvasElement,
+    readonly world: ClientWorld,
+  ) {
+    this.renderer = new WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.outputColorSpace = SRGBColorSpace;
+    this.renderer.toneMapping = ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.0;
+    this.renderer.shadowMap.enabled = true;
+    // PCF is soft-filtered in this three.js (PCFSoftShadowMap is deprecated and falls back to it).
+    this.renderer.shadowMap.type = PCFShadowMap;
+    this.renderer.info.autoReset = false;
+
+    this.lighting = new Lighting(this.scene);
+    this.terrain = new TerrainRenderer(world);
+    this.scene.add(this.terrain.group);
+    this.water = new WaterRenderer();
+    this.scene.add(this.water.mesh);
+    this.roads = new RoadRenderer(world);
+    this.scene.add(this.roads.group);
+    this.zones = new ZoneRenderer(world);
+    this.scene.add(this.zones.group);
+    this.buildings = new BuildingRenderer(world, this.terrain.uniforms);
+    this.scene.add(this.buildings.group);
+    this.civics = new CivicRenderer(world, this.buildings.material);
+    this.scene.add(this.civics.group);
+    this.vehicles = new VehicleRenderer(world);
+    this.scene.add(this.vehicles.group);
+    this.icons = new IconRenderer(world);
+    this.scene.add(this.icons.points);
+    this.garbage = new GarbageProps(world);
+    this.scene.add(this.garbage.mesh);
+    this.effects = new EffectsRenderer(world, this.vehicles, this.buildings.heights, this.civics.heights);
+    this.scene.add(this.effects.group);
+    this.coverageMap = new RoadTint((x, z) => world.heightAt(x, z), 'diverging', 0.85);
+    this.scene.add(this.coverageMap.group);
+    this.traffic = new TrafficRenderer(world, (seg, s, x, z) => world.roadHeight(seg, s, x, z));
+    this.scene.add(this.traffic.group);
+    this.pedestrians = new PedestrianRenderer(world, (seg, s, x, z) => world.roadHeight(seg, s, x, z));
+    this.scene.add(this.pedestrians.group);
+    this.disasters = new DisasterRenderer(world);
+    this.scene.add(this.disasters.group);
+    this.transit = new TransitRenderer(world, (seg, s, x, z) => world.roadHeight(seg, s, x, z));
+    this.scene.add(this.transit.group);
+    this.streetLights = new StreetLightRenderer(world);
+    this.scene.add(this.streetLights.group);
+    this.routeTint = new RoadTint((x, z) => world.heightAt(x, z), 'sequential', 0.7);
+    this.scene.add(this.routeTint.group);
+    this.ghost = new GhostRenderer((x, z) => world.heightAt(x, z));
+    this.scene.add(this.ghost.group);
+    this.trees = new TreeRenderer(world);
+    this.trees.blocked = (x, z) =>
+      this.roads.onRoad(x, z, 1.5) || this.onBuilding(x, z) || this.world.civicAt(x, z) !== null;
+    this.trees.rebuildAll();
+    this.scene.add(this.trees.group);
+    // Names for debugging (the test API's render breakdown).
+    const named: [{ name: string }, string][] = [
+      [this.terrain.group, 'terrain'],
+      [this.water.mesh, 'water'],
+      [this.roads.group, 'roads'],
+      [this.zones.group, 'zones'],
+      [this.buildings.group, 'buildings'],
+      [this.civics.group, 'civics'],
+      [this.vehicles.group, 'vehicles'],
+      [this.icons.points, 'icons'],
+      [this.garbage.mesh, 'garbage'],
+      [this.effects.group, 'effects'],
+      [this.coverageMap.group, 'coverageMap'],
+      [this.traffic.group, 'traffic'],
+      [this.pedestrians.group, 'pedestrians'],
+      [this.disasters.group, 'disasters'],
+      [this.transit.group, 'transit'],
+      [this.streetLights.group, 'streetLights'],
+      [this.routeTint.group, 'routeTint'],
+      [this.ghost.group, 'ghost'],
+      [this.trees.group, 'trees'],
+    ];
+    for (const [o, name] of named) o.name = name;
+    world.onCivics((changed) => {
+      for (const id of changed) {
+        const c = world.civics.get(id);
+        if (c) this.treePoints.push({ x: c.x, z: c.z });
+      }
+    });
+    world.onBuildings((changed) => {
+      for (const id of changed) {
+        const b = world.buildings.get(id);
+        if (b) this.treePoints.push({ x: b.x, z: b.z });
+      }
+    });
+    world.onNet((c) => {
+      const pts: { x: number; z: number }[] = [];
+      for (const id of c.segments) {
+        const s = world.netState.segments.get(id);
+        if (!s) continue;
+        const a = world.netState.nodes.get(s.a);
+        const b = world.netState.nodes.get(s.b);
+        if (a) pts.push(a);
+        if (b) pts.push(b);
+        pts.push({ x: s.cx, z: s.cz });
+      }
+      for (const id of c.nodes) {
+        const n = world.netState.nodes.get(id);
+        if (n) pts.push(n);
+      }
+      if (pts.length) this.trees.rebuildAround(pts);
+    });
+
+    this.controller = new CameraController(this.camera, canvas, (x, z) => world.heightAt(x, z));
+    this.resize();
+    window.addEventListener('resize', () => this.resize());
+  }
+
+  /** Car, zoned or civic building under a screen position. */
+  pick(
+    clientX: number,
+    clientY: number,
+  ): { kind: 'building' | 'civic' | 'car' | 'walker'; id: number } | null {
+    const ground = this.controller.screenToGround(clientX, clientY);
+    if (ground) {
+      const walker = this.pedestrians.walkerAt(ground.x, ground.z, 1.4);
+      if (walker) return { kind: 'walker', id: walker.id };
+      const car = this.traffic.carAt(ground.x, ground.z, 3.5);
+      if (car) return { kind: 'car', id: car.id };
+    }
+    const cam = this.camera.position;
+    const end = ground ?? cam.clone().add(new Vector3(0, -1, 0));
+    const dir = end.clone().sub(cam);
+    const len = dir.length();
+    dir.normalize();
+    for (let t = 0; t <= len + 1; t += 1.5) {
+      const x = cam.x + dir.x * t;
+      const y = cam.y + dir.y * t;
+      const z = cam.z + dir.z * t;
+      const c = this.world.civicAt(x, z);
+      if (c && y <= c.y + (this.civics.heights.get(c.id) ?? 8) + 0.5) return { kind: 'civic', id: c.id };
+      const b = this.world.buildingAt(x, z, -0.5);
+      if (b && y <= b.y + (this.buildings.heights.get(b.id) ?? 5) + 0.5)
+        return { kind: 'building', id: b.id };
+    }
+    return null;
+  }
+
+  /** Building under a screen position: marches the view ray and tests lot boxes by height. */
+  pickBuilding(clientX: number, clientY: number): number | null {
+    const ground = this.controller.screenToGround(clientX, clientY);
+    const cam = this.camera.position;
+    const end = ground ?? cam.clone().add(new Vector3(0, -1, 0));
+    const dir = end.clone().sub(cam);
+    const len = dir.length();
+    dir.normalize();
+    for (let t = 0; t <= len + 1; t += 1.5) {
+      const x = cam.x + dir.x * t;
+      const y = cam.y + dir.y * t;
+      const z = cam.z + dir.z * t;
+      const b = this.world.buildingAt(x, z, -0.5);
+      if (b && y <= b.y + (this.buildings.heights.get(b.id) ?? 5) + 0.5) return b.id;
+    }
+    return null;
+  }
+
+  /** Is (x, z) inside a building lot? Keeps trees off lots. */
+  onBuilding(x: number, z: number): boolean {
+    return this.world.buildingAt(x, z, 1) !== null;
+  }
+
+  resize(): void {
+    const w = this.canvas.clientWidth || window.innerWidth;
+    const h = this.canvas.clientHeight || window.innerHeight;
+    this.renderer.setSize(w, h, false);
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
+  }
+
+  setShadows(on: boolean): void {
+    this.renderer.shadowMap.enabled = on;
+    this.lighting.sun.castShadow = on;
+  }
+
+  /** Graphics settings: resolution, shadows and their detail, draw distance, crowd sizes. */
+  applyGraphics(g: {
+    pixelRatio: number;
+    shadows: boolean;
+    shadowMap: number;
+    fogScale: number;
+    treeDetail: number;
+    crowd: number;
+  }): void {
+    const ratio = Math.min(window.devicePixelRatio || 1, g.pixelRatio);
+    if (this.renderer.getPixelRatio() !== ratio) {
+      this.renderer.setPixelRatio(ratio);
+      this.resize();
+    }
+    this.setShadows(g.shadows);
+    const shadow = this.lighting.sun.shadow;
+    if (shadow.mapSize.x !== g.shadowMap) {
+      shadow.mapSize.set(g.shadowMap, g.shadowMap);
+      shadow.map?.dispose();
+      shadow.map = null;
+    }
+    this.fogScale = g.fogScale;
+    this.trees.lodDistance = g.treeDetail;
+    this.pedestrians.crowd = g.crowd;
+    this.traffic.maxCars = Math.round(360 * g.crowd);
+  }
+
+  frame(dt: number): void {
+    this.time += dt;
+    this.controller.update(dt);
+    // Data maps are read in flat daylight, whatever the time.
+    const hour = this.terrain.uniforms.uOverlayOn.value > 0.5 ? 13 : hourOfDay(this.world.displayTick);
+    const l = this.lighting;
+    l.update(hour);
+    l.follow(
+      this.camera.position,
+      this.controller.target,
+      this.controller.current.distance * 0.9,
+      this.camera.far,
+    );
+    l.fog.near = Math.max(900, this.controller.current.distance * 1.1) * this.fogScale;
+    l.fog.far = Math.max(7500, this.controller.current.distance * 3.5) * this.fogScale;
+    this.renderer.toneMappingExposure = 1.0 + l.night * 0.12;
+    this.terrain.update(this.time);
+    this.buildings.update(l.night);
+    this.vehicles.update(this.world.displayTick);
+    this.traffic.night = l.night;
+    this.traffic.update(this.world.displayTick);
+    this.pedestrians.update(this.world.displayTick, this.controller.current);
+    this.streetLights.update(l.night);
+    this.transit.update(this.world.displayTick);
+    this.icons.update(this.time, this.buildings.heights, this.civics.heights);
+    this.garbage.update();
+    const bufH = this.renderer.getDrawingBufferSize(this.tmpSize).y;
+    this.traffic.setScale(bufH / (2 * Math.tan((this.camera.fov * Math.PI) / 360)));
+    const pxPerMetre = bufH / (2 * Math.tan((this.camera.fov * Math.PI) / 360));
+    this.effects.update(this.time, pxPerMetre, windAngle(this.world.options.seed, this.world.displayTick));
+    this.disasters.update(dt, this.world.displayTick, pxPerMetre);
+    this.camera.position.add(this.disasters.shake);
+    // Trees under new buildings: rebuilt at most twice a second.
+    if (this.treePoints.length && this.time - this.treeRebuildAt > 0.5) {
+      this.treeRebuildAt = this.time;
+      this.trees.rebuildAround(this.treePoints);
+      this.treePoints = [];
+    }
+    this.trees.updateLod(this.camera.position.x, this.camera.position.y, this.camera.position.z);
+    this.water.update(this.time);
+    const wu = this.water.material.uniforms;
+    wu.uSky!.value.copy(l.horizon);
+    wu.uSunDir!.value.copy(l.sunDir);
+    wu.uSunColor!.value.copy(l.sunColor);
+    wu.uLight!.value = l.light;
+
+    this.renderer.info.reset();
+    this.renderer.render(this.scene, this.camera);
+    const info = this.renderer.info;
+    const stats = { calls: info.render.calls, triangles: info.render.triangles };
+    if (this.tiltShiftOn) {
+      const d = this.controller.current.distance;
+      this.tiltShift.apply(this.renderer, Math.min(1, Math.max(0, (520 - d) / 380)));
+    }
+    this.lastStats = {
+      calls: stats.calls,
+      triangles: stats.triangles,
+      geometries: info.memory.geometries,
+      textures: info.memory.textures,
+      trees: this.trees.instanceCount,
+      icons: this.icons.count,
+      vehicles: this.vehicles.positions.size,
+      fires: this.effects.fires,
+      cars: this.traffic.count,
+      walkers: this.pedestrians.count,
+      lamps: this.streetLights.count,
+      night: this.lighting.night,
+      disasters: { ...this.disasters.stats },
+      buses: this.transit.busCount,
+      smoke: this.effects.smokeParticles,
+    };
+  }
+}
