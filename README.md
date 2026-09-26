@@ -32,7 +32,8 @@ The main menu opens over a small town that keeps living in the background. Choos
 pick a map (river, coast, lakes or highlands), a seed, a difficulty, and whether you want sandbox
 money or random disasters. The tutorial is on for your first city and walks through the basics:
 
-1. **Roads** off the highway (drag to draw; drag through a bend for a curve).
+1. **Roads** off the highway: drag to draw a straight road, or click point to point to keep going;
+   the curve tool takes a start, a bend and an end, and the free tool follows the mouse.
 2. **Zones** beside them: residential, commercial and industrial. Buildings grow on their own when
    there's demand (the R, C and I bars in the top bar tell you what the city wants, and why).
 3. **Power, water and sewage** from the Utilities menu. Homes without them empty out.

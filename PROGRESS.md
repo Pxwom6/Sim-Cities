@@ -12,7 +12,7 @@
 - [x] M9 Disasters
 - [x] M10 Progression and specialisations
 - [x] M11 Game shell
-- [ ] M12 Balance, performance and polish
+- [x] M12 Balance, performance and polish
 
 ## Summary
 Citybloom is a complete, playable city builder in the browser. From the main menu (over a living
@@ -47,14 +47,14 @@ Checked by 138 unit and scenario tests, 15 UI tests, a 10-minute soak and a full
    surplus; a second tuning pass once real players have tried it.
 
 ## In progress
-M12 Balance, performance and polish: the final playthrough passes (`npm run playthrough`, 9 min:
-775 residents and 57 % approval at year one, 1,042 at year two, 1,156 after a tornado). It found
-and fixed four bugs: buildings drawing only shadows in a new city, a dragged road chaining into a
-stray road, steep start areas on a third of seeds, and roads along dead ends not joining them.
-Now: full e2e run on the final build, then tick M12.
+Nothing: every milestone in SPEC.md is done. The last pass (M12) ended with a final playthrough
+through the real UI (`npm run playthrough`: 775 residents and 57 % approval at year one, 1,042 at
+year two, 1,156 after a tornado) that found and fixed four bugs: finished buildings drawing only
+their shadows in a new city, a dragged road chaining into a stray road, steep start areas on a third
+of seeds (terrain v2), and a road along dead ends not joining them.
 
 ## Next tasks
-1. Full e2e on the final build (`npm run e2e`); tick M12 with an `M12 complete:` commit.
+Pick from "Ideas for what's next" above; the real-hardware pass (below) comes first.
 
 ## Known issues
 - Mature cities run a big surplus (≈ +$35k/month at 18k residents with 6 % taxes); intended as money for landmarks and big projects.
@@ -70,7 +70,7 @@ Now: full e2e run on the final build, then tick M12.
 - Tree count is high in forests (~25k in-map); LOD switches to low-poly beyond 750 m.
 
 ## Performance (M12)
-- `npx tsx scripts/bench.ts 30 --big`: a 16×16 avenue grid grows to ~106k residents by month 5. At 80–106k: tick avg 0.6–0.8 ms, p99 5–8 ms, worst per month 9–14 ms (budget: avg < 1 ms, worst < 15 ms). One-off 25–30 ms ticks in the first game hour of a freshly built or loaded big city (cold caches, JIT).
+- `npx tsx scripts/bench.ts 30 --big`: a 16×16 avenue grid grows to ~106k residents by month 5. At 80–106k (latest run, terrain v2): tick avg 0.59–0.71 ms, p99 5–7 ms, worst per month 8–11 ms (budget: avg < 1 ms, worst < 15 ms). One-off 25–30 ms ticks in the first game hour of a freshly built or loaded big city (cold caches, JIT).
 - `npx tsx scripts/bench.ts 12 9` (the older ~12k town): tick avg ~0.12–0.21 ms.
 - Rendering the ~100k city (`scripts/dev/bigshot.mjs`, SwiftShader): 288 draw calls / 2.5M triangles at the whole-city overview (about half the triangles are the shadow pass), 156 / 1.8M at the city preset, 92 / 1.05M at street level. Was 1,241 draw calls before civic, building, road and zone chunks were enlarged.
 - Night town (720 residents, M9): ~95 draw calls, ~0.75M triangles on SwiftShader. A tornado adds 3 point systems (~2,200 points); flood water is one mesh; dust bursts share one point system.
