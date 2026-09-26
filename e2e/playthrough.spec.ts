@@ -157,7 +157,7 @@ test('playthrough: a first city from the main menu to a thriving town @playthrou
   ]);
   await road([
     [504, cz],
-    [640, cz],
+    [760, cz],
   ]);
   if (failed.length) await page.screenshot({ path: 'test-results/playthrough-roads.png' });
   expect(failed, failed.join('\n')).toEqual([]);
@@ -210,7 +210,7 @@ test('playthrough: a first city from the main menu to a thriving town @playthrou
       [x, z - off],
       [x, z + off],
     ]);
-  const east = sides([530, 560, 590, 620], cz, 30);
+  const east = sides([530, 560, 590, 620, 650, 680, 710, 740], cz, 30);
   const north = sides([140, 170, 200, 230, 260, 290, 320, 350, 380], cz - 160, 30).filter(
     ([, z]) => z < cz - 160,
   );
@@ -247,7 +247,10 @@ test('playthrough: a first city from the main menu to a thriving town @playthrou
     const report = (what: string, ok: boolean) =>
       log(`month ${month(s)}: ${what} ${ok ? 'added' : 'no room/money'}`);
     if (u.power.supply < u.power.demand * 1.2 + 10)
-      report('power', await place(page, 'power', s.population > 800 ? 'coal' : 'wind', east));
+      report(
+        'power',
+        await place(page, 'power', s.population > 800 && s.treasury > 20_000 ? 'coal' : 'wind', east),
+      );
     if (u.water.supply < u.water.demand * 1.2 + 10)
       report('water', await place(page, 'water', 'pump', north));
     if (u.sewage.supply < u.sewage.demand * 1.2 + 10)
@@ -340,10 +343,21 @@ test('playthrough: a first city from the main menu to a thriving town @playthrou
   await page.getByTestId('disaster-tornado').click();
   const hit = await at(page, 400, cz - 120);
   await page.mouse.click(hit.x, hit.y);
-  await page.evaluate(() => window.__game!.advance(20));
   await page.getByTestId('tool-select').click();
+  await page.evaluate(
+    (cz) => window.__game!.setCamera({ x: 330, z: cz - 60, distance: 560, yaw: 0.3, tilt: -0.05 }),
+    cz,
+  );
+  await page.evaluate(() => window.__game!.advance(14));
+  await page.evaluate(() => window.__game!.waitFrames(4));
+  expect((await state(page)).renderStats.disasters.funnels).toBe(1);
   await shot(page, 'tornado');
-  s = await play(page, 2, tips);
+  // Rebuild what it knocked down (a power plant or pump in its path empties homes within days).
+  for (let m = 0; m < 2; m++) {
+    s = await play(page, 1, tips);
+    await keepUp(s);
+  }
+  s = await play(page, 1, tips);
   log(`after the tornado: pop ${s.population}, $${s.treasury}`);
   expect(s.population).toBeGreaterThan(500);
 

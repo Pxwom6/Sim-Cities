@@ -28,7 +28,7 @@ unlock buildings, landmarks and three specialisations (tourism, trade, technolog
 oil. Fires, earthquakes, tornadoes, floods and meteors strike and the city rebuilds. Saves are
 versioned and compressed with autosave, slots and file export. Everything runs from a deterministic
 sim in a Web Worker: ~0.7 ms per tick at 100k residents, with 288 draw calls at the city overview.
-Checked by 137 unit and scenario tests, 15 UI tests and a 10-minute soak
+Checked by 138 unit and scenario tests, 15 UI tests, a 10-minute soak and a full playthrough through the UI
 (`docs/SPEC_REVIEW.md` maps every SPEC item to where it's done).
 
 ## Ideas for what's next
@@ -47,12 +47,14 @@ Checked by 137 unit and scenario tests, 15 UI tests and a 10-minute soak
    surplus; a second tuning pass once real players have tried it.
 
 ## In progress
-M12 Balance, performance and polish: final playthrough (`npm run playthrough`) and a full e2e run
-on terrain v2.
+M12 Balance, performance and polish: the final playthrough passes (`npm run playthrough`, 9 min:
+775 residents and 57 % approval at year one, 1,042 at year two, 1,156 after a tornado). It found
+and fixed four bugs: buildings drawing only shadows in a new city, a dragged road chaining into a
+stray road, steep start areas on a third of seeds, and roads along dead ends not joining them.
+Now: full e2e run on the final build, then tick M12.
 
 ## Next tasks
-1. Review the playthrough screenshots; fix anything they show.
-2. Full e2e on the final build; tick M12.
+1. Full e2e on the final build (`npm run e2e`); tick M12 with an `M12 complete:` commit.
 
 ## Known issues
 - Mature cities run a big surplus (≈ +$35k/month at 18k residents with 6 % taxes); intended as money for landmarks and big projects.
