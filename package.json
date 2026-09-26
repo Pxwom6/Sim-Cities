@@ -11,6 +11,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "npm run build:test && playwright test",
+    "soak": "npm run build:test && SOAK=1 playwright test --grep @soak",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",

@@ -7,6 +7,8 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: 0,
+  // The long soak test runs only with `npm run soak`.
+  grepInvert: process.env.SOAK ? undefined : /@soak/,
   reporter: [['list']],
   use: {
     baseURL: 'http://localhost:4174',

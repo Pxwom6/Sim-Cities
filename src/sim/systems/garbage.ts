@@ -50,6 +50,13 @@ export function dispatchGarbage(sim: Sim): void {
   const facilities = [...s.civics.values()]
     .filter((c) => civicDef(c).garbage && c.access && civicOnline(c))
     .sort((a, b) => a.id - b.id);
+  // Buildings worth a trip, and where they join the roads (worked out once, not per facility).
+  const dirty: { b: Building; node: number }[] = [];
+  for (const b of s.buildings.values()) {
+    if (b.garbage < 12) continue;
+    const att = attachmentOf(sim, g, b);
+    if (att) dirty.push({ b, node: att.node });
+  }
   for (const c of facilities) {
     let free = trucksFor(sim, c) - c.out;
     if (free <= 0 || full(c)) continue;
@@ -63,11 +70,9 @@ export function dispatchGarbage(sim: Sim): void {
       return true;
     });
     const cands: { b: Building; cost: number }[] = [];
-    for (const b of s.buildings.values()) {
-      if (b.garbage < 12 || targeted.has(b.id)) continue;
-      const att = attachmentOf(sim, g, b);
-      if (!att) continue;
-      const cost = reach.get(att.node);
+    for (const { b, node } of dirty) {
+      if (targeted.has(b.id)) continue;
+      const cost = reach.get(node);
       if (cost === undefined) continue;
       cands.push({ b, cost });
     }

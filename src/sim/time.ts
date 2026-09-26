@@ -85,3 +85,28 @@ export function isHourStart(tick: number): boolean {
 export function isMonthStart(tick: number): boolean {
   return (tick + START_TICK_OFFSET) % TICKS_PER_MONTH === 0;
 }
+
+/**
+ * Minute of each game hour at which the hourly systems run (DESIGN §3.2). They are spread out so a
+ * big city's worst tick is its slowest system rather than the sum of them all.
+ */
+export const HOURLY_AT = {
+  utilities: 0,
+  /** Rebuild the coverage cache here if roads or services changed. */
+  coverageCache: 3,
+  /** Seats and beds; every building's coverage fields on the next tick. */
+  coverage: 6,
+  health: 12,
+  garbage: 18,
+  /** Every third hour: ground pollution, then air pollution and crime decay on the next tick. */
+  pollution: 24,
+  /** The commute matcher runs over MATCH_SLICES ticks from here, every other hour. */
+  matcher: 30,
+  happiness: 36,
+  lifecycle: 42,
+  economy: 48,
+  landValue: 54,
+} as const;
+
+/** Ticks a commute-matching round is spread over (a slice of origins each). */
+export const MATCH_SLICES = 4;

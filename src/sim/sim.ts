@@ -47,7 +47,7 @@ import { emptyDemand, updateDemand } from './systems/demand';
 import { updateLandValue, waterDistance } from './systems/landValue';
 import { growthPass, lifecycle } from './systems/growth';
 import { happinessFactors, updateHappiness } from './systems/happiness';
-import { runMatcher } from './systems/commute';
+import { MatchRound } from './systems/commute';
 import { advise } from './systems/advisors';
 import { thoughts } from './systems/thoughts';
 import { deckAt, deckProfile, type DeckProfile } from './world/bridge';
@@ -62,7 +62,7 @@ import {
 import { congestedEdgeCosts, congestedSeconds, hourShare, segVC, type TripSample } from './systems/traffic';
 import { GROWTH, HAPPINESS, TRANSIT } from '../data/balance';
 import { ZONE_I, ZONE_R } from '../data/zones';
-import { TICKS_PER_HOUR, dateOf, isMonthStart } from './time';
+import { HOURLY_AT, MATCH_SLICES, TICKS_PER_HOUR, dateOf, isMonthStart } from './time';
 import {
   addModule,
   bulldozeCivic,
@@ -80,7 +80,8 @@ import { dispatchGarbage, garbageHour } from './systems/garbage';
 import { segSpeed, stepVehicles } from './systems/vehicles';
 import { computeOverlay } from './systems/overlays';
 import {
-  applyCoverage,
+  applyCoverageFields,
+  applyServiceLoads,
   computeCoverage,
   coverageNear,
   coveragePreview,
@@ -793,6 +794,32 @@ export class Sim {
 
   // ---------------------------------------------------------------- time
 
+  /** The commute matching round under way, if one is (it runs over four ticks). */
+  private matchRound: MatchRound | null = null;
+
+  /** Commute matching, a quarter of the origins per tick over `MATCH_SLICES` ticks. */
+  private matchSlice(i: number): void {
+    if (i === 0) {
+      this.matchRound?.finish();
+      this.matchRound = new MatchRound(this);
+    }
+    const r = this.matchRound;
+    if (!r) return;
+    if (i >= MATCH_SLICES - 1) {
+      r.finish();
+      this.matchRound = null;
+    } else r.step(Math.ceil(r.size / MATCH_SLICES));
+  }
+
+  /** Complete any matching round under way (before a save, so a loaded city carries on the same). */
+  finishMatching(): void {
+    this.matchRound?.finish();
+    this.matchRound = null;
+  }
+
+  /** Optional hook around each system (benchmarks time them); the sim itself never reads a clock. */
+  timer: ((name: string, fn: () => void) => void) | null = null;
+
   step(): void {
     const s = this.state;
     s.tick++;
@@ -808,34 +835,80 @@ export class Sim {
         c.processedToday = 0;
       }
     }
-    stepVehicles(this);
-    incidentsTick(this);
-    disastersTick(this);
-    if (t % GROWTH.passInterval === 0) growthPass(this);
-    if (t % TICKS_PER_HOUR === 0) {
-      disastersHour(this);
-      updateUtilities(this);
-      utilityConsequences(this);
-      applyCoverage(this, this.coverage);
-      healthHour(this);
-      this.refreshFlags();
-      garbageHour(this);
-      dispatchGarbage(this);
-      if (t % (TICKS_PER_HOUR * 3) === 0) {
-        updateGroundPollution(this, 3);
-        updateAirPollution(this, 3);
-        decayCrime(this, 3);
-      }
-      if (t % (TICKS_PER_HOUR * 2) === 0) runMatcher(this);
-      updateHappiness(this);
-      incidentsHour(this);
-      lifecycle(this);
-      s.totals = computeTotals(this);
-      updateDemand(this);
-      economyHour(this);
-      specialisationsHour(this);
-      progressHour(this);
-      if (t % (TICKS_PER_HOUR * 3) === 0) updateLandValue(this);
+    const run = this.timer ?? ((_name: string, fn: () => void) => fn());
+    run('vehicles', () => stepVehicles(this));
+    run('incidents', () => incidentsTick(this));
+    run('disasters', () => disastersTick(this));
+    if (t % GROWTH.passInterval === 0) run('growth', () => growthPass(this));
+    // Hourly systems, spread over the hour in their usual order (HOURLY_AT).
+    const minute = t % TICKS_PER_HOUR;
+    const hour = Math.floor(t / TICKS_PER_HOUR);
+    switch (minute) {
+      case HOURLY_AT.utilities:
+        run('disastersHour', () => disastersHour(this));
+        run('utilities', () => {
+          updateUtilities(this);
+          utilityConsequences(this);
+        });
+        break;
+      case HOURLY_AT.coverageCache:
+        // After a change to roads or services, rebuild the coverage cache on a quiet tick rather
+        // than inside the coverage pass (it's a pure function of the city, so when doesn't matter).
+        if (!this.coverageCache) run('coverageCache', () => this.coverage);
+        break;
+      case HOURLY_AT.coverage:
+        run('coverage', () => applyServiceLoads(this, this.coverage));
+        break;
+      case HOURLY_AT.coverage + 1:
+        run('coverage2', () => applyCoverageFields(this, this.coverage));
+        break;
+      case HOURLY_AT.health:
+        run('health', () => healthHour(this));
+        run('flags', () => this.refreshFlags());
+        break;
+      case HOURLY_AT.garbage:
+        run('garbage', () => {
+          garbageHour(this);
+          dispatchGarbage(this);
+        });
+        break;
+      case HOURLY_AT.pollution:
+        if (hour % 3 === 0) run('pollution', () => updateGroundPollution(this, 3));
+        break;
+      case HOURLY_AT.pollution + 1:
+        if (hour % 3 === 0)
+          run('air', () => {
+            updateAirPollution(this, 3);
+            decayCrime(this, 3);
+          });
+        break;
+      case HOURLY_AT.matcher:
+      case HOURLY_AT.matcher + 1:
+      case HOURLY_AT.matcher + 2:
+      case HOURLY_AT.matcher + 3:
+        if (hour % 2 === 0) run('matcher', () => this.matchSlice(minute - HOURLY_AT.matcher));
+        break;
+      case HOURLY_AT.happiness:
+        run('happiness', () => updateHappiness(this));
+        break;
+      case HOURLY_AT.lifecycle:
+        run('incidentsHour', () => incidentsHour(this));
+        run('lifecycle', () => lifecycle(this));
+        break;
+      case HOURLY_AT.economy:
+        run('totals', () => {
+          s.totals = computeTotals(this);
+          updateDemand(this);
+        });
+        run('economy', () => economyHour(this));
+        run('progress', () => {
+          specialisationsHour(this);
+          progressHour(this);
+        });
+        break;
+      case HOURLY_AT.landValue:
+        if (hour % 3 === 0) run('landValue', () => updateLandValue(this));
+        break;
     }
     if (this.testMode) checkInvariants(this);
   }
@@ -863,6 +936,7 @@ export class Sim {
   }
 
   save(savedAt = ''): SaveFile {
+    this.finishMatching();
     this.syncRng();
     return makeSaveFile(this.state, this.state.totals.population, savedAt);
   }

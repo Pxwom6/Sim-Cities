@@ -3,6 +3,7 @@
 // Usage: npx tsx scripts/balance.ts [years=20] [careful,greedy,neglectful] [--csv dir] [--seed s]
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { Sim } from '../src/sim/sim';
+import { checkInvariants } from '../src/sim/invariants';
 import { CIVIC } from '../src/data/civic';
 import { ROAD_TYPES, type RoadTypeId } from '../src/data/roads';
 import { advise } from '../src/sim/systems/advisors';
@@ -26,6 +27,9 @@ const flag = (name: string) => {
 };
 const csvDir = flag('--csv');
 const verbose = Number(flag('--verbose') ?? 0);
+// --invariants: check the sim's invariants every game hour (a long headless soak).
+const invariants = args.includes('--invariants');
+if (invariants) args.splice(args.indexOf('--invariants'), 1);
 const seed = flag('--seed') ?? 'balance';
 const difficulty = (flag('--difficulty') ?? 'normal') as 'easy' | 'normal' | 'hard';
 // Exploration knobs (in memory only): --scale tax=1.5,upkeep=0.8,road=1
@@ -411,7 +415,12 @@ for (const id of strategies) {
   for (let m = 0; m < months; m++) {
     for (let h = 0; h < 4; h++) {
       p.play();
-      p.sim.advance(TICKS_PER_HOUR * 6);
+      if (!invariants) p.sim.advance(TICKS_PER_HOUR * 6);
+      else
+        for (let k = 0; k < 6; k++) {
+          p.sim.advance(TICKS_PER_HOUR);
+          checkInvariants(p.sim);
+        }
     }
     samples.push(p.sample());
     if (m < verbose) {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Sim } from '../src/sim/sim';
 import { BState, type Building } from '../src/sim/world/buildings';
-import { TICKS_PER_HOUR, TICKS_PER_MONTH } from '../src/sim/time';
+import { HOURLY_AT, TICKS_PER_HOUR, TICKS_PER_MONTH } from '../src/sim/time';
 import { EDUCATION, HAPPINESS } from '../src/data/balance';
 import { CIVIC } from '../src/data/civic';
 import { ZONE_R } from '../src/data/zones';
@@ -189,7 +189,8 @@ describe('happiness, land value and wealth', () => {
     const sim = newSim();
     buildTown(sim);
     serveTown(sim);
-    sim.advance(TICKS_PER_MONTH * 2);
+    // Just after the hourly mood pass, when every stored mood is up to date.
+    sim.advance(TICKS_PER_MONTH * 2 + HOURLY_AT.happiness + 1);
     const list = active(sim);
     expect(list.length).toBeGreaterThan(50);
     for (const b of list) {

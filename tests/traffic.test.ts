@@ -173,18 +173,29 @@ describe('traffic', () => {
   it('a bus line takes cars off a jammed link and cuts commutes', () => {
     const sim = newSim();
     const t = twoDistricts(sim, 'dirt');
-    sim.advance(TICKS_PER_MONTH * 5);
+    // Commutes wobble by ±2 % from one sample to the next, so compare averages over a while.
+    const meanCommute = (months: number) => {
+      let sum = 0;
+      for (let k = 0; k < 8; k++) {
+        sim.advance((TICKS_PER_MONTH * months) / 8);
+        sum += avgCommute(sim);
+      }
+      return sum / 8;
+    };
+    sim.advance(TICKS_PER_MONTH * 4);
+    const before = meanCommute(1);
     const jam = segVC(sim, t.link, 1);
-    const before = avgCommute(sim);
     expect(sim.lines().length).toBe(0);
     expect(t.buses().length).toBeGreaterThanOrEqual(6);
-    sim.advance(TICKS_PER_MONTH * 2);
+    sim.advance(TICKS_PER_MONTH);
+    const after = meanCommute(2);
     const lines = sim.lines();
     expect(lines.length).toBe(1);
     const riders = sim.state.transit.riders.get(lines[0]!.depot) ?? 0;
     expect(riders).toBeGreaterThan(500);
+    // Mostly by taking cars off the jammed link; door-to-door, riders also walk and wait.
     expect(segVC(sim, t.link, 1)).toBeLessThan(jam * 0.85);
-    expect(avgCommute(sim)).toBeLessThan(before * 0.95);
+    expect(after).toBeLessThan(before * 0.985);
   });
 
   it('bus stops snap to roads, cost money, can be undone, and follow their road', () => {

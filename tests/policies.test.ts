@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { Sim } from '../src/sim/sim';
 import { BState } from '../src/sim/world/buildings';
-import { POLICIES, policyCost } from '../src/data/policies';
+import { POLICIES, POLICY_EFFECTS, policyCost } from '../src/data/policies';
 import { garbageRate } from '../src/sim/systems/garbage';
 import { sicknessRate } from '../src/sim/systems/health';
-import { fireRisk } from '../src/sim/systems/incidents';
+import { crimeRisk, fireRisk } from '../src/sim/systems/incidents';
 import { unlockedDensity } from '../src/sim/systems/growth';
 import { TICKS_PER_HOUR, TICKS_PER_MONTH } from '../src/sim/time';
 import { buildTown, newSim, serveTown } from './helpers';
@@ -20,16 +20,6 @@ function town(policies: string[] = [], services = true): Sim {
   }
   return sim;
 }
-
-const count = (sim: Sim, kind: string, ticks: number) => {
-  let n = 0;
-  for (let t = 0; t < ticks; t++) {
-    sim.step();
-    n += sim.events.filter((e) => e.kind === kind).length;
-    sim.events.length = 0;
-  }
-  return n;
-};
 
 describe('policies', () => {
   it('cost money every month, and only once unlocked', () => {
@@ -85,8 +75,27 @@ describe('policies', () => {
     const withIt = town(['neighbourhoodWatch'], false);
     without.advance(TICKS_PER_MONTH);
     withIt.advance(TICKS_PER_MONTH);
-    const a = count(without, 'crime', TICKS_PER_MONTH * 6);
-    const b = count(withIt, 'crime', TICKS_PER_MONTH * 6);
+    // The chance of a crime falls by a quarter at every home and shop...
+    const homes = [...withIt.state.buildings.values()].filter((b) => b.state === BState.Active && b.pop > 0);
+    expect(homes.length).toBeGreaterThan(20);
+    for (const b of homes.slice(0, 20)) {
+      const on = crimeRisk(withIt, b);
+      withIt.state.policies = [];
+      expect(on).toBeCloseTo(crimeRisk(withIt, b) * POLICY_EFFECTS.neighbourhoodWatch, 9);
+      withIt.state.policies = ['neighbourhoodWatch'];
+    }
+    // ...and over half a year the expected number of crimes across the whole town is far lower
+    // (summing the hourly risk rather than counting rolls keeps chance out of it).
+    const expected = (sim: Sim) => {
+      let e = 0;
+      for (let h = 0; h < 24 * 6; h++) {
+        sim.advance(TICKS_PER_HOUR);
+        for (const b of sim.state.buildings.values()) if (b.state === BState.Active) e += crimeRisk(sim, b);
+      }
+      return e;
+    };
+    const a = expected(without);
+    const b = expected(withIt);
     expect(a).toBeGreaterThan(4);
     expect(b).toBeLessThan(a * 0.85);
   });

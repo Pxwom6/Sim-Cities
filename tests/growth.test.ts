@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Sim } from '../src/sim/sim';
 import { BState } from '../src/sim/world/buildings';
-import { TICKS_PER_MONTH } from '../src/sim/time';
+import { HOURLY_AT, TICKS_PER_MONTH } from '../src/sim/time';
 import { ZONE_C, ZONE_I, ZONE_R } from '../src/data/zones';
 import { buildTown, connectPoint, countBuildings, newSim, road, serveTown } from './helpers';
 
@@ -139,7 +139,8 @@ describe('growth', () => {
   it('every building can explain its mood', () => {
     const sim = newSim();
     buildTown(sim);
-    sim.advance(TICKS_PER_MONTH);
+    // Just after the hourly mood pass, when every stored mood is up to date.
+    sim.advance(TICKS_PER_MONTH + HOURLY_AT.happiness + 1);
     for (const b of sim.state.buildings.values()) {
       if (b.state !== BState.Active) continue;
       const d = sim.buildingDetails(b.id)!;

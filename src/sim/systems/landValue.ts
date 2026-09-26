@@ -65,26 +65,27 @@ export function updateLandValue(sim: Sim, instant = false): void {
     }
   }
   const blur = (src: Float32Array, radius: number): Float32Array => {
-    // Separable box blur (radius in cells), sums not averages.
+    // Separable box blur (radius in cells), sums not averages, as running sums along each row and
+    // then each column. The inputs are float32, so the double sums are exact: the same result as
+    // adding up each window afresh, at a fraction of the cost.
     const tmp = new Float32Array(n);
     const out = new Float32Array(n);
     for (let j = 0; j < GRID_RES; j++) {
+      const row = j * GRID_RES;
+      let s = 0;
+      for (let i = 0; i < radius && i < GRID_RES; i++) s += src[row + i]!;
       for (let i = 0; i < GRID_RES; i++) {
-        let s = 0;
-        for (let d = -radius; d <= radius; d++) {
-          const ii = i + d;
-          if (ii >= 0 && ii < GRID_RES) s += src[j * GRID_RES + ii]!;
-        }
-        tmp[j * GRID_RES + i] = s;
+        if (i + radius < GRID_RES) s += src[row + i + radius]!;
+        if (i - radius - 1 >= 0) s -= src[row + i - radius - 1]!;
+        tmp[row + i] = s;
       }
     }
-    for (let j = 0; j < GRID_RES; j++) {
-      for (let i = 0; i < GRID_RES; i++) {
-        let s = 0;
-        for (let d = -radius; d <= radius; d++) {
-          const jj = j + d;
-          if (jj >= 0 && jj < GRID_RES) s += tmp[jj * GRID_RES + i]!;
-        }
+    for (let i = 0; i < GRID_RES; i++) {
+      let s = 0;
+      for (let j = 0; j < radius && j < GRID_RES; j++) s += tmp[j * GRID_RES + i]!;
+      for (let j = 0; j < GRID_RES; j++) {
+        if (j + radius < GRID_RES) s += tmp[(j + radius) * GRID_RES + i]!;
+        if (j - radius - 1 >= 0) s -= tmp[(j - radius - 1) * GRID_RES + i]!;
         out[j * GRID_RES + i] = s;
       }
     }
@@ -98,18 +99,14 @@ export function updateLandValue(sim: Sim, instant = false): void {
   for (const c of sim.state.civics.values()) {
     const lvDef = civicDef(c).landValue;
     if (!lvDef) continue;
-    const r = lvDef.radius / GRID_CELL;
     const ci = Math.floor(c.x / GRID_CELL);
     const cj = Math.floor(c.z / GRID_CELL);
-    for (let dj = -Math.ceil(r); dj <= Math.ceil(r); dj++) {
-      for (let di = -Math.ceil(r); di <= Math.ceil(r); di++) {
-        const i = ci + di;
-        const j = cj + dj;
-        if (i < 0 || j < 0 || i >= GRID_RES || j >= GRID_RES) continue;
-        const d = Math.hypot(di, dj) / r;
-        if (d > 1) continue;
-        civicEffect[j * GRID_RES + i]! += lvDef.value * (1 - d);
-      }
+    const kern = kernel(lvDef.radius / GRID_CELL);
+    for (let e = 0; e < kern.length; e += 3) {
+      const i = ci + kern[e]!;
+      const j = cj + kern[e + 1]!;
+      if (i < 0 || j < 0 || i >= GRID_RES || j >= GRID_RES) continue;
+      civicEffect[j * GRID_RES + i]! += lvDef.value * kern[e + 2]!;
     }
   }
   const ground = sim.state.groundPollution;
@@ -128,14 +125,10 @@ export function updateLandValue(sim: Sim, instant = false): void {
   const svcBlur = blur(svcSum, 4);
   const svcWBlur = blur(svcW, 4);
   const trees = sim.state.trees;
+  const setting = settingValue(sim, water);
   for (let k = 0; k < n; k++) {
-    const i = k % GRID_RES;
-    const j = (k - i) / GRID_RES;
-    const h = sim.terrain.heightAt((i + 0.5) * GRID_CELL, (j + 0.5) * GRID_CELL);
-    const waterfront = Math.max(0, 1 - water[k]! / 120);
-    const view = Math.max(0, Math.min(1, (h - 15) / 45));
     const neighbour = wSum[k]! > 0 ? hSum[k]! / wSum[k]! - 0.5 : 0;
-    let target = 0.3 + 0.15 * waterfront + 0.07 * view + 0.05 * (trees[k]! / 255) + 0.2 * neighbour;
+    let target = setting[k]! + 0.05 * (trees[k]! / 255) + 0.2 * neighbour;
     target -= 0.08 * Math.min(2, nuis[k]!);
     target -= 0.06 * Math.min(3, aband[k]!);
     target += civicEffect[k]!;
@@ -146,6 +139,43 @@ export function updateLandValue(sim: Sim, instant = false): void {
     target = Math.max(0, Math.min(1, target));
     lv[k] = instant ? target : lv[k]! + (target - lv[k]!) * 0.25;
   }
+}
+
+/**
+ * The fixed part of each cell's value, from the land itself: a base plus waterfront and hilltop
+ * views. Cached per terrain (the water-distance raster stands in for it).
+ */
+const settingCache = new WeakMap<Float32Array, Float64Array>();
+function settingValue(sim: Sim, water: Float32Array): Float64Array {
+  let out = settingCache.get(water);
+  if (out) return out;
+  out = new Float64Array(GRID_RES * GRID_RES);
+  for (let k = 0; k < out.length; k++) {
+    const i = k % GRID_RES;
+    const j = (k - i) / GRID_RES;
+    const h = sim.terrain.heightAt((i + 0.5) * GRID_CELL, (j + 0.5) * GRID_CELL);
+    const waterfront = Math.max(0, 1 - water[k]! / 120);
+    const view = Math.max(0, Math.min(1, (h - 15) / 45));
+    out[k] = 0.3 + 0.15 * waterfront + 0.07 * view;
+  }
+  settingCache.set(water, out);
+  return out;
+}
+
+/** Cells within `r` cells of a centre, as (di, dj, 1 − distance / r) triples; cached per radius. */
+const kernels = new Map<number, Float64Array>();
+function kernel(r: number): Float64Array {
+  let k = kernels.get(r);
+  if (k) return k;
+  const out: number[] = [];
+  for (let dj = -Math.ceil(r); dj <= Math.ceil(r); dj++) {
+    for (let di = -Math.ceil(r); di <= Math.ceil(r); di++) {
+      const d = Math.hypot(di, dj) / r;
+      if (d <= 1) out.push(di, dj, 1 - d);
+    }
+  }
+  kernels.set(r, (k = Float64Array.from(out)));
+  return k;
 }
 
 export function landValueAt(sim: Sim, x: number, z: number): number {

@@ -139,8 +139,11 @@ export function computeCoverage(sim: Sim): Coverage {
   return { graph: g, kinds };
 }
 
-/** Hourly: buildings read coverage at their road node; schools fill their nearest seats first. */
-export function applyCoverage(sim: Sim, cov: Coverage): void {
+/**
+ * Hourly, first half: schools and clinics fill their nearest seats and beds first, and occupied homes
+ * learn their school places and care. `applyCoverageFields` does the rest on the next tick.
+ */
+export function applyServiceLoads(sim: Sim, cov: Coverage): void {
   const g = cov.graph;
   sim.schoolUse.clear();
   const civics = [...sim.state.civics.values()].sort((a, b) => a.id - b.id);
@@ -174,19 +177,11 @@ export function applyCoverage(sim: Sim, cov: Coverage): void {
     const used = fill(sim, g, c, svc.range, total, byNode, need, have);
     sim.schoolUse.set(c.id, Math.round(used));
   }
-  for (const b of sim.state.buildings.values()) {
-    const acc = b.state !== BState.Rubble ? sim.buildingAccess(b) : null;
+  // Homes' school places (education coverage scaled by the seats they got) and hospital beds.
+  for (const b of homes) {
+    const acc = sim.buildingAccess(b);
     const len = acc ? sim.net.curve(acc.seg).length : 0;
-    const at = (k: ServiceKind) => (acc ? round(coverageOnSegment(cov, k, acc.seg, acc.s, len)) : 0);
-    b.covFire = at('fire');
-    b.covPolice = at('police');
-    b.covHealth = at('health');
-    b.covPark = at('park');
-    const edu = at('education');
-    if (b.zone !== ZONE_R) {
-      b.covEdu = edu;
-      continue;
-    }
+    const edu = acc ? round(coverageOnSegment(cov, 'education', acc.seg, acc.s, len)) : 0;
     const share = (l: number) => {
       const w = want[l]!.get(b.id) ?? 0;
       return w > 0 ? round(Math.min(1, (got[l]!.get(b.id) ?? 0) / w)) : 0;
@@ -202,6 +197,31 @@ export function applyCoverage(sim: Sim, cov: Coverage): void {
     }
     b.covEdu = !acc ? 0 : w > 0 ? round((h / w) * Math.max(0.5, edu)) : edu;
     b.treated = b.sick > 0 ? round(Math.min(1, (beds.get(b.id) ?? 0) / b.sick)) : 0;
+  }
+}
+
+/**
+ * Every building's coverage by fire, police, health and parks (and education for businesses),
+ * read off its road. The second half of the hourly coverage pass, on the tick after the first.
+ */
+export function applyCoverageFields(sim: Sim, cov: Coverage): void {
+  for (const b of sim.state.buildings.values()) {
+    const acc = b.state !== BState.Rubble ? sim.buildingAccess(b) : null;
+    const len = acc ? sim.net.curve(acc.seg).length : 0;
+    const at = (k: ServiceKind) => (acc ? round(coverageOnSegment(cov, k, acc.seg, acc.s, len)) : 0);
+    b.covFire = at('fire');
+    b.covPolice = at('police');
+    b.covHealth = at('health');
+    b.covPark = at('park');
+    // Occupied homes on the road graph got their education and beds in the first half.
+    if (b.zone === ZONE_R && b.state === BState.Active && b.pop > 0 && attachmentOf(sim, cov.graph, b))
+      continue;
+    if (b.zone === ZONE_R) {
+      // Empty or cut-off homes: no places were filled for them.
+      b.seat1 = b.seat2 = b.seat3 = 0;
+      b.covEdu = acc ? at('education') : 0;
+      b.treated = 0;
+    } else b.covEdu = at('education');
   }
 }
 

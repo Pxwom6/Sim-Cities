@@ -204,10 +204,7 @@ by `query` when the inspector opens.
 |---|---|
 | every tick | apply commands · move service vehicles · advance fires/incidents · construction progress |
 | 10 ticks | growth pass (slice of zone blocks) · occupancy |
-| 60 ticks (hour) | economy accrual · demand · incident rolls (fire, crime, sickness) · garbage · utilities (if dirty, else every 2 h) · happiness (slice: all buildings over 4 h) |
-| sliced | traffic assignment: a slice of origins each tick, a full round every ~2 h |
-| 180 ticks | pollution advection/diffusion · land value · crime decay |
-| on change / 4 h | service coverage (dirty on road/service/funding change, and refreshed for congestion) |
+| hour, spread by minute (`HOURLY_AT`) | :00 utilities · :03 coverage cache rebuild (only after a road/service change) · :06 school seats and hospital beds · :07 coverage fields · :12 health · :18 garbage · :24/:25 ground, then air pollution and crime decay (every 3 h) · :30–:33 commute matching, a quarter of the origins per tick (every 2 h) · :36 happiness · :42 incidents and lifecycle · :48 totals, demand, economy, progress · :54 land value (every 3 h) |
 | month | budget close + history · education progression · milestones · advisors digest |
 
 ### 3.3 Demand (RCI)
@@ -682,6 +679,12 @@ the main menu's Continue and an exported-then-imported file (e2e `m11-shell`).
 ## 8. Performance budget
 
 - Sim: average tick < 1 ms and worst tick < 15 ms at 100k residents (sliced systems), so 3× speed
-  uses < 5 % of a worker core on average and never stalls the worker for long.
+  uses < 5 % of a worker core on average and never stalls the worker for long. Met (M12,
+  `scripts/bench.ts --big`): at 80–106k residents the average is 0.6–0.8 ms and each month's worst
+  tick 9–14 ms. How: the hourly systems run on different minutes, commute matching is split over
+  four ticks (a save completes a round in progress first, so a loaded city carries on identically),
+  coverage is split in two with its cache rebuilt on a quiet tick, and land value and garbage
+  dispatch were made cheaper without changing their results. Exceptions: the first hour after
+  loading or founding a big city (cold caches and JIT, one-off ticks of 25–30 ms).
 - Render: < 300 draw calls, < 1.5 M triangles at the default overview; no allocations in per-frame
   paths (vehicles, camera, animation); chunk rebuilds budgeted per frame.

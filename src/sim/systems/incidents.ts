@@ -104,6 +104,23 @@ export function ignite(sim: Sim, b: Building): void {
   dispatch(sim, 'fire', 'fire', b.id);
 }
 
+/**
+ * Chance of a crime at an active home or business this hour: more with unemployment, poverty and
+ * unhappiness, less with police coverage and a neighbourhood watch; scaled by how full it is.
+ */
+export function crimeRisk(sim: Sim, b: Building): number {
+  if (b.zone === ZONE_I) return 0;
+  const workers = Math.max(1, b.seekers);
+  const unemp = b.zone === ZONE_R ? Math.max(0, b.seekers - b.employed) / workers : 0;
+  return (
+    (sim.policy('neighbourhoodWatch') ? POLICY_EFFECTS.neighbourhoodWatch : 1) *
+    SERVICES.crimeBase *
+    (1 + 2 * unemp + (b.wealth === 0 ? 0.5 : 0) + 1.5 * Math.max(0, 0.5 - b.happiness)) *
+    (1 - SERVICES.crimePoliceCut * b.covPolice) *
+    (b.pop / Math.max(1, b.cap))
+  );
+}
+
 /** Hourly: roll fires, crimes and emergencies; retry dispatch for fires still waiting. */
 export function incidentsHour(sim: Sim): void {
   const s = sim.state;
@@ -116,15 +133,7 @@ export function incidentsHour(sim: Sim): void {
     if (b.fire <= 0 && rng.chance(fireRisk(sim, b))) ignite(sim, b);
     if (b.state !== BState.Active) continue;
     if (b.zone !== ZONE_I) {
-      const workers = Math.max(1, b.seekers);
-      const unemp = b.zone === ZONE_R ? Math.max(0, b.seekers - b.employed) / workers : 0;
-      const rate =
-        (sim.policy('neighbourhoodWatch') ? POLICY_EFFECTS.neighbourhoodWatch : 1) *
-        SERVICES.crimeBase *
-        (1 + 2 * unemp + (b.wealth === 0 ? 0.5 : 0) + 1.5 * Math.max(0, 0.5 - b.happiness)) *
-        (1 - SERVICES.crimePoliceCut * b.covPolice) *
-        (b.pop / Math.max(1, b.cap));
-      if (rng.chance(rate)) {
+      if (rng.chance(crimeRisk(sim, b))) {
         const inc: Incident = {
           id: s.nextId++,
           kind: 'crime',

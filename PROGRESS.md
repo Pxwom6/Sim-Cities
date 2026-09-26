@@ -15,18 +15,15 @@
 - [ ] M12 Balance, performance and polish
 
 ## In progress
-M12 Balance, performance and polish. Done so far: `scripts/balance.ts` (careful / greedy / neglectful
-over 20 years); economy retuned from its results (tax base ×2, septic tanks for hamlets, garbage
-trucks and facilities that keep up). 20-year curves now: careful grows ~0.8k → 2k → 4k → 14k by
-year 4, then fills the 15 district slots (~15k, approval ~60 %); greedy (15 % taxes, no services) stays
-~100 residents at ~15 % approval; neglectful stagnates at 300–570 with ~38 % approval. Easy grows
-faster, Tough stalls ~5 years before growing.
+M12 Balance, performance and polish. Done: balance tool and economy retune (see DECISIONS); the
+100k-resident tick budget (hourly systems spread over the hour, matching over four ticks, cheaper
+land value, coverage and garbage dispatch). Next: soak test, bug bash and SPEC review, README.
 
 ## Next tasks
-1. Performance at scale: grow a ~100k city in the benchmark (bigger grid, dense zoning, sandbox),
-   profile the hourly systems, keep ticks within budget (DESIGN §8).
-2. Soak test (long run at top speed, disasters on, zero console errors), bug bash, SPEC review.
-3. Main-menu demo town; README; final summary at the top of this file.
+1. Soak test: a long run at top speed over a grown city with random disasters on, zero console errors
+   (e2e), plus a long headless run with invariants on.
+2. Bug bash and a final review against every SPEC item (done, or explained in docs/DECISIONS.md).
+3. Main-menu demo town; README; final summary and ideas at the top of this file.
 
 ## Known issues
 - Mature cities run a big surplus (≈ +$30k/month at 15k residents with 6 % taxes); intended as money for landmarks and big projects, but worth another look once the 100k benchmark exists.
@@ -42,8 +39,9 @@ faster, Tough stalls ~5 years before growing.
 - Growth all the way to 100k residents is only exercised by the M12 large-city benchmark so far; M10 tests the unlock table and each specialisation on the test town.
 - Tree count is high in forests (~25k in-map); LOD switches to low-poly beyond 750 m.
 
-## Performance (M10; M11 adds no per-tick work)
-- `npx tsx scripts/bench.ts 12 9`: ~11–13k residents, tick avg ~0.11–0.21 ms, p99 ~2–9 ms, worst ~29 ms (hourly systems + 3-hourly air pollution and land value). Progression, tourism and extraction are hourly passes over the civic buildings only (no measurable cost). Disasters cost nothing while none is active.
+## Performance (M12)
+- `npx tsx scripts/bench.ts 30 --big`: a 16×16 avenue grid grows to ~106k residents by month 5. At 80–106k: tick avg 0.6–0.8 ms, p99 5–8 ms, worst per month 9–14 ms (budget: avg < 1 ms, worst < 15 ms). One-off 25–30 ms ticks in the first game hour of a freshly built or loaded big city (cold caches, JIT).
+- `npx tsx scripts/bench.ts 12 9` (the older ~12k town): tick avg ~0.12–0.21 ms.
 - Night town (720 residents, M9): ~95 draw calls, ~0.75M triangles on SwiftShader. A tornado adds 3 point systems (~2,200 points); flood water is one mesh; dust bursts share one point system.
 - Procedural models: mean triangles per building R0 139, R1 329, R2 622, C0 102, C1 254, C2 481, I 174–217 (`scripts/dev/modelstats.ts`).
 
