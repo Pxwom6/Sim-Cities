@@ -75,7 +75,7 @@ Playtest fixes (after the first real playtest on the Mac), see "Playtest fixes" 
 - Tree count is high in forests (~25k in-map); LOD switches to low-poly beyond 750 m.
 
 ## Performance (M12)
-- `npx tsx scripts/bench.ts 30 --big`: a 16×16 avenue grid grows to ~106k residents by month 5. At 80–106k (latest run, terrain v2): tick avg 0.59–0.71 ms, p99 5–7 ms, worst per month 8–11 ms (budget: avg < 1 ms, worst < 15 ms). One-off 25–30 ms ticks in the first game hour of a freshly built or loaded big city (cold caches, JIT).
+- `npx tsx scripts/bench.ts 30 --big`: a 16×16 avenue grid grows to ~106k residents by month 5. At 84–110k (latest run, with garbage rounds): tick avg 0.68–0.81 ms, p99 6–7 ms, worst per month 11–14 ms (budget: avg < 1 ms, worst < 15 ms); before the playtest fixes 0.59–0.71 ms and 8–11 ms at 80–106k. One-off 25–30 ms ticks in the first game hour of a freshly built or loaded big city (cold caches, JIT).
 - `npx tsx scripts/bench.ts 12 9` (the older ~12k town): tick avg ~0.12–0.21 ms.
 - Rendering the ~100k city (`scripts/dev/bigshot.mjs`, SwiftShader): 288 draw calls / 2.5M triangles at the whole-city overview (about half the triangles are the shadow pass), 156 / 1.8M at the city preset, 92 / 1.05M at street level. Was 1,241 draw calls before civic, building, road and zone chunks were enlarged.
 - Night town (720 residents, M9): ~95 draw calls, ~0.75M triangles on SwiftShader. A tornado adds 3 point systems (~2,200 points); flood water is one mesh; dust bursts share one point system.
