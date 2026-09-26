@@ -34,7 +34,7 @@ screenshots are in `docs/screenshots/`. Anything not done is explained at the en
 ## 5. Game design
 | Area | Status |
 |---|---|
-| World: seeded terrain, hills, river/coast/lakes, forests, groundwater/ore/oil on data maps; 2×2 km with scenery; highway | Done (M0, M4, M10) |
+| World: seeded terrain, hills, river/coast/lakes, forests, groundwater/ore/oil on data maps; 2×2 km with scenery; highway | Done (M0, M4, M10); every seed has a gentle start area by the highway (M12, terrain v2) |
 | New-game options: seed/preset, difficulty, sandbox, disasters | Done (M11): new-city screen |
 | Roads: dirt/street/avenue + boulevard, upgrades keep buildings, drag drawing with curves, snapping, intersections, cost preview, invalid state, slope limits, bridges, bulldozer with refunds | Done (M1, M6); e2e m1, m6 |
 | Zoning and growth: cells on both sides, RCI painting, density by road and milestones, wealth by land value, construction, upgrades, decline, abandonment, RCI bars with reasons | Done (M1, M2, M10); e2e m1, m2 |
@@ -70,6 +70,8 @@ screenshots are in `docs/screenshots/`. Anything not done is explained at the en
 | Performance benchmark | Done: `scripts/bench.ts` (and `--big` for ~100k) |
 | Balance tool: careful / greedy / neglectful for 20+ years | Done: `scripts/balance.ts` |
 | Long soak with zero console errors | Done: `npm run soak` (10 minutes of top-speed play with disasters, panels, maps, saves) |
+| §9 final playthrough via tests and screenshots | Done: `npm run playthrough` (a first city through the real UI, menu to year two; `docs/screenshots/m12-play-*.png`) |
+| §9 README (run, build, play); summary and ideas at the top of PROGRESS.md | Done |
 
 ## Not done, and why
 - **Trams and trains** (§5 transport, "if time allows") and the §9 extras (neighbouring cities, weather

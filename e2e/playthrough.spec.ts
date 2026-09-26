@@ -17,14 +17,24 @@ async function shot(page: Page, name: string): Promise<void> {
   await page.screenshot({ path: `docs/screenshots/m12-play-${name}.png` });
 }
 
-async function at(page: Page, x: number, z: number) {
-  return page.evaluate(([x, z]) => window.__game!.worldToScreen(x!, z!), [x, z]);
+/** Screen position of a ground point, and whether it's on the map (not under a panel or toolbar). */
+async function screenAt(page: Page, x: number, z: number) {
+  const p = await page.evaluate(([x, z]) => window.__game!.worldToScreen(x!, z!), [x, z]);
+  const hit = await page.evaluate(([sx, sy]) => document.elementFromPoint(sx!, sy!)?.id ?? '', [p.x, p.y]);
+  return { ...p, onMap: hit === 'scene' };
 }
 
-/** Look down over the town site, as a player would before building. */
+/** Screen position of a ground point that must be on the map. */
+async function at(page: Page, x: number, z: number) {
+  const p = await screenAt(page, x, z);
+  expect(p.onMap, `(${x}, ${z}) is at screen ${Math.round(p.x)},${Math.round(p.y)}, under the UI`).toBe(true);
+  return p;
+}
+
+/** Look down over the town site, as a player would before building (clear of the toolbars). */
 async function topDown(page: Page, cz: number): Promise<void> {
   await page.evaluate(
-    (cz) => window.__game!.setCamera({ x: 264, z: cz, distance: 560, yaw: 0, tilt: 0.55 }),
+    (cz) => window.__game!.setCamera({ x: 290, z: cz + 50, distance: 700, yaw: 0, tilt: 0.55 }),
     cz,
   );
   await page.evaluate(() => window.__game!.waitFrames(2));
@@ -39,15 +49,23 @@ async function closeTips(page: Page, seen: string[]): Promise<void> {
   }
 }
 
-async function drag(page: Page, points: [number, number][]): Promise<void> {
+/** Drag the road tool along points; returns why not if nothing was built. */
+async function drag(page: Page, points: [number, number][]): Promise<string | null> {
+  const before = (await state(page)).segments;
   let p = await at(page, points[0]![0], points[0]![1]);
   await page.mouse.move(p.x, p.y);
   await page.mouse.down();
+  let hint = '';
   for (const [x, z] of points.slice(1)) {
     p = await at(page, x, z);
     await page.mouse.move(p.x, p.y, { steps: 5 });
+    const h = page.getByTestId('tool-hint');
+    if (await h.isVisible()) hint = await h.innerText();
   }
   await page.mouse.up();
+  await page.waitForTimeout(300);
+  if ((await state(page)).segments > before) return null;
+  return `${JSON.stringify(points)} at screen ${Math.round(p.x)},${Math.round(p.y)}: ${hint || 'no hint'}`;
 }
 
 /** Place a building from a toolbar menu, trying spots beside the roads until one takes it. */
@@ -59,7 +77,8 @@ async function place(page: Page, category: string, def: string, spots: [number, 
   if (await button.isDisabled()) return false;
   await button.click();
   for (const [x, z] of spots) {
-    const p = await at(page, x, z);
+    const p = await screenAt(page, x, z);
+    if (!p.onMap) continue;
     await page.mouse.move(p.x, p.y, { steps: 3 });
     await page.waitForTimeout(150);
     await page.mouse.click(p.x, p.y);
@@ -112,18 +131,25 @@ test('playthrough: a first city from the main menu to a thriving town @playthrou
   await topDown(page, cz);
   await page.getByTestId('tool-road').click();
   await page.getByTestId('road-avenue').click();
-  await drag(page, [
+  const failed: string[] = [];
+  const road = async (points: [number, number][]) => {
+    const why = await drag(page, points);
+    if (why) failed.push(why);
+  };
+  await road([
     [24, cz],
     [264, cz],
     [504, cz],
   ]);
   await page.getByTestId('road-street').click();
   for (const x of [120, 216, 312, 408])
-    await drag(page, [
+    await road([
       [x, cz - 160],
       [x, cz],
       [x, cz + 160],
     ]);
+  if (failed.length) await page.screenshot({ path: 'test-results/playthrough-roads.png' });
+  expect(failed, failed.join('\n')).toEqual([]);
   const s1 = await state(page);
   expect(s1.segments).toBeGreaterThanOrEqual(s0.segments + 13);
   log(`roads: ${s1.segments - s0.segments} segments for $${s0.treasury - s1.treasury}`);
@@ -204,6 +230,7 @@ test('playthrough: a first city from the main menu to a thriving town @playthrou
 
   // The first few months; keep the utilities ahead of demand, as the advisors ask.
   const keepUp = async (s: State) => {
+    await topDown(page, cz);
     const u = s.utilities;
     if (u.power.supply < u.power.demand * 1.2 + 10)
       log(
