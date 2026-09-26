@@ -1,24 +1,24 @@
 # CLAUDE.md
 
-This project is an original 3D city-building game for the browser, built by you across many autonomous sessions. **SPEC.md is the brief and the source of truth.** `DESIGN.md` (which you'll write in M0) holds the technical design, and `PROGRESS.md` holds the current state.
+This project is an original 3D city-building game for the browser, built by you across many autonomous sessions. **The brief and the source of truth is SPEC.md (phase 1, M0–M12) together with SPEC-2.md (phase 2, M13–M24).** SPEC.md still applies in full during phase 2; SPEC-2.md adds the new milestones and its own rules for all of phase 2 (save migrations with a test, the performance budget, bench and balance reruns per milestone, a SPEC_REVIEW section). `DESIGN.md` holds the technical design, and `PROGRESS.md` holds the current state.
 
 ## Start of every session, and after any context compaction
 1. Read `PROGRESS.md` to see where things stand and what's next.
-2. Re-read the SPEC.md entries for the current milestone.
+2. Re-read the entries for the current milestone: SPEC.md for M0–M12, SPEC-2.md (and its "Rules for all of phase 2") for M13–M24.
 3. If tests exist, run them so you know the starting state before changing anything.
 
 ## Working rules
 - **Work autonomously.** Assume I'm not around. Don't stop to ask questions or wait for approval: when something's ambiguous, make the call a thoughtful game designer would, note it in `docs/DECISIONS.md` with a one-line reason, and keep going.
 - **Small, verified steps.** Work through the milestones in order, breaking each into small steps, and get each step working and tested before starting the next.
 - **Commit and push often.** Commit after every working step with a clear message, and push straight away. Never commit a broken build. When a milestone meets its done criteria, start that commit's message with `M<n> complete:` (git tags can't be pushed from cloud sessions).
-- **Keep PROGRESS.md current.** Open it with a checklist of all 13 milestones (`- [ ] M0 Foundation` through `- [ ] M12 Balance, performance and polish`) and tick one (`- [x]`) only when it meets its done criteria. Below that: what's in progress, the next few tasks, known issues and the latest performance numbers. Update it whenever you finish a step and before any long-running job, so a fresh session could carry on from it alone. Keep it short; history lives in git.
-- **Verify for real** (SPEC.md section 8). A feature is done when its tests pass and you've seen it working in screenshots you actually looked at.
+- **Keep PROGRESS.md current.** Open it with a checklist of all 25 milestones (`- [ ] M0 Foundation` through `- [ ] M24 Terrain and map editor`) and tick one (`- [x]`) only when it meets its done criteria. Below that: what's in progress, the next few tasks, known issues and the latest performance numbers. Update it whenever you finish a step and before any long-running job, so a fresh session could carry on from it alone. Keep it short; history lives in git.
+- **Verify for real** (SPEC.md section 8). A feature is done when its tests pass and you've seen it working in screenshots you actually looked at. In phase 2 every milestone also ends tested through the real UI, with `bench` and `balance` rerun and their numbers logged in PROGRESS.md.
 - **Be honest.** Never hardcode results to make a test pass, weaken or delete a test to get to green, or describe a stub as finished. If something doesn't work yet, say so in PROGRESS.md, along with what you tried.
 - **Don't get stuck.** If a problem resists repeated attempts, write down what you tried, choose a simpler approach that still meets the spec, move on, and revisit it in M12.
 - **Protect your context.** Use subagents for self-contained side jobs (researching a technique, reviewing a batch of screenshots, writing a set of tests), and don't dump huge files or logs into the conversation.
 - **Leave `.claude/` alone.** Edits in there can trigger permission prompts that would stall an unattended run.
 - **Quality over speed.** A solid, polished milestone is worth more than racing ahead on shaky foundations.
-- **Keep going** until every milestone in SPEC.md is complete. Only stop early if you hit something only I can fix (a missing system dependency, say), and if so, put exactly what you need at the top of PROGRESS.md.
+- **Keep going** until every milestone in SPEC.md and SPEC-2.md is complete, in order. Only stop early if you hit something only I can fix (a missing system dependency, say), and if so, put exactly what you need at the top of PROGRESS.md.
 
 ## Cloud sessions
 When `CLAUDE_CODE_REMOTE` is `true`, you're running in a cloud VM cloned fresh from GitHub:
