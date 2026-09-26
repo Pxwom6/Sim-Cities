@@ -89,5 +89,32 @@ test('M4: utilities placed through the UI supply the town; cutting power visibly
   expect((await state(page)).renderStats.icons).toBeGreaterThan(10);
   await shot(page, 'm4-power-cut');
   await page.getByTestId('map-legend').getByRole('button').click();
+
+  // The landfill's inspector shows how collection is going and sells extra trucks.
+  const lf = await page.evaluate(() => window.__game!.getCivics().find((c) => c.def === 'landfill')!);
+  // Power back on first (the trucks don't run from a dark landfill), then a day of collection.
+  await page.evaluate(async () => {
+    const g = window.__game!;
+    await g.placeCivic('coal');
+    await g.advance(1440);
+  });
+  await page.evaluate(
+    (c) => window.__game!.setCamera({ x: c.x, z: c.z, distance: 150, yaw: 0.4, tilt: 0.3 }),
+    lf,
+  );
+  await page.evaluate(() => window.__game!.waitFrames(2));
+  const at = await page.evaluate((c) => window.__game!.worldToScreen(c.x, c.z), lf);
+  await page.mouse.click(at.x, at.y);
+  await expect(page.getByTestId('inspector')).toContainText('Landfill');
+  await expect(page.getByTestId('garbage-trucks')).toHaveText(/^\d+ of 4$/);
+  await expect(page.getByTestId('garbage-collected')).toContainText('a day');
+  await expect(page.getByTestId('garbage-produced')).toContainText('a day');
+  await expect(page.getByTestId('garbage-rounds')).toHaveText(/ h, \d+(\.\d)? stops?, \d+ of 400 a load$/);
+  const money = (await state(page)).treasury;
+  await page.getByTestId('buy-truck').click();
+  await expect(page.getByTestId('garbage-trucks')).toHaveText(/^\d+ of 5$/);
+  expect((await state(page)).treasury).toBe(money - 1_200);
+  await shot(page, 'playtest-landfill');
+  await page.keyboard.press('Escape');
   errs.check();
 });

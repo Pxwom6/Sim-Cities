@@ -23,6 +23,9 @@ export interface Vehicle {
   wait: number;
   /** Incident this vehicle answers (0 if none). */
   ref: number;
+  /** Tick it set out, and stops made on this trip so far (garbage rounds). */
+  born: number;
+  stops: number;
 }
 
 export function segSpeed(sim: Sim, segId: number): number {
@@ -82,6 +85,8 @@ export function spawnVehicle(
     load: 0,
     wait: 0,
     ref: 0,
+    born: sim.state.tick,
+    stops: 0,
   };
   sim.state.vehicles.set(v.id, v);
   const c = sim.state.civics.get(home);
@@ -95,6 +100,20 @@ export function despawnVehicle(sim: Sim, v: Vehicle): void {
   const c = sim.state.civics.get(v.home);
   if (c) c.out = Math.max(0, c.out - 1);
   sim.markVehiclesDirty();
+}
+
+/** Send a vehicle on from where it is to a new destination (phase 'out'); false if there's no route. */
+export function driveOn(sim: Sim, v: Vehicle, target: number, to: { seg: number; s: number }): boolean {
+  const at = currentPoint(sim, v);
+  const legs = at ? route(sim, at, to) : null;
+  if (!legs) return false;
+  v.legs = legs;
+  v.leg = 0;
+  v.t = 0;
+  v.phase = 'out';
+  v.target = target;
+  sim.markVehiclesDirty();
+  return true;
 }
 
 /** Send a vehicle back to its home building from wherever it is. */

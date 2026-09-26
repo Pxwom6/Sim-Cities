@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { modulesFor } from '../data/modules';
+import { MODULE, modulesFor } from '../data/modules';
 import { DENSITY_NAMES, INDUSTRY_TIER_NAMES, WEALTH_NAMES, ZONED_DEFS } from '../data/buildings';
 import type { BuildingDetails, CivicDetails } from '../sim/protocol';
 import { formatNumber, useGameUpdates } from './hooks';
@@ -292,8 +292,34 @@ function CivicInspector({ id }: { id: number }) {
         {d.garbage && (
           <>
             <dt>Trucks out</dt>
-            <dd>
-              {d.garbage.out} / {d.garbage.trucks}
+            <dd data-testid="garbage-trucks">
+              {d.garbage.out} of {d.garbage.trucks}
+            </dd>
+            <dt>Collected</dt>
+            <dd
+              data-testid="garbage-collected"
+              class={
+                d.garbage.collectedAllLastDay < d.garbage.producedPerDay * 0.95 && d.garbage.piles > 0
+                  ? 'neg'
+                  : ''
+              }
+            >
+              {d.garbage.collectedLastDay.toLocaleString('en-US')} a day
+              {d.garbage.collectedAllLastDay > d.garbage.collectedLastDay &&
+                ` (${d.garbage.collectedAllLastDay.toLocaleString('en-US')} all sites)`}
+            </dd>
+            <dt>City makes</dt>
+            <dd data-testid="garbage-produced">{d.garbage.producedPerDay.toLocaleString('en-US')} a day</dd>
+            <dt>On the streets</dt>
+            <dd data-testid="garbage-backlog" class={d.garbage.piles > 0 ? 'neg' : ''}>
+              {d.garbage.backlog.toLocaleString('en-US')}
+              {d.garbage.piles > 0 ? `, piles at ${d.garbage.piles}` : ''}
+            </dd>
+            <dt>Rounds</dt>
+            <dd data-testid="garbage-rounds">
+              {d.garbage.roundHours
+                ? `${d.garbage.roundHours} h, ${d.garbage.stopsPerRound} ${d.garbage.stopsPerRound === 1 ? 'stop' : 'stops'}, ${d.garbage.loadPerRound} of ${d.garbage.truckCapacity} a load`
+                : '—'}
             </dd>
             {d.garbage.storage > 0 && (
               <>
@@ -313,6 +339,9 @@ function CivicInspector({ id }: { id: number }) {
             )}
           </>
         )}
+      </dl>
+      {d.garbage && <GarbageTrucks civicId={d.id} g={d.garbage} />}
+      <dl>
         {d.service && (
           <>
             {d.service.vehicles > 0 && (
@@ -394,10 +423,59 @@ function CivicInspector({ id }: { id: number }) {
   );
 }
 
+/** What the garbage figures say, in a line: keeping up, or what would help. */
+function garbageVerdict(g: NonNullable<CivicDetails['garbage']>): string {
+  const behind = g.piles > 0 && g.collectedAllLastDay < g.producedPerDay * 0.95;
+  if (!behind) return g.piles > 0 ? 'Clearing the last piles.' : 'The trucks are keeping up.';
+  const busy = g.out >= g.trucks;
+  const far = g.roundHours >= 8;
+  if (busy && g.extraTrucks < g.maxExtraTrucks)
+    return far
+      ? 'Every truck is out and rounds are long: buy a truck, or build a site closer to town.'
+      : 'Every truck is out and garbage is piling up: buy another truck.';
+  if (busy) return 'Every truck is out: build another site closer to the piles.';
+  return 'Some piles are out of reach: connect them by road or build a site nearer.';
+}
+
+/** Extra trucks for a garbage facility, bought one at a time up to a limit. */
+function GarbageTrucks({ civicId, g }: { civicId: number; g: NonNullable<CivicDetails['garbage']> }) {
+  const game = useGameUpdates(300);
+  const m = MODULE.get('garbageTruck')!;
+  const full = g.extraTrucks >= g.maxExtraTrucks;
+  return (
+    <section class="trucks" data-testid="garbage-verdict">
+      <p class="muted">{garbageVerdict(g)}</p>
+      <div class="module-row">
+        <div>
+          <strong>Extra trucks</strong>
+          <div class="muted">
+            {g.extraTrucks} of {g.maxExtraTrucks} bought. Each carries {g.truckCapacity} and costs +$
+            {m.upkeep}/month.
+          </div>
+        </div>
+        <button
+          class="btn small"
+          data-testid="buy-truck"
+          disabled={full}
+          onClick={() =>
+            void game.dispatch({ type: 'addModule', civic: civicId, module: m.id }).then((r) => {
+              if (r.ok) game.audio?.play('place');
+              else game.toast(r.reason, 'bad');
+            })
+          }
+        >
+          {full ? 'All bought' : `Buy a truck $${m.cost.toLocaleString('en-US')}`}
+        </button>
+      </div>
+    </section>
+  );
+}
+
 /** Add-on modules for a service building: what's installed and what can be added. */
 function ModuleList({ civicId, def }: { civicId: number; def: string }) {
   const game = useGameUpdates(300);
-  const list = modulesFor(def);
+  // Extra garbage trucks are bought in the garbage section, next to the figures that call for them.
+  const list = modulesFor(def).filter((m) => !m.trucks);
   if (!list.length) return null;
   const installed = game.world.civics.get(civicId)?.modules ?? [];
   const st = game.world.stats;

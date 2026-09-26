@@ -4,7 +4,7 @@ import { canonicalStringify, decodeValue, encodeValue } from './serialize';
 import type { SimState } from './state';
 
 /** Bump when the saved state shape changes, and add a migration from the previous version. */
-export const SAVE_VERSION = 10;
+export const SAVE_VERSION = 11;
 export const SAVE_FORMAT = 'citybloom-save';
 
 export interface SaveMeta {
@@ -136,6 +136,13 @@ export const migrations: Record<number, (state: Record<string, unknown>) => Reco
   },
   // v9 → v10 (M12): terrain generator versions. Older cities keep the original terrain.
   9: (s) => ({ ...s, options: { ...(s.options as Record<string, unknown>), terrain: 1 } }),
+  // v10 → v11 (playtest fixes): garbage trucks do rounds; vehicles note when they set out and
+  // how many stops they've made.
+  10: (s) => {
+    const vs = s.vehicles as { $m: [number, Record<string, unknown>][] };
+    for (const [, v] of vs.$m) Object.assign(v, { born: s.tick, stops: 0 });
+    return s;
+  },
 };
 
 export function encodeState(state: SimState): unknown {

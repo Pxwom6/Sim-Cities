@@ -28,7 +28,7 @@ unlock buildings, landmarks and three specialisations (tourism, trade, technolog
 oil. Fires, earthquakes, tornadoes, floods and meteors strike and the city rebuilds. Saves are
 versioned and compressed with autosave, slots and file export. Everything runs from a deterministic
 sim in a Web Worker: ~0.7 ms per tick at 100k residents, with 288 draw calls at the city overview.
-Checked by 138 unit and scenario tests, 15 UI tests, a 10-minute soak and a full playthrough through the UI
+Checked by 142 unit and scenario tests, 16 UI tests, a 10-minute soak and a full playthrough through the UI
 (`docs/SPEC_REVIEW.md` maps every SPEC item to where it's done).
 
 ## Ideas for what's next
@@ -47,14 +47,19 @@ Checked by 138 unit and scenario tests, 15 UI tests, a 10-minute soak and a full
    surplus; a second tuning pass once real players have tried it.
 
 ## In progress
-Nothing: every milestone in SPEC.md is done. The last pass (M12) ended with a final playthrough
-through the real UI (`npm run playthrough`: 775 residents and 57 % approval at year one, 1,042 at
-year two, 1,156 after a tornado) that found and fixed four bugs: finished buildings drawing only
-their shadows in a new city, a dragged road chaining into a stray road, steep start areas on a third
-of seeds (terrain v2), and a road along dead ends not joining them.
+Playtest fixes (after the first real playtest on the Mac), see "Playtest fixes" in
+`docs/DECISIONS.md`:
+- Done: the blank red inspector button (a stale CSS rule drew danger buttons red on red) is now
+  "Bulldoze (refund $…)" with an icon and a confirmation; `e2e/ui-labels.spec.ts` fails on any
+  visible button without a readable label.
+- Done: early-game garbage. Measured on the playtest save (`Saves/Ashton.citybloom`,
+  `scripts/dev/garbage.ts`): trucks were always out on 7-hour one-stop trips carrying a fifth of a
+  load. Trucks now work rounds, piles stop at 120, landfills sell extra trucks ($1,200, up to 4) and
+  show collection figures; the balance tool's careful player builds landfills at the edge and buys
+  trucks. `tests/garbage.test.ts` covers the early game.
 
 ## Next tasks
-Pick from "Ideas for what's next" above; the real-hardware pass (below) comes first.
+1. The real-hardware pass (below), then "Ideas for what's next" above.
 
 ## Known issues
 - Mature cities run a big surplus (≈ +$35k/month at 18k residents with 6 % taxes); intended as money for landmarks and big projects.

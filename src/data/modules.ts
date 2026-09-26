@@ -1,6 +1,7 @@
 /**
  * Add-on modules for service buildings (M10): each raises one capacity of the building it's added
- * to, for a one-off cost and extra upkeep. A building takes each of its modules once.
+ * to, for a one-off cost and extra upkeep. A building takes each of its modules once, or up to
+ * `max` times (garbage trucks).
  */
 export interface ModuleDef {
   id: string;
@@ -14,11 +15,26 @@ export interface ModuleDef {
   vehicles?: number;
   capacity?: number;
   buses?: number;
+  /** Extra garbage trucks. */
+  trucks?: number;
+  /** How many a building can take (default 1). */
+  max?: number;
   unlockPopulation: number;
   blurb: string;
 }
 
 export const MODULES: ModuleDef[] = [
+  {
+    id: 'garbageTruck',
+    name: 'Extra truck',
+    for: ['landfill', 'recycling', 'incinerator'],
+    cost: 1_200,
+    upkeep: 45,
+    trucks: 1,
+    max: 4,
+    unlockPopulation: 0,
+    blurb: 'One more garbage truck, bought one at a time.',
+  },
   {
     id: 'engineBay',
     name: 'Extra engine bay',
