@@ -59,13 +59,16 @@ Checked by 142 unit and scenario tests, 16 UI tests, a 10-minute soak and a full
    surplus; a second tuning pass once real players have tried it.
 
 ## In progress
-Phase 2 (SPEC-2.md, M13–M24) has started. M13 Gentler roads: measuring how often ordinary street
-placements are rejected as too steep, before changing the road grading.
+Phase 2 (SPEC-2.md, M13–M24). M13 Gentler roads: graded profiles, earthworks, level pads for
+civic buildings, terrain deltas (save v12), graded road ghost and hints, unit and UI tests are in
+and pushed. Left: full e2e run, bench and balance, docs (DECISIONS, DESIGN §2.4, README,
+SPEC_REVIEW phase-2 section), then the `M13 complete:` commit.
 
 ## Next tasks
-1. M13: sampled rejection test across presets (numbers before), smoothed road profiles with cut and
-   fill and per-type grade limits, earthwork costs, grade in the road preview, terrain deltas saved.
-2. Then M14 Controls and editing.
+1. M13: full checks, `npx tsx scripts/bench.ts 30 --big` and `npx tsx scripts/balance.ts 20`,
+   log the numbers here; docs; commit `M13 complete:`.
+2. Then M14 Controls and editing (trackpad, undo/redo ~30 actions incl. bulldoze, move
+   buildings, `?` cheat sheet).
 
 ## Known issues
 - Mature cities run a big surplus (≈ +$35k/month at 18k residents with 6 % taxes); intended as money for landmarks and big projects.
