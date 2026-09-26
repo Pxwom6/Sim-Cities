@@ -87,6 +87,19 @@ export interface TestApi {
   renderSounds(): Promise<SoundCheck[]>;
   /** Visible meshes per top-level scene object, and how many of them cast shadows (dev). */
   renderBreakdown(): { name: string; meshes: number; shadow: number }[];
+  /**
+   * How many sampled pixels of the current view a top-level scene object changes when it's shown.
+   * Shadows are frozen for both renders, so this counts only the object's own drawing.
+   */
+  drawnPixels(name: string): number;
+  /** The meshes in one top-level scene object (by name): visibility, size and bounds (dev). */
+  inspectGroup(name: string): {
+    name: string;
+    visible: boolean;
+    triangles: number;
+    sphere: [number, number, number, number] | null;
+    material: string;
+  }[];
   /** Game shell state: menu or city, open screens, settings and what the renderer applied. */
   getShell(): {
     mode: 'menu' | 'play';
@@ -237,6 +250,60 @@ export function installTestApi(game: Game): TestApi {
         });
         return { name: o.name || `${o.type}#${i}`, meshes, shadow };
       }),
+    drawnPixels: (name) => {
+      const r = game.renderer;
+      const group = r.scene.children.find((o) => o.name === name);
+      if (!group) return 0;
+      // Render to the canvas itself (an offscreen target would compile different shader programs)
+      // and read it back straight away, sampling every 4th pixel each way.
+      const gl = r.renderer.getContext();
+      const [w, h] = [gl.drawingBufferWidth, gl.drawingBufferHeight];
+      const read = () => {
+        r.renderer.setRenderTarget(null);
+        r.renderer.render(r.scene, r.camera);
+        const px = new Uint8Array(w * h * 4);
+        gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+        return px;
+      };
+      const [visible, autoUpdate] = [group.visible, r.renderer.shadowMap.autoUpdate];
+      r.renderer.shadowMap.autoUpdate = false;
+      group.visible = false;
+      const without = read();
+      group.visible = true;
+      const shown = read();
+      group.visible = visible;
+      r.renderer.shadowMap.autoUpdate = autoUpdate;
+      let n = 0;
+      for (let y = 0; y < h; y += 4)
+        for (let x = 0; x < w; x += 4) {
+          const i = (y * w + x) * 4;
+          const d =
+            Math.abs(shown[i]! - without[i]!) +
+            Math.abs(shown[i + 1]! - without[i + 1]!) +
+            Math.abs(shown[i + 2]! - without[i + 2]!);
+          if (d > 24) n++;
+        }
+      return n;
+    },
+    inspectGroup: (name) => {
+      const group = game.renderer.scene.children.find((o) => o.name === name);
+      const out: ReturnType<TestApi['inspectGroup']> = [];
+      group?.traverse((o) => {
+        const m = o as Mesh;
+        if (!m.isMesh) return;
+        const g = m.geometry;
+        const s = g.boundingSphere;
+        const tris = (g.index ? g.index.count : (g.getAttribute('position')?.count ?? 0)) / 3;
+        out.push({
+          name: m.name,
+          visible: m.visible,
+          triangles: Math.round(tris),
+          sphere: s ? [s.center.x, s.center.y, s.center.z, s.radius] : null,
+          material: (m.material as { type?: string }).type ?? '?',
+        });
+      });
+      return out;
+    },
     getShell: () => ({
       mode: game.mode,
       screens: [...game.screens],

@@ -225,7 +225,8 @@ test('playthrough: a first city from the main menu to a thriving town @playthrou
   await page.getByTestId('tool-select').click();
 
   // Let time run until the first families arrive; the tutorial's last card points at the advisors.
-  await expect(page.getByTestId('tutorial')).toContainText('Let time run');
+  // (The step ticks itself off if the first families have already arrived while we built.)
+  await expect(page.getByTestId('tutorial')).toContainText(/Let time run|Keep the city happy/);
   await page.getByTestId('speed-1').click();
   await page.evaluate(() => window.__game!.advance(600));
   await expect(page.getByTestId('tutorial')).toContainText('Keep the city happy', { timeout: 30_000 });
@@ -309,6 +310,9 @@ test('playthrough: a first city from the main menu to a thriving town @playthrou
     cz,
   );
   await shot(page, 'year-1');
+  // The homes, shops and factories are really drawn, not just their shadows.
+  expect(await page.evaluate(() => window.__game!.drawnPixels('buildings'))).toBeGreaterThan(200);
+  expect(await page.evaluate(() => window.__game!.drawnPixels('civics'))).toBeGreaterThan(20);
 
   // The budget, the advisors and a data map, through the top bar and toolbar.
   await page.getByTestId('open-budget').click();

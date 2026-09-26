@@ -7,6 +7,16 @@ test('M2: a town grows from zoning, buildings can be inspected, and save/load ro
   const errs = watchErrors(page);
   await openGame(page);
   await buildTownViaApi(page);
+  // As in a player's first city, the first construction sites are drawn before anything is finished
+  // (their shader once got reused for finished buildings, which then drew nothing).
+  const sites = await page.evaluate(async () => {
+    const g = window.__game!;
+    g.setCamera({ x: 200, z: (await g.getState()).highwayZ, distance: 420, yaw: 0.3, tilt: 0.2 });
+    for (let k = 0; k < 24 && !g.getBuildings().some((b) => b.state === 0); k++) await g.advance(60);
+    await g.waitFrames(2);
+    return g.getBuildings().filter((b) => b.state === 0).length;
+  });
+  expect(sites).toBeGreaterThan(0);
   await serveTownViaApi(page);
   // Run the clock for real for a moment at top speed, then fast-forward.
   await page.getByTestId('speed-3').click();
@@ -30,6 +40,13 @@ test('M2: a town grows from zoning, buildings can be inspected, and save/load ro
     cz,
   );
   await shot(page, 'm2-town');
+  // Finished homes and the civic buildings are really drawn (not just their shadows).
+  const drawn = await page.evaluate(() => ({
+    buildings: window.__game!.drawnPixels('buildings'),
+    civics: window.__game!.drawnPixels('civics'),
+  }));
+  expect(drawn.buildings).toBeGreaterThan(200);
+  expect(drawn.civics).toBeGreaterThan(20);
 
   // Click a grown house to inspect it.
   const target = await page.evaluate(() =>
@@ -48,11 +65,12 @@ test('M2: a town grows from zoning, buildings can be inspected, and save/load ro
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('inspector')).toBeHidden();
 
-  // Save, reload into the save, and compare state hashes.
-  const hashBefore = await page.evaluate(() => window.__game!.hash());
+  // Save, reload into the save, and compare state hashes. (Saving settles a commute-matching round
+  // in progress, so the city is hashed after the save, as it carries on.)
   await page.getByTestId('menu-button').click();
   await page.getByTestId('menu-save').click();
   await expect(page.getByTestId('toast')).toContainText('Saved');
+  const hashBefore = await page.evaluate(() => window.__game!.hash());
   errs.check();
   await page.goto('/?load=quick&paused=1');
   await page.waitForFunction(() => window.__game?.ready === true, null, { timeout: 90_000 });

@@ -34,6 +34,10 @@ export function buildingYaw(b: { angle: number; side: number }): number {
 
 export function makeMaterial(uniforms: BuildingUniforms, terrain: TerrainUniforms, clip: boolean): Material {
   const mat = new MeshLambertMaterial({ vertexColors: true });
+  // three.js caches programs by the onBeforeCompile source, which is the same text for both
+  // variants: without distinct keys, whichever compiled first (in a new city, the clipped
+  // construction one) was reused for the other, and finished buildings drew nothing.
+  mat.customProgramCacheKey = () => (clip ? 'building-clip' : 'building');
   mat.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms, {
       uOverlay: terrain.uOverlay,
