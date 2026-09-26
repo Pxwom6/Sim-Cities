@@ -24,7 +24,15 @@ export type UndoRecord =
       terrain?: TerrainEdit;
       earthCost?: number;
     }
-  | { kind: 'upgrade'; tick: number; cost: number; seg: number; from: RoadTypeId }
+  | {
+      kind: 'upgrade';
+      tick: number;
+      cost: number;
+      seg: number;
+      from: RoadTypeId;
+      /** The ground its regrading replaced (M13). */
+      terrain?: TerrainEdit;
+    }
   | { kind: 'stop'; tick: number; id: number; cost: number };
 
 export const UNDO_LIMIT = 12;

@@ -36,7 +36,7 @@ export interface EarthPlan {
   box: Box | null;
 }
 
-/** What a set of edits replaced, for undo. */
+/** What a set of edits replaced, for undo: the samples and their earlier deltas. */
 export interface TerrainEdit {
   idx: number[];
   before: number[];
@@ -59,6 +59,8 @@ export function planEarthworks(
   net: Network,
   pieces: EarthPiece[],
   keep?: (x: number, z: number) => boolean,
+  /** Roads whose corridors may be regraded too (a road being upgraded). */
+  ignore?: ReadonlySet<number>,
 ): EarthPlan {
   const out: EarthPlan = { idx: [], to: [], volume: 0, cut: 0, fill: 0, cost: 0, box: null };
   if (!pieces.length) return out;
@@ -103,7 +105,7 @@ export function planEarthworks(
     if (prof.raised[si] || prof.ground[si]! < SHORE_HEIGHT) continue; // under a viaduct or bridge
     const { corridor, inner } = formation(pc.type);
     if (d > corridor && keep?.(x, z)) continue;
-    if (inOtherRoad(net, x, z)) continue;
+    if (inOtherRoad(net, x, z, ignore)) continue;
     const H = profileAt(prof, s);
     let t: number;
     if (d <= inner) t = H;
@@ -137,8 +139,9 @@ export function planEarthworks(
 }
 
 /** Inside the corridor (road plus shoulders) of a road that already exists? */
-function inOtherRoad(net: Network, x: number, z: number): boolean {
+function inOtherRoad(net: Network, x: number, z: number, ignore?: ReadonlySet<number>): boolean {
   for (const id of net.segHash.queryPoint(x, z, GRADING.shoulder + 0.5)) {
+    if (ignore?.has(id)) continue;
     const r = net.halfWidth(id) + GRADING.shoulder;
     if (net.curve(id).project({ x, z }).d <= r) return true;
   }
@@ -146,8 +149,8 @@ function inOtherRoad(net: Network, x: number, z: number): boolean {
 }
 
 /**
- * Write planned heights into the terrain and its saved delta. Returns what they replaced (for
- * undo); `mark` hears about every changed sample.
+ * Write planned heights (or, with `asDelta`, deltas) into the terrain and its saved delta. Returns
+ * the deltas they replaced (for undo); `mark` hears about every changed sample.
  */
 export function applyHeights(
   terrain: Terrain,
@@ -155,13 +158,15 @@ export function applyHeights(
   idx: readonly number[],
   to: readonly number[],
   mark: (idx: number) => void,
+  asDelta = false,
 ): TerrainEdit {
   const before: number[] = [];
   for (let n = 0; n < idx.length; n++) {
     const i = idx[n]!;
-    before.push(terrain.heights[i]!);
-    terrain.heights[i] = to[n]!;
-    delta[i] = to[n]! - terrain.base[i]!;
+    before.push(delta[i]!);
+    // Height is always seed + delta, computed the same way as on load, so saves match exactly.
+    delta[i] = asDelta ? to[n]! : to[n]! - terrain.base[i]!;
+    terrain.heights[i] = terrain.base[i]! + delta[i]!;
     mark(i);
   }
   return { idx: [...idx], before };
@@ -172,7 +177,7 @@ export function applyHeights(
  * their height samples that did: construction clears the vegetation on new slopes.
  */
 export function disturbedTreeCells(
-  terrain: Terrain,
+  delta: Float32Array,
   idx: readonly number[],
   before: readonly number[],
 ): Map<number, number> {
@@ -180,7 +185,7 @@ export function disturbedTreeCells(
   const hit = new Map<number, number>();
   for (let n = 0; n < idx.length; n++) {
     const i = idx[n]!;
-    if (Math.abs(terrain.heights[i]! - before[n]!) < 0.5) continue;
+    if (Math.abs(delta[i]! - before[n]!) < 0.5) continue;
     const gx = Math.min(GRID_RES - 1, Math.floor((i % HEIGHT_RES) / per));
     const gz = Math.min(GRID_RES - 1, Math.floor(Math.floor(i / HEIGHT_RES) / per));
     const k = gz * GRID_RES + gx;
@@ -215,13 +220,25 @@ const SEAT_CORNERS = [
 const SEAT_EDGES = [...SEAT_CORNERS, [0, -1], [0, 1], [-1, 0], [1, 0]] as const;
 
 /**
- * Set terrain heights (earthworks or their undo) and settle what stands on the ground: trees on
- * new slopes are cleared, buildings re-seated. Returns what the heights were.
+ * Set terrain heights (earthworks), or deltas (their undo), and settle what stands on the ground:
+ * trees on new slopes are cleared, buildings re-seated. Returns the deltas they replaced.
  */
-export function reshapeGround(sim: Sim, idx: readonly number[], to: readonly number[]): TerrainEdit {
-  const edit = applyHeights(sim.terrain, sim.state.terrainDelta, idx, to, (i) => sim.markTerrainDirty(i));
+export function reshapeGround(
+  sim: Sim,
+  idx: readonly number[],
+  to: readonly number[],
+  asDelta = false,
+): TerrainEdit {
+  const edit = applyHeights(
+    sim.terrain,
+    sim.state.terrainDelta,
+    idx,
+    to,
+    (i) => sim.markTerrainDirty(i),
+    asDelta,
+  );
   const trees = sim.state.trees;
-  for (const [k, share] of disturbedTreeCells(sim.terrain, edit.idx, edit.before)) {
+  for (const [k, share] of disturbedTreeCells(sim.state.terrainDelta, edit.idx, edit.before)) {
     const next = Math.round(trees[k]! * Math.max(0, 1 - share));
     if (next !== trees[k]) {
       trees[k] = next;

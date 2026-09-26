@@ -798,7 +798,7 @@ export class Sim {
       if (res.ok && rec.earthCost) res = { ...res, cost: (res.cost ?? 0) - rec.earthCost };
       if (res.ok && !dryRun && rec.terrain) {
         // Put the ground back the way it was before the pad was levelled (M13).
-        reshapeGround(this, rec.terrain.idx, rec.terrain.before);
+        reshapeGround(this, rec.terrain.idx, rec.terrain.before, true);
         this.net.revalidate(samplesBox(rec.terrain.idx));
         this.earn(rec.earthCost ?? 0, 'refunds');
       }
@@ -1313,6 +1313,8 @@ export class Sim {
       }
     }
     for (const id of this.net.segHash.query(box)) this.deckCache.delete(id);
+    // Water distance and the land's setting (views) are derived from the ground.
+    this.waterDistCache = null;
   }
 
   markTreesDirty(idx: number): void {

@@ -93,16 +93,21 @@ export function gradeProfile(
     return out;
   }
 
-  // 1. Smooth the ground so short bumps are shaved off rather than followed.
+  // 1. Smooth the ground so short bumps are shaved off rather than followed. The window narrows
+  // symmetrically towards the ends, so a road on an even slope isn't lifted or dropped there.
   const half = GRADING.smooth / 2;
   const sm = new Float32Array(n);
-  let a = 0;
-  let b = 0;
-  let sum = 0;
+  const prefix = new Float64Array(n + 1);
+  for (let i = 0; i < n; i++) prefix[i + 1] = prefix[i]! + ground[i]!;
   for (let i = 0; i < n; i++) {
-    while (b < n && s[b]! <= s[i]! + half) sum += ground[b++]!;
-    while (s[a]! < s[i]! - half) sum -= ground[a++]!;
-    sm[i] = sum / (b - a);
+    const w = Math.min(half, s[i]!, L - s[i]!);
+    let a = i;
+    let b = i;
+    while (a > 0 && s[a - 1]! >= s[i]! - w - 1e-6) a--;
+    while (b < n - 1 && s[b + 1]! <= s[i]! + w + 1e-6) b++;
+    // Keep it symmetric in samples too (the last sample may sit closer than a full step).
+    const k = Math.min(i - a, b - i);
+    sm[i] = (prefix[i + k + 1]! - prefix[i - k]!) / (2 * k + 1);
   }
   // 2. The band the profile must stay in to reach each pinned end at no more than the limit.
   const bandLo = new Float32Array(n).fill(-Infinity);
