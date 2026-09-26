@@ -170,10 +170,15 @@ export const GRADING = {
   /** Level ground beyond the road's edge on each side, metres. */
   shoulder: 1.5,
   /**
-   * Further level ground beyond the shoulder: the first row of lots is graded to the road, and the
-   * road surface (draped on 8 m height samples) comes out flat across.
+   * Further level ground beyond the shoulder where the road is cut or filled: `benchPerDepth`
+   * metres per metre of cut or fill, up to `bench`. It keeps the road surface (draped on 8 m height
+   * samples) flat across in a cutting or on an embankment and gives the first lots a level site;
+   * a road at grade leaves the lots beside it alone.
    */
   bench: 8,
+  benchPerDepth: 2,
+  /** Height changes smaller than this (metres) aren't worth making, or charging for. */
+  minEdit: 0.25,
   /** Level ground around a civic building's pad, metres. */
   padMargin: 4,
   /**

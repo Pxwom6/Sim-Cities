@@ -77,7 +77,7 @@ test('M13: a street over a ridge is graded with cuttings and embankments; extrem
   // The client has the reshaped ground: many more samples cut and filled, metres deep.
   await expect
     .poll(async () => (await edits(page)).edited, { timeout: 20_000 })
-    .toBeGreaterThan(e0.edited + 100);
+    .toBeGreaterThan(e0.edited + 40);
   const e1 = await edits(page);
   expect(e1.maxCut).toBeGreaterThan(3);
   expect(e1.version).toBeGreaterThan(e0.version);

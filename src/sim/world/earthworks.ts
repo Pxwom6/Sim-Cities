@@ -44,7 +44,7 @@ export interface TerrainEdit {
 
 const AREA = HEIGHT_STEP * HEIGHT_STEP;
 
-/** Half-width of the flat formation and of the road's own corridor (road plus shoulders). */
+/** Half-width of the road's own corridor (road plus shoulders) and of the widest formation. */
 export function formation(type: RoadTypeId): { corridor: number; inner: number } {
   const corridor = roadHalfWidth(type) + GRADING.shoulder;
   return { corridor, inner: corridor + GRADING.bench };
@@ -88,6 +88,15 @@ export function planEarthworks(
       }
     }
   });
+  // How deep each piece is cut or filled around each sample (±8 m): the level bench beside the
+  // road widens with it, so a road at grade leaves the lots beside it as they were.
+  const depths = pieces.map(({ prof }) => {
+    const n = prof.h.length;
+    const raw = Array.from(prof.h, (h, i) =>
+      prof.ground[i]! < SHORE_HEIGHT ? 0 : Math.abs(h - prof.ground[i]!),
+    );
+    return raw.map((_, i) => Math.max(...raw.slice(Math.max(0, i - 2), Math.min(n, i + 3))));
+  });
   const keys = [...best.keys()].sort((a, b) => a - b);
   let minX = Infinity;
   let minZ = Infinity;
@@ -103,7 +112,8 @@ export function planEarthworks(
     if (cur < SHORE_HEIGHT || terrain.base[idx]! < SHORE_HEIGHT) continue; // water stays water
     const si = Math.max(0, Math.min(prof.h.length - 1, Math.round(s / prof.step)));
     if (prof.raised[si] || prof.ground[si]! < SHORE_HEIGHT) continue; // under a viaduct or bridge
-    const { corridor, inner } = formation(pc.type);
+    const { corridor } = formation(pc.type);
+    const inner = corridor + Math.min(GRADING.bench, GRADING.benchPerDepth * depths[k]![si]!);
     if (d > corridor && keep?.(x, z)) continue;
     if (inOtherRoad(net, x, z, ignore)) continue;
     const H = profileAt(prof, s);
@@ -114,7 +124,7 @@ export function planEarthworks(
     // Never dig dry land down into the water table.
     if (t < SHORE_HEIGHT + 0.1) t = Math.max(t, Math.min(cur, SHORE_HEIGHT + 0.1));
     const dh = t - cur;
-    if (Math.abs(dh) < 0.02) continue;
+    if (Math.abs(dh) < GRADING.minEdit) continue;
     out.idx.push(idx);
     out.to.push(t);
     if (dh > 0) out.fill += dh * AREA;
