@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact';
-import { useState } from 'preact/hooks';
+import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { BUILDABLE_ROADS, ROAD_TYPES, type RoadTypeId } from '../data/roads';
 import type { ZoneLetter } from '../data/zones';
 import type { RoadMode } from '../tools/roadTool';
@@ -174,6 +174,7 @@ export function Toolbar() {
                     `$${rt.costPerMetre}/m to build · $${(rt.upkeepPerMetre * 100).toFixed(0)}/100 m monthly upkeep`,
                     `${rt.lanes} lanes · ${rt.speed} km/h · ${rt.capacity.toLocaleString('en-US')} vehicles/h`,
                     `Density up to ${['low', 'medium', 'high'][rt.maxDensity]}`,
+                    `Climbs up to ${Math.round(rt.maxGrade * 100)}\u00a0%: steeper ground is cut and filled (earthworks cost extra)`,
                     rt.blurb,
                     ...(locked
                       ? [`Unlocks at ${rt.unlockPopulation.toLocaleString('en-US')} residents`]
@@ -205,7 +206,7 @@ export function Toolbar() {
                 'upgrade',
                 IconUpgrade,
                 'Upgrade',
-                'Click a road to change it to the selected type. Buildings along it stay where they can.',
+                'Click a road to change it to the selected type. Buildings along it stay where they can; a gentler type may need its slope regraded.',
               ],
             ] as [RoadMode, typeof IconCurve, string, string][]
           ).map(([m, Icon, name, how]) => (
@@ -490,9 +491,25 @@ function serviceLine(svc: NonNullable<CivicDef['service']>): string {
 export function ToolHintLabel() {
   const game = useGameUpdates(30);
   const h = game.hint;
+  const ref = useRef<HTMLDivElement>(null);
+  // Keep it on screen: long explanations wrap, and near the right or bottom edge the hint moves to
+  // the other side of the cursor.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || !h) return;
+    const w = el.offsetWidth;
+    const ht = el.offsetHeight;
+    let x = h.x + 18;
+    let y = h.y + 18;
+    if (x + w > window.innerWidth - 8) x = Math.max(8, h.x - 18 - w);
+    if (y + ht > window.innerHeight - 8) y = Math.max(8, h.y - 18 - ht);
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
+  });
   if (!h) return null;
   return (
     <div
+      ref={ref}
       class={`tool-hint ${h.tone}`}
       style={{ left: `${h.x + 18}px`, top: `${h.y + 18}px` }}
       data-testid="tool-hint"

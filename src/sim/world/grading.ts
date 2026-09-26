@@ -39,7 +39,8 @@ export function profileAt(p: { step: number; h: ArrayLike<number> }, s: number):
   return p.h[i]! * (1 - t) + p.h[i + 1]! * t;
 }
 
-const pct = (g: number) => `${Math.round(g * 100)} %`;
+/** A grade as a percentage (a non-breaking space keeps the number and sign together). */
+const pct = (g: number) => `${Math.round(g * 100)}\u00a0%`;
 
 /**
  * Grade a road along `curve` over ground given by `groundAt`. `pinA`/`pinB` fix the height at an
@@ -154,7 +155,7 @@ export function gradeProfile(
     }
     if (d < -GRADING.maxCut && !out.fail)
       out.fail = {
-        reason: `Too steep: this needs a ${Math.round(-d)} m cutting (${roadName(type)} can climb ${pct(G)}; the ground here rises ${pct(out.groundGrade)}). Go round the hill, or wind up it`,
+        reason: `Too steep: the ground here rises ${pct(out.groundGrade)} and ${roadName(type)} can climb ${pct(G)}, so it would need a ${Math.ceil(-d)} m cutting (${GRADING.maxCut} m at most). Go round the hill, or wind up it`,
         at: i,
       };
     if (d > 0) out.maxFill = Math.max(out.maxFill, d);

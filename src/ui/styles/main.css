@@ -374,7 +374,10 @@ body {
   background: var(--color-surface-dark);
   color: var(--color-text-inverse);
   pointer-events: none;
-  white-space: nowrap;
+  /* Long explanations (e.g. why a road is too steep) wrap instead of running off screen. */
+  max-width: min(26rem, calc(100vw - 16px));
+  width: max-content;
+  line-height: 1.35;
   z-index: var(--z-toast);
   box-shadow: var(--shadow-sm);
 }

@@ -214,7 +214,7 @@ function regrade(
       if (g > limit * 1.02)
         return {
           earth: null,
-          reason: `Too steep for ${name}: this bridge climbs ${Math.round(g * 100)} % and ${name} can climb ${Math.round(limit * 100)} %`,
+          reason: `Too steep for ${name}: this bridge climbs ${Math.round(g * 100)}\u00a0% and ${name} can climb ${Math.round(limit * 100)}\u00a0%`,
           at: curve.pointAt(Math.min(curve.length, i * deck.step)),
         };
     }

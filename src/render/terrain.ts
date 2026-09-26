@@ -269,8 +269,8 @@ uniform float uGridOn;`,
   private earthworks(delta: number, slope: number, out: Color): void {
     const amount = smoothstep(0.15, 1.2, Math.abs(delta));
     if (amount <= 0) return;
-    const face = smoothstep(0.1, 0.28, slope);
-    if (face > 0) out.lerp(delta < 0 ? PAL.cutFace : PAL.bank, amount * face * (delta < 0 ? 0.85 : 0.7));
+    const face = smoothstep(0.08, 0.24, slope);
+    if (face > 0) out.lerp(delta < 0 ? PAL.cutFace : PAL.bank, amount * face * (delta < 0 ? 0.95 : 0.8));
     else out.lerp(PAL.meadow, amount * 0.25);
   }
 

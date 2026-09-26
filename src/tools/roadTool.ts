@@ -19,11 +19,17 @@ interface PreviewInfo {
   };
 }
 
+/** Upgrade hint notes (M13): regrading a road for a gentler type costs earthworks. */
+function upgradeNotes(info: unknown): string[] {
+  const earth = (info as { earth?: { cost: number } | null } | undefined)?.earth;
+  return earth && earth.cost > 0 ? [`earthworks $${earth.cost.toLocaleString('en-US')}`] : [];
+}
+
 /** Hint notes on grading (M13): how steep it climbs against the limit, earthworks and viaducts. */
 export function gradeNotes(info: PreviewInfo | undefined): string[] {
   const g = info?.grade;
   if (!g) return [];
-  const pct = (v: number) => `${Math.round(v * 100)} %`;
+  const pct = (v: number) => `${Math.round(v * 100)}\u00a0%`;
   const out: string[] = [];
   if (g.max >= 0.02) out.push(`climbs ${pct(g.max)} (max ${pct(g.limit)})`);
   if (g.earth && g.earth.cost > 0) out.push(`earthworks $${g.earth.cost.toLocaleString('en-US')}`);
@@ -59,6 +65,8 @@ export class RoadTool implements Tool {
   private pointer = { x: 0, y: 0 };
   /** Upgrade mode: the road under the cursor. */
   private hoverSeg: number | null = null;
+  /** A preview has needed real earthworks or run into steep ground (drives a one-time tip). */
+  sawEarthworks = false;
 
   constructor(private game: Game) {}
 
@@ -161,7 +169,10 @@ export class RoadTool implements Tool {
     else if (res.ok)
       this.game.setHint({
         ...this.pointer,
-        text: `${from} → ${ROAD_TYPES[this.type].name} · $${res.cost.toLocaleString('en-US')}`,
+        text: [
+          `${from} → ${ROAD_TYPES[this.type].name} · $${res.cost.toLocaleString('en-US')}`,
+          ...upgradeNotes(res.info),
+        ].join(' · '),
         tone: 'ok',
       });
     else this.game.setHint({ ...this.pointer, text: res.reason, tone: 'bad' });
@@ -191,6 +202,9 @@ export class RoadTool implements Tool {
     const state = !res ? 'pending' : res.ok ? 'ok' : 'bad';
     // A fresh preview carries the planned pieces (split at junctions) and their graded profiles.
     const info = fresh ? (res?.info as PreviewInfo | undefined) : undefined;
+    const earth = info?.grade?.earth?.cost ?? 0;
+    if ((res?.ok && earth > 0.25 * res.cost) || (res && !res.ok && /steep/i.test(res.reason)))
+      this.sawEarthworks = true;
     const planned = info?.grade && info.pieces?.length === info.grade.pieces.length ? info : undefined;
     g.showRoad(
       planned?.pieces ?? pieces,

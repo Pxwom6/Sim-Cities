@@ -69,6 +69,8 @@ export interface TestApi {
    * Earthworks as the client sees them (M13): samples changed from the generated terrain, the box
    * around them, the biggest cut and fill, and the terrain version.
    */
+  /** The road ghost's last graded drawing (M13): quads per grade colour and cut/fill posts. */
+  ghostGrade(): { ok: number; warn: number; bad: number; viaduct: number; posts: number };
   getTerrainEdits(): {
     edited: number;
     box: { minX: number; minZ: number; maxX: number; maxZ: number } | null;
@@ -187,6 +189,7 @@ export function installTestApi(game: Game): TestApi {
       return null;
     },
     heightAt: (x, z) => game.world.heightAt(x, z),
+    ghostGrade: () => ({ ...game.renderer.ghost.gradeStats }),
     getTerrainEdits: () => {
       const d = game.world.terrainDelta;
       let edited = 0;

@@ -142,6 +142,14 @@ export const TIPS: Tip[] = [
     when: (g) => g.world.stats.avgCommute > 28 && g.world.stats.population > 500,
   },
   {
+    id: 'earthworks',
+    text:
+      'Roads are laid into hills: the ground is cut and filled so they climb no steeper than their type ' +
+      'allows (streets 16 %, boulevards 8 %). The ghost turns amber near the limit and red where it is ' +
+      'too steep; a longer, winding route is cheaper to grade.',
+    when: (g) => g.tools.road.sawEarthworks,
+  },
+  {
     id: 'milestone',
     text: 'New buildings, policies and a bigger loan unlocked. The city panel (P) shows them and what comes next.',
     when: (g) => g.world.stats.milestone >= 1,

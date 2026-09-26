@@ -67,7 +67,7 @@ describe('graded road profiles (M13)', () => {
     expect(v.raisedLength).toBeGreaterThan(40);
     const far = gradeProfile(line(100), () => 10, 'street', 10, 40);
     expect(far.fail?.reason).toMatch(/Too steep: the ends are 30 m apart/);
-    expect(far.fail?.reason).toMatch(/climb 16 %/);
+    expect(far.fail?.reason).toMatch(/climb 16\s%/);
     expect(far.fail?.reason).toMatch(/longer|wind/);
   });
 
@@ -75,7 +75,7 @@ describe('graded road profiles (M13)', () => {
     // A 60 % hill between two roads at its foot.
     const hill = (x: number) => 5 + Math.max(0, 40 - Math.abs(x - 100) * 0.6 * 1.6);
     const p = gradeProfile(line(200), (x) => hill(x), 'street', 5, 5);
-    expect(p.fail?.reason).toMatch(/Too steep: this needs a \d+ m cutting/);
+    expect(p.fail?.reason).toMatch(/Too steep: .* it would need a \d+ m cutting \(14 m at most\)/);
     expect(p.fail?.reason).toMatch(/Go round the hill, or wind up it/);
   });
 });

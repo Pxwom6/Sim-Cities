@@ -329,7 +329,7 @@ export function planRoad(
       if (endAt >= 0)
         return fail(
           plan,
-          `Too steep to end here: it would stand on a ${Math.round(prof.h[endAt]! - prof.ground[endAt]!)} m embankment (${GRADING.maxFill} m at most; the ground falls ${Math.round(prof.groundGrade * 100)} % and ${articled(ROAD_TYPES[type].name)} can climb ${Math.round(rt.maxGrade * 100)} %). Carry it on across the valley, or wind down the slope`,
+          `Too steep to end here: it would stand on a ${Math.round(prof.h[endAt]! - prof.ground[endAt]!)} m embankment (${GRADING.maxFill} m at most; the ground falls ${Math.round(prof.groundGrade * 100)}\u00a0% and ${articled(ROAD_TYPES[type].name)} can climb ${Math.round(rt.maxGrade * 100)}\u00a0%). Carry it on across the valley, or wind down the slope`,
           pointAt(endAt),
         );
       if (prof.raisedLength > BRIDGE.maxSpan)
