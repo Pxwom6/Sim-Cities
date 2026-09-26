@@ -150,7 +150,7 @@ export const SNAP = {
 
 /**
  * Road grading (M13): each road gets a smoothed vertical profile within its type's grade limit, and
- * the ground under it and a little to each side is cut or filled to match. DESIGN.md §2.4.
+ * the ground under it and a little to each side is cut or filled to match. DESIGN.md §3.15.
  */
 export const GRADING = {
   /** Profile sample spacing, metres (the bridge deck spacing too). */

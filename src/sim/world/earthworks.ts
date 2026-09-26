@@ -13,7 +13,7 @@ import { profileAt, type GradeProfile } from './grading';
  * profile, and side slopes run from its edge back to the natural ground: an embankment where the
  * road is above it, a cutting where it's below. Other roads, buildings and water are left alone.
  * Edits are to the terrain's height samples and are saved as deltas on the generated terrain.
- * DESIGN.md §2.4.
+ * DESIGN.md §3.15.
  */
 export interface EarthPiece {
   curve: Curve;

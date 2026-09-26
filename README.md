@@ -33,7 +33,11 @@ pick a map (river, coast, lakes or highlands), a seed, a difficulty, and whether
 money or random disasters. The tutorial is on for your first city and walks through the basics:
 
 1. **Roads** off the highway: drag to draw a straight road, or click point to point to keep going;
-   the curve tool takes a start, a bend and an end, and the free tool follows the mouse.
+   the curve tool takes a start, a bend and an end, and the free tool follows the mouse. Over hills
+   the ground is cut and filled so a road climbs no steeper than its type allows (streets 16 %,
+   avenues 12 %, boulevards 8 %), with a viaduct across deep dips: the ghost shows the road at its
+   built height, turning amber near the limit and red where it's too steep, and the hint gives the
+   climb, the earthworks' cost, or what would fix it.
 2. **Zones** beside them: residential, commercial and industrial. Buildings grow on their own when
    there's demand (the R, C and I bars in the top bar tell you what the city wants, and why).
 3. **Power, water and sewage** from the Utilities menu. Homes without them empty out.

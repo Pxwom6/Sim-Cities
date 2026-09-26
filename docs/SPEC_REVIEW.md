@@ -82,3 +82,35 @@ screenshots are in `docs/screenshots/`. Anything not done is explained at the en
   traffic model.
 - **Render triangle budget**: 2.5M at the whole-city overview of a 100k city (half of it the shadow
   pass) against an early 1.5M target; draw calls are within budget. Flagged for the Mac check.
+
+---
+
+# SPEC-2.md (phase 2, M13–M24)
+
+Each phase-2 milestone mapped to where it's done. Filled in as milestones complete.
+
+## Rules for all of phase 2
+
+| Rule | Where |
+|---|---|
+| Work in order, each milestone playable, UI-tested with screenshots, `M<n> complete:` commits | git history; `e2e/m13-*.spec.ts` onwards; `docs/screenshots/m13-*.png` onwards |
+| New saved state bumps the save version with a migration and a test that older saves load and play on | M13: SAVE_VERSION 12 (`terrainDelta`), `tests/grading.test.ts` loads the version-10 playtest save |
+| M12 performance budget kept; bench and balance rerun per milestone | numbers per milestone in PROGRESS.md |
+| Everything original | procedural models, icons and sounds, as in phase 1 |
+| Player kept informed (tooltips, shortcuts, tips, advisor hints, maps and inspector lines) | per milestone below |
+| README and this section kept current; real-hardware checks under "To check on the Mac" | README.md, PROGRESS.md |
+
+## M13 Gentler roads
+
+| Item | Where |
+|---|---|
+| Smoothed vertical profile per road; grade measured on it | `src/sim/world/grading.ts` (40 m smoothing, fit within the limit, pinned at junctions); DESIGN.md §3.15 |
+| Cut and fill under the road and to each side, visible embankments and cuttings | `src/sim/world/earthworks.ts` (formation + bench, 1:1 cuttings, 1:3 embankments); terrain tint in `src/render/terrain.ts`; `docs/screenshots/m13-cutting.png` |
+| Per-type grade limits; only extreme ground fails | `RoadType.maxGrade` in `src/data/roads.ts` (streets 16 %, boulevards 8 %); a cutting deeper than 14 m is the only land failure |
+| Bridge over dry ground where fill is very tall | viaducts (`RoadSegment.deck`) where fill passes 8 m |
+| Earthworks cost ∝ volume | $0.40/m³ in the road's price (`GRADING.costPerCubicMetre`); civic pads likewise |
+| Preview shows grade along the ghost, colours too-steep sections, says by how much and what fixes it | `src/render/ghost.ts` (graded ghost, colours, cut/fill posts), `src/tools/roadTool.ts` (hint), reasons in `grading.ts`; `docs/screenshots/m13-preview.png`, `m13-too-steep.png` |
+| Terrain edits saved as deltas on the seed | `SimState.terrainDelta`, save v12, `FrameDiff.terrain` |
+| Nearby zone cells, buildings and trees adapt; nothing floats or sinks | `Sim.groundMoved` (re-seat), cells revalidated, trees cleared on moved ground; level pads for civic buildings; tested in `tests/grading.test.ts` |
+| Existing saves load unchanged | migration 11 → 12 (zero delta); test loads the v10 playtest save and checks the ground is the seed's |
+| Done when: sampled random streets across all presets refused only on extreme ground (before/after), screenshots of clean earthworks with buildings beside them | before 20.7 % refused (90 % on 8–15 % ground), after 0.7 %, only on ≥ 35 % ground (`scripts/dev/grades.ts`, `tests/grading.test.ts`); `scripts/dev/earthshot.mjs` town on a ridge |

@@ -6,7 +6,7 @@ import type { Curve } from '../geom';
  * Road grading (M13). A road no longer drapes over every bump: it gets a smoothed vertical profile
  * within its type's grade limit, pinned only where it joins roads that already exist, and the
  * ground is cut or filled to meet it. Pure and deterministic, so previews, the sim and tests agree.
- * DESIGN.md §2.4.
+ * DESIGN.md §3.15.
  */
 export interface GradeProfile {
   /** Sample spacing along the road, metres (the last sample sits at the road's end). */

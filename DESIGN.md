@@ -139,6 +139,7 @@ SimState {
   rng: {growth, events, traffic, world, disasters}          // sfc32 states
   terrain: { heights: Float32Array(257²) }                  // regenerated from seed + options.terrain
                                                             // (generator version), not saved
+  terrainDelta: Float32Array(257²)                          // earthworks (M13): heights = seed + delta
   grids:   { trees, groundwater, ore, oil,                  // Uint8/Float32, 128²
              airPollution, groundPollution, landValue, crime, garbageField, ... }
   roads:   { nodes: Map<id, RoadNode>, segments: Map<id, RoadSegment>, nextId }
@@ -160,7 +161,8 @@ Key entities:
 
 ```ts
 RoadNode    { id, x, z, y, segs: number[] }                 // segs is derived, rebuilt on load
-RoadSegment { id, a, b, cx, cz, type: RoadTypeId, length, blocks: [left, right], name }
+RoadSegment { id, a, b, cx, cz, type: RoadTypeId, length, blocks: [left, right], name,
+              deck?: number[] }                             // viaduct over dry ground: heights / 4 m (M13)
 ZoneBlock   { id, seg, side: 1 | -1, s0, cols, rows,        // cell (c, r) centre = P(s0 + (c+½)·8) +
               zone: Uint8Array, valid: Uint8Array,          //   N·(halfWidth + (r+½)·8), angle = tangent
               bld: Int32Array }                             // building id or 0
@@ -559,6 +561,47 @@ disasters menu can set any one off at a chosen point whatever that setting.
             │   crime ◄── unemployment, low happiness ──────────────────┘            │
             └── decline / abandonment ◄── unhappiness, unmet needs ◄─────────────────┘
 ```
+
+### 3.15 Road grading and earthworks (M13)
+
+Roads no longer drape over the raw ground. `world/grading.ts` gives each dry-land piece a vertical
+profile sampled every 4 m:
+
+1. The ground along the centre line is averaged over 40 m (the window narrows symmetrically at the
+   ends), so short bumps are shaved off rather than followed.
+2. Ends that join an existing road (or an earlier piece of the same road) are pinned to its height;
+   a new dead end is free. If two pinned ends are further apart in height than the type can climb
+   over the length, the piece fails ("make it longer, or wind it up the slope").
+3. The profile is the one within the type's grade limit (`RoadType.maxGrade`: dirt 20 %, street
+   16 %, avenue 12 %, boulevard 8 %) that strays least from the smoothed ground: a bisection on the
+   worst cut, with fill held to 8/14 of it, finds the smallest tolerance for which a forward pass of
+   reachable heights (grade-limited, inside the pins' band) stays non-empty; a backward pass then
+   picks the height closest to the ground at each sample. If that needs a cutting deeper than
+   14 m, a second fit lets fill run tall instead (a viaduct beats an impossible cutting).
+4. Samples more than 8 m above the ground are carried on a viaduct (stored on the segment as
+   `deck`, drawn and costed like a bridge; not at a road's end, not for dirt roads, at most
+   `BRIDGE.maxSpan`). A cutting deeper than 14 m fails with the ground's steepness, the limit and
+   the fix. Pieces over water keep the M6 bridge rules.
+
+`world/earthworks.ts` turns profiles into terrain edits. Each height sample within reach of the
+road is claimed by the nearest piece: out to the road's half-width plus a 1.5 m shoulder plus an
+8 m bench (the first row of lots, and enough that the road, draped on 8 m samples, comes out flat
+across) it is set to the profile; beyond, side slopes run back to the natural ground, 1:1 in
+cuttings and 1:3 on embankments (gentle enough that lots on them stay buildable). Water, other
+roads' corridors (road + shoulder), ground beyond an end that joins another road, samples under a
+viaduct, and ground under buildings that stay are left alone. Earth moved costs $0.40 per cubic
+metre, part of the road's price (not refunded by bulldozing). Civic buildings whose footprint
+varies by more than 1 m get a level pad at the height where they meet their road (4 m margin,
+same side slopes, same price); beyond 12 m the site is too steep.
+
+Edits are written as `terrainDelta` (height = seed terrain + delta, computed the same way live and
+on load, so saves and undo are exact) and sent to the client as `FrameDiff.terrain`. After any edit
+the sim re-seats buildings and civic buildings (highest ground under their corners and centre),
+clears trees on ground that moved more than half a metre, forgets bridge decks and the water
+distance / land-setting cache, and rechecks zone cells there (a lot on a steep cut face loses its
+zoning). The client rebuilds the terrain chunks (tinting cut faces earth-brown, embankments fresh
+green), roads, zone cells and trees in the box. Undo records keep the deltas they replaced. Road
+upgrades regrade to the new type between the road's two junctions, or say why they can't.
 
 ---
 
