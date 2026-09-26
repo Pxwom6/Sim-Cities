@@ -12,7 +12,8 @@ export type SoundName =
   | 'siren'
   | 'quake'
   | 'whoosh'
-  | 'boom';
+  | 'boom'
+  | 'fanfare';
 
 /**
  * Sound-effect recipes, all synthesised. `v` (0–1) varies pitch a little so repeats don't grate.
@@ -129,6 +130,16 @@ export const SOUNDS: Record<
     burst(ctx, out, t, { f0: 2400, f1: 600, q: 0.7, gain: 0.45, dur: 0.12 });
     burst(ctx, out, t, { colour: 'brown', filter: 'lowpass', f0: 900, f1: 60, gain: 0.8, dur: 2.2 });
     return tone(ctx, out, t, { f0: 70 + v * 10, f1: 28, gain: 0.55, dur: 1.8 });
+  },
+
+  /** A milestone: a bright rising fanfare ending on a chord. */
+  fanfare: (ctx, out, t) => {
+    const notes = [523.25, 659.25, 783.99, 1046.5];
+    notes.forEach((f, k) => tone(ctx, out, t + k * 0.12, { type: 'triangle', f0: f, gain: 0.09, dur: 0.22 }));
+    let end = t;
+    for (const f of [523.25, 659.25, 783.99])
+      end = tone(ctx, out, t + 0.5, { type: 'triangle', f0: f, gain: 0.07, attack: 0.02, dur: 1.1 });
+    return end;
   },
 
   /** A distant emergency wail: two rising-and-falling sweeps. */

@@ -123,3 +123,16 @@ One line each: what was decided and why. Newest at the bottom of each section.
 - A direct meteor hit destroys a civic building outright (the player rebuilds it); other disasters only knock civic buildings offline for repairs.
 - The disasters menu works whether or not random disasters are on: the setting only stops them striking by themselves.
 - Disaster collapses are their own event ('collapsed', logged but not toasted); the report when a disaster is over sums up the damage instead of a toast per building.
+
+## M10
+- Unlocks go by the highest population ever reached, not the current one: losing residents to a disaster or a bad budget shouldn't take away buildings the player has already used.
+- Every unlock threshold sits exactly on a named milestone (nine, from Hamlet to Metropolis, never more than 2.5× apart), so each one arrives as a batch with a celebration instead of things trickling in unannounced. Existing thresholds moved to the nearest milestone (e.g. gas power 1,200 → 2,000, hospital 4,000 → 5,000, university 15,000 → 20,000).
+- The unlock-all cheat opens up buildings, roads, policies and modules but not zone densities, which follow the city's own growth; sandbox mode unlocks both. Tests rely on the cheat to place services without changing how towns grow.
+- Each policy has exactly one effect in one system, sized to be clearly measurable (−25 % to −50 %), so tests can check it and players can see it on the relevant data map or ledger line.
+- Free buses have no fares to remove (the game never charged fares), so they act on the mode choice: the bus counts as five minutes quicker.
+- Modules are added from the building's inspector, once each, and appear as a small annex in a back corner of the lot rather than extending the footprint, which would have to re-check roads and neighbours.
+- Specialisation buildings are civic buildings with extra fields (tourism, resource, freight, research), so placement, funding, upkeep, damage, disasters and the inspector all work for them unchanged. Two new budget departments (Tourism; Trade and research) scale them.
+- Visitors don't drive through the traffic model yet (they're counted, spend and shop); tourist traffic is a possible M12 addition.
+- Landmarks are unique; hotels, mines, wells and freight terminals aren't (a second terminal adds half again, a third nothing).
+- Achievements are checked in the sim (deterministic, saved with the city) and are off in sandbox mode.
+- Growth all the way to 100,000 residents is exercised in M12's large-city benchmark; M10 checks the unlock table itself (every milestone unlocks something, nothing unlocks between them).

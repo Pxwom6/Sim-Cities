@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Sim } from '../src/sim/sim';
 import { CIVIC } from '../src/data/civic';
 import { MILESTONES } from '../src/data/progression';
+import { unlocksAt } from '../src/data/unlocks';
 import { MODULES } from '../src/data/modules';
 import { POLICIES } from '../src/data/policies';
 import { ROAD_TYPES } from '../src/data/roads';
@@ -38,24 +39,17 @@ function place(sim: Sim, def: string): number {
 
 describe('progression', () => {
   it('every milestone up to a metropolis unlocks something new', () => {
-    const unlocks = (p: number) => [
-      ...[...CIVIC.values()].filter((d) => d.unlockPopulation === p).map((d) => d.name),
-      ...Object.values(ROAD_TYPES)
-        .filter((r) => r.buildable && r.unlockPopulation === p)
-        .map((r) => r.name),
-      ...POLICIES.filter((x) => x.unlockPopulation === p).map((x) => x.name),
-      ...MODULES.filter((x) => x.unlockPopulation === p).map((x) => x.name),
-      ...LOAN_OPTIONS.filter((x) => x.unlockPopulation === p).map((x) => `$${x.amount} loan`),
-      ...Object.values(DENSITY_UNLOCK_POPULATION)
-        .filter((x) => x === p && p > 0)
-        .map(() => 'denser zones'),
-    ];
-    const all = new Set<number>();
-    for (const d of CIVIC.values()) all.add(d.unlockPopulation);
-    for (const m of MODULES) all.add(m.unlockPopulation);
-    for (const x of POLICIES) all.add(x.unlockPopulation);
-    for (const m of MILESTONES) expect(unlocks(m.population).length, m.name).toBeGreaterThan(0);
+    // The first milestone is the start; every later one brings a batch.
+    for (const m of MILESTONES.slice(1)) expect(unlocksAt(m.population).length, m.name).toBeGreaterThan(0);
     // Nothing unlocks between milestones.
+    const all = new Set<number>([
+      ...[...CIVIC.values()].map((d) => d.unlockPopulation),
+      ...MODULES.map((m) => m.unlockPopulation),
+      ...POLICIES.map((p) => p.unlockPopulation),
+      ...LOAN_OPTIONS.map((l) => l.unlockPopulation),
+      ...Object.values(ROAD_TYPES).map((r) => r.unlockPopulation),
+      ...Object.values(DENSITY_UNLOCK_POPULATION),
+    ]);
     for (const p of all)
       expect(
         MILESTONES.some((m) => m.population === p),

@@ -215,3 +215,23 @@ export const IconMeteor = (p: P) => (
     <path d="M11 11L3 3M13 9L7 3M9 13L3 7" />
   </svg>
 );
+export const IconLandmark = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M12 2l3 5v14H9V7zM9 12h6M5 21h14" />
+  </svg>
+);
+export const IconCrate = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M3 8l9-4 9 4v9l-9 4-9-4zM3 8l9 4 9-4M12 12v9" />
+  </svg>
+);
+export const IconTrophy = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M7 4h10v5a5 5 0 01-10 0zM7 6H4a3 3 0 003 4M17 6h3a3 3 0 01-3 4M12 14v4M8 21h8M9 18h6" />
+  </svg>
+);
+export const IconCity = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M3 21V10l5-3v14M8 21V4l7 3v14M15 21v-9l6 2v7M2 21h20" />
+  </svg>
+);

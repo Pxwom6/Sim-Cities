@@ -1083,11 +1083,18 @@ body {
 .legend {
   position: absolute;
   left: var(--space-3);
-  bottom: var(--space-3);
+  /* Above the toolbar, which reaches the left edge on narrower screens. */
+  bottom: calc(var(--toolbar-height) + var(--space-5));
   width: 15rem;
   padding: var(--space-2) var(--space-3);
   font-size: var(--font-size-xs);
   z-index: var(--z-hud);
+}
+.legend.beside-panel {
+  left: calc(25rem + var(--space-3) * 2);
+}
+.legend.beside-budget {
+  left: calc(27rem + var(--space-3) * 2);
 }
 .legend-head {
   display: flex;
@@ -1336,4 +1343,207 @@ body {
     0 0 3px rgba(255, 255, 255, 0.95),
     0 0 6px rgba(255, 255, 255, 0.8);
   white-space: nowrap;
+}
+
+/* City panel: progress, policies, achievements (M10) */
+.city-btn {
+  padding: var(--space-1) var(--space-2);
+}
+.city-btn.active {
+  background: var(--color-accent-soft);
+}
+.milestone-card {
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-3);
+  font-size: var(--font-size-sm);
+}
+.milestone-card h3 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-sm);
+}
+.milestone-bar {
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-border);
+  margin: var(--space-2) 0;
+  overflow: hidden;
+}
+.milestone-bar span {
+  display: block;
+  height: 100%;
+  background: var(--color-accent);
+}
+.unlock-list {
+  margin: var(--space-2) 0 0;
+  padding-left: 1.2em;
+  columns: 2;
+  font-size: var(--font-size-xs);
+}
+.city-stats {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px var(--space-3);
+  margin: 0;
+}
+.city-stats dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-bold);
+}
+.muted {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+.policy-list,
+.achievement-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.policy {
+  padding: var(--space-2) 0;
+  border-bottom: 1px dashed var(--color-border);
+  font-size: var(--font-size-sm);
+}
+.policy label {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--space-2);
+  align-items: center;
+  cursor: pointer;
+}
+.policy input {
+  accent-color: var(--color-accent);
+}
+.policy-name {
+  font-weight: var(--font-weight-bold);
+}
+.policy-cost {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+}
+.policy-effect {
+  margin: 2px 0 0 1.7rem;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+.policy.locked {
+  opacity: 0.55;
+}
+.policy.on .policy-name {
+  color: var(--color-accent-strong);
+}
+.achievement {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  padding: var(--space-2) 0;
+  border-bottom: 1px dashed var(--color-border);
+  font-size: var(--font-size-sm);
+  opacity: 0.5;
+}
+.achievement svg {
+  flex: none;
+  color: var(--color-text-muted);
+}
+.achievement.got {
+  opacity: 1;
+}
+.achievement.got svg {
+  color: #d9a938;
+}
+
+/* Milestone banner */
+.milestone-banner {
+  position: absolute;
+  top: calc(var(--topbar-height) + var(--space-5));
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(30rem, calc(100vw - 2rem));
+  padding: var(--space-4) var(--space-5);
+  text-align: center;
+  z-index: var(--z-toast);
+  overflow: hidden;
+  cursor: pointer;
+  animation: banner-in 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+.milestone-banner h2 {
+  margin: var(--space-1) 0;
+  font-size: 1.6rem;
+}
+.milestone-banner p {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-sm);
+}
+.milestone-banner .unlock-list {
+  text-align: left;
+  display: inline-block;
+}
+.milestone-kicker {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-accent-strong);
+}
+.confetti span {
+  position: absolute;
+  top: -10px;
+  width: 7px;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--color-accent);
+  animation: confetti-fall 2.4s ease-in forwards;
+}
+.confetti span:nth-child(3n) {
+  background: #e0b030;
+}
+.confetti span:nth-child(3n + 1) {
+  background: #3aa876;
+}
+@keyframes confetti-fall {
+  to {
+    transform: translateY(260px) rotate(540deg);
+    opacity: 0;
+  }
+}
+@keyframes banner-in {
+  from {
+    transform: translate(-50%, -20px) scale(0.92);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .milestone-banner,
+  .confetti span {
+    animation: none;
+  }
+  .confetti {
+    display: none;
+  }
+}
+
+/* Service modules in the inspector */
+.modules {
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+.modules h3 {
+  margin: 0 0 var(--space-1);
+  font-size: var(--font-size-sm);
+}
+.module-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+  font-size: var(--font-size-sm);
+}
+.module-done {
+  color: var(--color-positive);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
 }

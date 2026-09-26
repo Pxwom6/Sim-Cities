@@ -91,7 +91,7 @@ import {
 import { ignite, incidentsHour, incidentsTick } from './systems/incidents';
 import { disastersHour, disastersTick, floodedSegments, startDisaster } from './systems/disasters';
 import { progressHour } from './systems/progress';
-import { specialisationsHour } from './systems/specialisations';
+import { extractionPerDay, specialisationsHour } from './systems/specialisations';
 import { POLICY, type PolicyId } from '../data/policies';
 import { decayCrime, splatField } from './systems/pollution';
 import type { ServiceKind } from '../data/civic';
@@ -1256,6 +1256,15 @@ export class Sim {
       service: d.service ? this.serviceDetails(c) : null,
       transit: d.transit ? this.transitDetails(c) : null,
       refund: Math.round(c.cost * 0.25),
+      special: d.resource
+        ? {
+            kind: 'resource',
+            perDay: Math.round(extractionPerDay(this, c)),
+            left: Math.max(0, Math.round((1 - c.stored / d.resource.reserve) * 100)),
+          }
+        : d.tourism
+          ? { kind: 'tourism', draw: d.tourism.draw ?? 0, rooms: d.tourism.rooms ?? 0 }
+          : null,
     };
   }
 

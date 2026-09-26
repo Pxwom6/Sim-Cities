@@ -39,6 +39,8 @@ import {
   IconTornado,
   IconWaves,
   IconMeteor,
+  IconLandmark,
+  IconCrate,
 } from './icons';
 import { DISASTER_KINDS } from '../sim/systems/disasters';
 import { DISASTER_INFO } from '../tools/disasterTool';
@@ -381,6 +383,18 @@ export function Toolbar() {
               'Buses',
               'A depot runs buses round the stops you place. Riders leave their cars at home.',
             ],
+            [
+              'landmark',
+              IconLandmark,
+              'Tourism and landmarks',
+              'Landmarks draw visitors who spend money and shop; hotels keep them overnight.',
+            ],
+            [
+              'special',
+              IconCrate,
+              'Trade and research',
+              'Freight, ore mines and oil wells earn export income; a research park grows high-tech industry.',
+            ],
           ] as [CivicCategory, typeof IconBolt, string, string][]
         ).map(([cat, Icon, name, blurb]) => (
           <ToolButton
@@ -579,7 +593,10 @@ export function MapLegend() {
         ? 'linear-gradient(90deg, #e34948, #f0efec, #2a78d6)'
         : 'linear-gradient(90deg, #cde2fb, #9ec5f4, #6da7ec, #3987e5, #256abf, #184f95, #0d366b)';
   return (
-    <div class="legend panel" data-testid="map-legend">
+    <div
+      class={`legend panel ${game.panel === 'budget' ? 'beside-budget' : game.panel ? 'beside-panel' : ''}`}
+      data-testid="map-legend"
+    >
       <div class="legend-head">
         <strong>{name}</strong>
         <button class="btn icon" aria-label="Hide data map" onClick={() => game.overlay.set(null)}>

@@ -21,10 +21,10 @@ export function ThoughtsFeed() {
       clearInterval(r);
     };
   }, [game]);
-  // Side panels sit where the feed does, and while building the map needs every pixel: the feed
-  // steps aside for both.
+  // Side panels and the data-map legend sit where the feed does, and while building the map needs
+  // every pixel: the feed steps aside for all of them.
   if (!list.length || game.world.stats.population === 0 || game.panel) return null;
-  if (game.tools.activeId !== 'select') return null;
+  if (game.tools.activeId !== 'select' || game.overlay.active) return null;
   const items = [list[shown % list.length]!, list[(shown + 1) % list.length]!].filter(
     (x, i, a) => a.findIndex((y) => y.id === x.id) === i,
   );

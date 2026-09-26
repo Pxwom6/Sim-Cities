@@ -7,6 +7,8 @@ import type { WorkerPerf } from './sim/protocol';
 import { SPEED_TICKS_PER_SECOND, type Speed } from './sim/time';
 import { ToolManager } from './tools/manager';
 import { CIVIC } from './data/civic';
+import { MILESTONES } from './data/progression';
+import { ACHIEVEMENTS } from './data/achievements';
 import type { Advice } from './sim/systems/advisors';
 import { OverlayController } from './client/overlay';
 import { StreetNames } from './client/names';
@@ -46,7 +48,10 @@ export class Game {
   debugOpen = false;
   hint: ToolHint | null = null;
   /** Open side panel (budget, and later data maps, advisors...). */
-  panel: 'budget' | 'advisors' | 'notifications' | null = null;
+  panel: 'budget' | 'advisors' | 'notifications' | 'city' | null = null;
+  /** Milestone being celebrated (index into MILESTONES), if any. */
+  celebration: number | null = null;
+  private celebrationTimer: ReturnType<typeof setTimeout> | null = null;
   /** Street and neighbourhood names, and their labels on the map. */
   readonly names: StreetNames;
   readonly labels: StreetLabels;
@@ -274,7 +279,22 @@ export class Game {
         this.notice('crimeStopped', 'Police stopped a crime.', 'ok', at, false);
       else if (e.kind === 'patientSaved')
         this.notice('patientSaved', 'An ambulance got a patient to care.', 'ok', at, false);
-      else if (e.kind === 'disaster') this.disasterNotice(e.id);
+      else if (e.kind === 'milestone') {
+        const m = MILESTONES[e.id];
+        if (m) {
+          this.notice(
+            `milestone:${e.id}`,
+            `${m.name}! The city has ${m.population.toLocaleString('en-US')} residents.`,
+            'ok',
+            undefined,
+            false,
+          );
+          this.celebrate(e.id);
+        }
+      } else if (e.kind === 'achievement') {
+        const a = ACHIEVEMENTS[e.id];
+        if (a) this.notice(`achievement:${a.id}`, `Achievement: ${a.name}. ${a.blurb}`, 'ok');
+      } else if (e.kind === 'disaster') this.disasterNotice(e.id);
       else if (e.kind === 'disasterOver' && e.info) this.disasterReport(e.info);
       else if (e.kind === 'collapsed') this.notice('collapsed', 'A building collapsed.', 'bad', at, false);
       else if (e.kind === 'civicDamaged')
@@ -320,6 +340,20 @@ export class Game {
       toasted = true;
     }
     this.lastAdviceKeys = keys;
+  }
+
+  /** Show the milestone banner for a while. */
+  celebrate(index: number): void {
+    this.celebration = index;
+    if (this.celebrationTimer) clearTimeout(this.celebrationTimer);
+    this.celebrationTimer = setTimeout(() => this.dismissCelebration(), 9000);
+    this.audio?.play('fanfare');
+    this.notify();
+  }
+
+  dismissCelebration(): void {
+    this.celebration = null;
+    this.notify();
   }
 
   setRandomDisasters(on: boolean): void {

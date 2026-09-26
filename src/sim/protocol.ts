@@ -84,6 +84,11 @@ export interface CivicDetails {
   /** Bus depots: its line. */
   transit: { stops: number; buses: number; loopMinutes: number; riders: number; full: boolean } | null;
   refund: number;
+  /** Mines and wells: units a day and the share of the deposit left; landmarks and hotels. */
+  special:
+    | { kind: 'resource'; perDay: number; left: number }
+    | { kind: 'tourism'; draw: number; rooms: number }
+    | null;
 }
 
 export interface BudgetReport {

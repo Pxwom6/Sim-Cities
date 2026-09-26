@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import { modulesFor } from '../data/modules';
 import { DENSITY_NAMES, INDUSTRY_TIER_NAMES, WEALTH_NAMES, ZONED_DEFS } from '../data/buildings';
 import type { BuildingDetails, CivicDetails } from '../sim/protocol';
 import { formatNumber, useGameUpdates } from './hooks';
@@ -311,11 +312,38 @@ function CivicInspector({ id }: { id: number }) {
             </dd>
           </>
         )}
+        {d.special?.kind === 'resource' && (
+          <>
+            <dt>Output</dt>
+            <dd data-testid="civic-output">{d.special.perDay} units/day</dd>
+            <dt>Deposit left</dt>
+            <dd>{d.special.left}%</dd>
+          </>
+        )}
+        {d.special?.kind === 'tourism' && (
+          <>
+            {d.special.draw > 0 && (
+              <>
+                <dt>Draws</dt>
+                <dd>{d.special.draw.toLocaleString('en-US')} visitors/day</dd>
+              </>
+            )}
+            {d.special.rooms > 0 && (
+              <>
+                <dt>Rooms</dt>
+                <dd>{d.special.rooms.toLocaleString('en-US')}</dd>
+              </>
+            )}
+            <dt>City visitors</dt>
+            <dd>{game.world.stats.visitors.toLocaleString('en-US')}/day</dd>
+          </>
+        )}
         <dt>Upkeep</dt>
         <dd>
           ${d.upkeep.toLocaleString('en-US')}/month ({d.funding}% funding)
         </dd>
       </dl>
+      <ModuleList civicId={d.id} def={d.def} />
       <footer>
         <button
           class="btn danger"
@@ -328,6 +356,52 @@ function CivicInspector({ id }: { id: number }) {
         </button>
       </footer>
     </aside>
+  );
+}
+
+/** Add-on modules for a service building: what's installed and what can be added. */
+function ModuleList({ civicId, def }: { civicId: number; def: string }) {
+  const game = useGameUpdates(300);
+  const list = modulesFor(def);
+  if (!list.length) return null;
+  const installed = game.world.civics.get(civicId)?.modules ?? [];
+  const st = game.world.stats;
+  return (
+    <section class="modules" data-testid="modules">
+      <h3>Modules</h3>
+      {list.map((m) => {
+        const has = installed.includes(m.id);
+        const locked = !st.unlockAll && st.peak < m.unlockPopulation;
+        return (
+          <div key={m.id} class="module-row">
+            <div>
+              <strong>{m.name}</strong>
+              <div class="muted">
+                {m.blurb} +${m.upkeep}/month.
+                {locked ? ` Unlocks at ${m.unlockPopulation.toLocaleString('en-US')} residents.` : ''}
+              </div>
+            </div>
+            {has ? (
+              <span class="module-done">Added</span>
+            ) : (
+              <button
+                class="btn small"
+                disabled={locked}
+                data-testid={`add-module-${m.id}`}
+                onClick={() =>
+                  void game.dispatch({ type: 'addModule', civic: civicId, module: m.id }).then((r) => {
+                    if (r.ok) game.audio?.play('place');
+                    else game.toast(r.reason, 'bad');
+                  })
+                }
+              >
+                Add ${m.cost.toLocaleString('en-US')}
+              </button>
+            )}
+          </div>
+        );
+      })}
+    </section>
   );
 }
 

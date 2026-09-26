@@ -498,14 +498,39 @@ back into crumble after four days, so lots regrow as demand returns. Random disa
 once per 30 game days once the city has 1,500 residents, and can be switched off (`setDisasters`); the
 disasters menu can set any one off at a chosen point whatever that setting.
 
-### 3.13 Progression (M10)
+### 3.13 Progression and specialisations (M10)
 
-Population milestones unlock road types, densities, services, modules, policies, specialisations and
-landmarks (`src/data/unlocks.ts`): e.g. 0 (dirt road, street, low density, basics), 500 (avenue,
-medium density), 2 000, 5 000 (high density), 10 000, 25 000, 50 000, 100 000. Service buildings take
-add-on modules (+capacity, +upkeep). Specialisations: tourism (landmarks, hotels, attractions →
-tourist visits and revenue), trade (freight hub, ore mine / oil well on resource deposits → export
-revenue), technology (university-driven high-tech campus → tax and education boost).
+- **Milestones** (`data/progression.ts`): Hamlet 0 → Village 800 → Town 2,000 → Large town 5,000 →
+  Small city 10,000 → City 20,000 → Large city 40,000 → Major city 70,000 → Metropolis 100,000. Every
+  unlockable (civic buildings, road types, zone densities, modules, policies, loans) has its
+  `unlockPopulation` on one of these, so each milestone brings a batch (`data/unlocks.ts` lists them
+  for the UI). Unlocks follow `progress.peak`, the highest population ever reached, so they stay if
+  the city shrinks; each milestone is announced once (banner, fanfare, notification). The unlock-all
+  cheat unlocks things to build, not zone densities, which follow the city's own growth (sandbox
+  mode unlocks everything).
+- **Policies** (`data/policies.ts`): a monthly cost (base + per resident, the 'Policies' ledger line)
+  and one effect applied where that system lives: fire safety halves outbreak risk, free buses make
+  the bus 5 min "quicker" in the mode choice, recycling cuts garbage 25 %, neighbourhood watch cuts
+  crime 25 %, healthy living cuts sickness 30 %, clean industry grants cut industrial pollution 40 %,
+  the high-rise ban caps growth at medium density, the tourism campaign brings 50 % more visitors.
+- **Service modules** (`data/modules.ts`): one-off cost, extra upkeep, and extra engines / patrol
+  cars / ambulances, beds, seats or buses on the building they're added to (each once). The systems
+  read `civicVehicles/Capacity/Buses/Upkeep(c)`; the model gets a small annex per module.
+- **Tourism**: landmarks (clock tower, observation wheel, glass conservatory, sky needle, grand
+  arch; one of each) draw visitors a day × funding × appeal (0.6 + 0.4 × approval) × campaign; hotels
+  host up to 45 % of them overnight. Day trippers spend $3, overnight guests $10 ('Tourism' line), and
+  visitors lift commercial demand (up to +0.25).
+- **Trade**: ore mines and oil wells must stand on a deposit (mean richness ≥ 0.2 under the
+  footprint; choosing one opens the resources map). They extract `perDay × richness × remaining`
+  units (falling to 20 % as the deposit runs down) and sell them ('Ore and oil sales'). A freight
+  terminal earns $0.6 per industrial job a day ('Trade and exports'; a second adds half) and lifts
+  industrial demand by 0.12 each (two at most).
+- **Technology**: a research park (needs a university) lowers high-tech industry's education bar
+  (workforce share 0.3 → 0.2, land value 0.4 → 0.3) and earns $1.2 per high-tech job a day
+  ('Research licences').
+- **Achievements** (`data/achievements.ts`, checks in `systems/progress.ts`): twelve goals checked
+  hourly (none in sandbox mode), from a first road to a metropolis, including a comeback after a
+  disaster that flattened ten buildings.
 
 ### 3.14 How the systems feed each other
 

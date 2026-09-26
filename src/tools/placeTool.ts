@@ -42,6 +42,9 @@ export class PlaceTool implements Tool {
     this.def = id;
     this.category = CIVIC.get(id)!.category;
     this.last = null;
+    // Mines and wells go on deposits: show where they are.
+    if (CIVIC.get(id)!.resource && this.game.overlay.active !== 'resources')
+      this.game.overlay.set('resources');
     this.game.notify();
   }
 

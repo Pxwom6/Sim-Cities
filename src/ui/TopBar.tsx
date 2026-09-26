@@ -4,6 +4,7 @@ import { IconPause, IconSpeed1, IconSpeed2, IconSpeed3 } from './icons';
 import { Rci } from './Rci';
 import { SystemMenu } from './SystemMenu';
 import { AdvisorsButton } from './Advisors';
+import { CityButton } from './CityPanel';
 import { NotificationsButton } from './Notifications';
 
 const SPEEDS: { s: Speed; label: string; Icon: typeof IconPause; key: string }[] = [
@@ -55,6 +56,7 @@ export function TopBar() {
         </span>
       </div>
       <Rci />
+      <CityButton />
       <AdvisorsButton />
       <NotificationsButton />
       <span class="divider" />

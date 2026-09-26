@@ -33,7 +33,7 @@ export class CivicRenderer {
       this.heights.delete(id);
       return;
     }
-    const m = assets.civic(c.def, c.variant, c.fill);
+    const m = assets.civic(c.def, c.variant, c.fill, c.modules?.length ?? 0);
     const arr = new Arrays(false);
     appendModel(arr, m, c.x, c.y, c.z, buildingYaw(c));
     const mesh = new Mesh(arr.geometry(), this.material);

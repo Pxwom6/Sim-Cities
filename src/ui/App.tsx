@@ -11,6 +11,7 @@ import { BudgetPanel } from './Budget';
 import { AdvisorsPanel } from './Advisors';
 import { NotificationsPanel } from './Notifications';
 import { ThoughtsFeed } from './Thoughts';
+import { CityPanel, MilestoneBanner } from './CityPanel';
 
 function Shortcuts({ game }: { game: Game }) {
   useEffect(() => {
@@ -27,6 +28,7 @@ function Shortcuts({ game }: { game: Game }) {
       else if (e.code === 'KeyM' && !e.ctrlKey && !e.metaKey) game.openPanel('budget');
       else if (e.code === 'KeyJ' && !e.ctrlKey && !e.metaKey) game.openPanel('advisors');
       else if (e.code === 'KeyN' && !e.ctrlKey && !e.metaKey) game.openPanel('notifications');
+      else if (e.code === 'KeyP' && !e.ctrlKey && !e.metaKey) game.openPanel('city');
       else if (e.code === 'KeyL' && !e.ctrlKey && !e.metaKey)
         game.overlay.set(game.overlay.active ? null : 'power');
     };
@@ -49,6 +51,8 @@ export function App({ game }: { game: Game }) {
       <BudgetPanel />
       <AdvisorsPanel />
       <NotificationsPanel />
+      <CityPanel />
+      <MilestoneBanner />
       <ThoughtsFeed />
       <MoneyBanner />
       <ToastLayer />

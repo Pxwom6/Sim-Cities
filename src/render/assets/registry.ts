@@ -37,13 +37,13 @@ export class AssetRegistry {
     return m;
   }
 
-  civic(def: string, variant: number, fill = 0): ModelData {
+  civic(def: string, variant: number, fill = 0, modules = 0): ModelData {
     const q = Math.round(fill * 4);
-    const k = `civic:${def}|${variant % 4}|${q}`;
+    const k = `civic:${def}|${variant % 4}|${q}|${modules}`;
     let m = this.cache.get(k);
     if (!m) {
       const o = this.overrides.get(def);
-      m = o ? o() : buildCivicModel(CIVIC.get(def)!, variant % 4, q / 4);
+      m = o ? o() : buildCivicModel(CIVIC.get(def)!, variant % 4, q / 4, modules);
       this.cache.set(k, m);
     }
     return m;
