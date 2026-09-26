@@ -6,6 +6,8 @@ const out = process.argv[2];
 const ticks = Number(process.argv[3] ?? 4320);
 const server = spawn('npx', ['vite', 'preview', '--outDir', 'dist-test', '--port', '4185', '--strictPort'], {
   stdio: 'ignore',
+  // Its own process group, so the preview server (a child of npx) goes down with it.
+  detached: true,
 });
 await new Promise((r) => setTimeout(r, 1500));
 const browser = await chromium.launch({
@@ -105,5 +107,5 @@ try {
   if (errors.length) console.log('ERRORS:\n' + errors.join('\n'));
 } finally {
   await browser.close();
-  server.kill();
+  process.kill(-server.pid);
 }

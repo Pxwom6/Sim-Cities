@@ -92,9 +92,15 @@ describe('service coverage', () => {
     // More primary pupils than the (half-funded) school has seats.
     const pupils = homes.reduce((s, b) => s + b.pop * EDUCATION.pupils[0]!, 0);
     expect(pupils).toBeGreaterThan(CIVIC.get('primary')!.service!.capacity! * sim.fundingEff('education'));
-    const avg = (xs: Building[]) => xs.reduce((s, b) => s + b.covEdu, 0) / xs.length;
+    // Primary places (seat1: the share of a home's primary pupils with a seat) go nearest first: the
+    // nearest quarter of homes are all seated, the farthest mostly not, and their education
+    // coverage follows. (Seats go by road distance; this ranks homes by straight-line distance.)
+    const avg = (xs: Building[], f: (b: Building) => number) => xs.reduce((s, b) => s + f(b), 0) / xs.length;
     const k = Math.floor(homes.length / 4);
-    expect(avg(homes.slice(0, k))).toBeGreaterThan(avg(homes.slice(-k)) + 0.2);
+    const [near, far] = [homes.slice(0, k), homes.slice(-k)];
+    expect(avg(near, (b) => b.seat1)).toBeGreaterThan(0.95);
+    expect(avg(far, (b) => b.seat1)).toBeLessThan(0.5);
+    expect(avg(near, (b) => b.covEdu)).toBeGreaterThan(avg(far, (b) => b.covEdu) * 2);
   });
 });
 

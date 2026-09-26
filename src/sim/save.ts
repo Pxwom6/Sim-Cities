@@ -4,7 +4,7 @@ import { canonicalStringify, decodeValue, encodeValue } from './serialize';
 import type { SimState } from './state';
 
 /** Bump when the saved state shape changes, and add a migration from the previous version. */
-export const SAVE_VERSION = 9;
+export const SAVE_VERSION = 10;
 export const SAVE_FORMAT = 'citybloom-save';
 
 export interface SaveMeta {
@@ -134,6 +134,8 @@ export const migrations: Record<number, (state: Record<string, unknown>) => Reco
       tourism: { visitors: 0, overnight: 0 },
     };
   },
+  // v9 → v10 (M12): terrain generator versions. Older cities keep the original terrain.
+  9: (s) => ({ ...s, options: { ...(s.options as Record<string, unknown>), terrain: 1 } }),
 };
 
 export function encodeState(state: SimState): unknown {

@@ -201,7 +201,7 @@ export class Sim {
 
   static create(opts: Partial<GameOptions> = {}): Sim {
     const options: GameOptions = { ...DEFAULT_OPTIONS, ...opts };
-    const terrain = new Terrain(options.seed, options.preset);
+    const terrain = new Terrain(options.seed, options.preset, options.terrain);
     const rng = {} as SimState['rng'];
     for (const s of RNG_STREAMS) rng[s] = Rng.fromSeed(`${options.seed}:${s}`).getState();
     const state: SimState = {
@@ -249,7 +249,7 @@ export class Sim {
 
   static fromSave(save: SaveFile): Sim {
     const state = readSaveFile(save);
-    const terrain = new Terrain(state.options.seed, state.options.preset);
+    const terrain = new Terrain(state.options.seed, state.options.preset, state.options.terrain);
     return new Sim(state, terrain);
   }
 

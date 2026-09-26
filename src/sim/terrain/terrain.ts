@@ -1,6 +1,6 @@
 import { GRID_CELL, GRID_RES, HEIGHT_RES, HEIGHT_STEP, MAP_SIZE, SHORE_HEIGHT } from '../../data/world';
 import type { MapPreset } from '../../data/world';
-import { TerrainGen, generateTerrain, sampleHeights } from './generate';
+import { TERRAIN_VERSION, TerrainGen, generateTerrain, sampleHeights } from './generate';
 
 /** Terrain derived from the seed: heights and static resource grids. Not saved (regenerated). */
 export class Terrain {
@@ -11,8 +11,8 @@ export class Terrain {
   readonly oil: Uint8Array;
   readonly initialTrees: Uint8Array;
 
-  constructor(seed: string, preset: MapPreset) {
-    this.gen = TerrainGen.create(seed, preset);
+  constructor(seed: string, preset: MapPreset, version = TERRAIN_VERSION) {
+    this.gen = TerrainGen.create(seed, preset, version);
     const data = generateTerrain(this.gen);
     this.heights = data.heights;
     this.groundwater = data.groundwater;

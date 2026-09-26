@@ -14,6 +14,7 @@ import type { Incident } from './systems/incidents';
 import type { TransitState } from './systems/transit';
 import type { Crater, Disaster } from './systems/disasters';
 import type { TourismState } from './systems/specialisations';
+import { TERRAIN_VERSION } from './terrain/generate';
 
 export type { Difficulty };
 
@@ -24,6 +25,8 @@ export interface GameOptions {
   sandbox: boolean;
   disasters: boolean;
   cityName: string;
+  /** Terrain generator version the city was founded with (see TERRAIN_VERSION). */
+  terrain: number;
 }
 
 export const DEFAULT_OPTIONS: GameOptions = {
@@ -33,6 +36,7 @@ export const DEFAULT_OPTIONS: GameOptions = {
   sandbox: false,
   disasters: true,
   cityName: 'New Town',
+  terrain: TERRAIN_VERSION,
 };
 
 export const RNG_STREAMS = ['world', 'growth', 'events', 'traffic', 'disasters'] as const;

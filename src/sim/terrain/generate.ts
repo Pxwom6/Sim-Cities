@@ -3,6 +3,14 @@ import { Rng } from '../rng';
 import { Noise2D, clamp, lerp, smoothstep } from './noise';
 
 /**
+ * Terrain generator version for new cities. Saved cities keep the version they were founded with
+ * (`GameOptions.terrain`), since terrain is regenerated from the seed on load. 1: original.
+ * 2 (M12): the start area round the highway entrance is kept gentle, so every seed takes a first
+ * grid of streets.
+ */
+export const TERRAIN_VERSION = 2;
+
+/**
  * Deterministic terrain. `TerrainGen.height(x, z)` is a pure function defined everywhere, so the sim
  * samples it on the buildable area and the renderer uses it for the scenery beyond. DESIGN.md §2.1.
  */
@@ -17,6 +25,8 @@ export interface TerrainParams {
   highway: { lineX: number; connectZ: number; height: number };
   /** Prevailing wind direction (unit vector). */
   wind: { x: number; z: number };
+  /** Generator version (see TERRAIN_VERSION). */
+  version: number;
 }
 
 export class TerrainGen {
@@ -38,7 +48,7 @@ export class TerrainGen {
     this.flattenHighway = flattenHighway;
   }
 
-  static create(seed: string, preset: MapPreset): TerrainGen {
+  static create(seed: string, preset: MapPreset, version = TERRAIN_VERSION): TerrainGen {
     const rng = Rng.fromSeed(`terrain:${seed}:${preset}`);
     const params: TerrainParams = {
       seed,
@@ -49,6 +59,7 @@ export class TerrainGen {
       hillAmp: preset === 'highlands' ? 120 : preset === 'lakes' ? 55 : 75,
       highway: { lineX: -110, connectZ: 1024, height: 10 },
       wind: { x: 1, z: 0 },
+      version,
     };
     const windAngle = rng.range(-0.6, 0.6); // mostly westerly: pollution drifts east, away from the start
     params.wind = { x: Math.cos(windAngle), z: Math.sin(windAngle) };
@@ -82,8 +93,9 @@ export class TerrainGen {
         params.lakes.push({ x: rng.range(800, 1900), z: rng.range(200, 1850), r: rng.range(90, 190) });
       }
     }
-    // Pick the flattest dry spot on the west edge for the highway connection.
-    const probe = new TerrainGen(params, false);
+    // Pick the flattest dry spot on the west edge for the highway connection (with the original
+    // start-area easing, which doesn't depend on where the connection is).
+    const probe = new TerrainGen({ ...params, version: 1 }, false);
     let best = 1024;
     let bestScore = Infinity;
     for (let z = 500; z <= 1550; z += 25) {
@@ -156,7 +168,13 @@ export class TerrainGen {
     const hillMask = smoothstep(0.12, 0.5, this.nHills.fbm(x / 1500 + 7, z / 1500 - 3, 3));
     const hillShape = 0.55 + 0.45 * this.nHills.fbm(x / 380 + 50, z / 380, 4);
     // Keep the start area near the highway gentler.
-    const startEase = 0.3 + 0.7 * smoothstep(200, 900, x);
+    let startEase = 0.3 + 0.7 * smoothstep(200, 900, x);
+    // Version 2: hills fade out round the highway entrance (to about 4 m), whatever the seed.
+    if (p.version >= 2) {
+      const d = Math.hypot(x, (z - p.highway.connectZ) * 0.8);
+      const floor = 4 / p.hillAmp;
+      startEase = Math.min(startEase, floor + (1 - floor) * smoothstep(450, 1050, d));
+    }
     h += p.hillAmp * hillMask * hillShape * hillShape * startEase;
     h += 0.7 * this.nDetail.fbm(x / 140, z / 140, 2);
 

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { Terrain } from '../src/sim/terrain/terrain';
+import { TERRAIN_VERSION } from '../src/sim/terrain/generate';
 import { MAP_PRESETS, MAP_SIZE, GRID_RES } from '../src/data/world';
+import { Sim } from '../src/sim/sim';
 
 describe('terrain generation', () => {
   it('is deterministic per seed and preset', () => {
@@ -52,5 +54,48 @@ describe('terrain generation', () => {
       if (sawWater) crossings++;
     }
     expect(crossings).toBeGreaterThanOrEqual(4);
+  });
+});
+
+describe('terrain versions', () => {
+  it('v2: every seed and preset takes a first grid of streets off the highway', () => {
+    // An avenue and four crossing streets, as a new player lays out (the playthrough does too).
+    // On the original terrain about a third of river seeds had some of these too steep.
+    for (const preset of MAP_PRESETS.map((p) => p.id))
+      for (let k = 0; k < 4; k++) {
+        const sim = Sim.create({ seed: `start${k}`, preset });
+        expect(sim.state.options.terrain).toBe(TERRAIN_VERSION);
+        const hw = sim.state.net.nodes.get(sim.state.highway.connect)!;
+        const road = (type: 'avenue' | 'street', a: [number, number], b: [number, number]) =>
+          sim.dispatch({
+            type: 'buildRoad',
+            road: type,
+            points: [
+              { x: hw.x + a[0], z: hw.z + a[1] },
+              { x: hw.x + b[0], z: hw.z + b[1] },
+            ],
+          });
+        expect(road('avenue', [0, 0], [480, 0]).ok, `${preset} start${k} avenue`).toBe(true);
+        for (const dx of [96, 192, 288, 384])
+          expect(road('street', [dx, -160], [dx, 160]).ok, `${preset} start${k} street at ${dx}`).toBe(true);
+      }
+  });
+
+  it('a city keeps the terrain version it was founded with, and older saves keep the original', () => {
+    const v1 = new Terrain('keep', 'highlands', 1);
+    const v2 = new Terrain('keep', 'highlands', 2);
+    expect(v2.heights).not.toEqual(v1.heights);
+    // Only the start area changes: far from the highway entrance the ground is the same.
+    expect(v2.heightAt(1800, 300)).toBeCloseTo(v1.heightAt(1800, 300), 5);
+    const old = Sim.create({ seed: 'keep', preset: 'highlands', terrain: 1 });
+    const save = old.save();
+    const loaded = Sim.fromSave(JSON.parse(JSON.stringify(save)));
+    expect(loaded.terrain.heights).toEqual(v1.heights);
+    // A save from before terrain versions (v9) migrates to the original terrain.
+    const legacy = JSON.parse(JSON.stringify(save));
+    legacy.version = 9;
+    delete legacy.state.options.terrain;
+    expect(Sim.fromSave(legacy).state.options.terrain).toBe(1);
+    expect(Sim.fromSave(legacy).terrain.heights).toEqual(v1.heights);
   });
 });

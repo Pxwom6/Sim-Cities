@@ -95,6 +95,8 @@ test('playthrough: a first city from the main menu to a thriving town @playthrou
   await page.getByTestId('main-new').click();
   await page.getByTestId('new-name').fill('Maplewood');
   await page.getByTestId('preset-river').click();
+  // A fixed seed keeps the run repeatable (tests/terrain.test.ts checks any seed takes this layout).
+  await page.getByTestId('new-seed').fill('maplewood');
   await expect(page.getByTestId('new-tutorial')).toBeChecked();
   await page.getByTestId('new-start').click();
   await expect(page.getByTestId('topbar')).toBeVisible({ timeout: 90_000 });

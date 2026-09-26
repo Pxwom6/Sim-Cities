@@ -5,6 +5,8 @@ import { spawn } from 'node:child_process';
 const [dir, out] = process.argv.slice(2);
 const server = spawn('npx', ['vite', 'preview', '--outDir', dir, '--port', '4196', '--strictPort'], {
   stdio: 'ignore',
+  // Its own process group, so the preview server (a child of npx) goes down with it.
+  detached: true,
 });
 await new Promise((r) => setTimeout(r, 2000));
 const browser = await chromium.launch({
@@ -40,5 +42,5 @@ try {
   await page.screenshot({ path: `${out}-b.png` });
 } finally {
   await browser.close();
-  server.kill();
+  process.kill(-server.pid);
 }

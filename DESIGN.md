@@ -135,9 +135,10 @@ Scenery extends 3 km beyond each edge, generated on the main thread from the sam
 
 ```ts
 SimState {
-  version, seed, options {preset, difficulty, sandbox, disasters}, tick,
+  version, seed, options {preset, difficulty, sandbox, disasters, terrain}, tick,
   rng: {growth, events, traffic, world, disasters}          // sfc32 states
-  terrain: { heights: Float32Array(257²) }                  // regenerated from seed, not saved
+  terrain: { heights: Float32Array(257²) }                  // regenerated from seed + options.terrain
+                                                            // (generator version), not saved
   grids:   { trees, groundwater, ore, oil,                  // Uint8/Float32, 128²
              airPollution, groundPollution, landValue, crime, garbageField, ... }
   roads:   { nodes: Map<id, RoadNode>, segments: Map<id, RoadSegment>, nextId }
