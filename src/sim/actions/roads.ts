@@ -6,7 +6,8 @@ import { footprint } from '../world/buildings';
 import { bulldozeCivic, civicRect } from '../world/civic';
 import type { Sim } from '../sim';
 import { UNDO_LIMIT } from '../undo';
-import { applyRoadPlan, planRoad } from '../world/roadPlanner';
+import { applyRoadPlan, planRoad, type RoadPlan } from '../world/roadPlanner';
+import { reshapeGround, samplesBox, type TerrainEdit } from '../world/earthworks';
 import { removeStop } from '../systems/transit';
 
 /** Refusal reason if a road type isn't available yet, else null. */
@@ -22,16 +23,27 @@ export function buildRoad(sim: Sim, road: RoadTypeId, points: Vec2[], dryRun: bo
   const s = sim.state;
   const locked = roadLocked(sim, road);
   if (locked) return fail(locked);
-  const plan = planRoad(sim.net, sim.terrain, road, points, s.treasury, s.options.sandbox);
+  // Earthworks leave the ground under buildings alone, except those the road will replace.
+  let doomed = new Set<number>();
+  const plan = planRoad(sim.net, sim.terrain, road, points, s.treasury, s.options.sandbox, (pieces) => {
+    doomed = new Set(buildingsInTheWay(sim, pieces, road));
+    return keepUnder(sim, doomed);
+  });
   const preview = {
     pieces: plan.pieces.map((p) => ({ a: p.a, c: p.c, b: p.b })),
     length: plan.length,
     splits: plan.splits.length,
-    demolish: plan.ok ? buildingsInTheWay(sim, plan.pieces, road).length : 0,
+    demolish: doomed.size,
+    grade: gradeInfo(plan),
   };
   if (!plan.ok) return fail(plan.reason ?? 'Invalid road', { at: plan.at, info: preview });
   if (dryRun) return ok(plan.cost, { info: preview });
-  const res = applyRoadPlan(sim.net, plan);
+  let terrain: TerrainEdit | undefined;
+  const res = applyRoadPlan(sim.net, plan, () => {
+    if (!plan.earth?.idx.length) return null;
+    terrain = reshapeGround(sim, plan.earth.idx, plan.earth.to);
+    return plan.earth.box;
+  });
   sim.spend(plan.cost, 'roads');
   clearTreesAlong(sim, res.segments);
   sim.pushUndo({
@@ -41,9 +53,54 @@ export function buildRoad(sim: Sim, road: RoadTypeId, points: Vec2[], dryRun: bo
     segments: res.segments,
     nodes: res.nodes,
     splits: res.splits,
+    ...(terrain ? { terrain } : {}),
   });
   sim.markNetworkChanged();
   return ok(plan.cost, { created: res.segments, info: preview });
+}
+
+/** What the road preview shows about grading (M13): the profile of each piece and the earthworks. */
+function gradeInfo(plan: RoadPlan) {
+  const r2 = (v: number) => Math.round(v * 100) / 100;
+  let steepest = 0;
+  let ground = 0;
+  for (const p of plan.profiles) {
+    if (!p) continue;
+    steepest = Math.max(steepest, p.grade);
+    ground = Math.max(ground, p.groundGrade);
+  }
+  return {
+    limit: ROAD_TYPES[plan.type].maxGrade,
+    max: r2(steepest),
+    ground: r2(ground),
+    earth: plan.earth
+      ? { volume: plan.earth.volume, cut: plan.earth.cut, fill: plan.earth.fill, cost: plan.earth.cost }
+      : null,
+    viaduct: Math.round(plan.profiles.reduce((a, p) => a + (p?.raisedLength ?? 0), 0)),
+    pieces: plan.profiles.map((p) =>
+      p
+        ? {
+            step: p.step,
+            h: Array.from(p.h, r2),
+            ground: Array.from(p.ground, r2),
+            raised: Array.from(p.raised),
+            fail: p.fail?.at ?? -1,
+          }
+        : null,
+    ),
+  };
+}
+
+/** Ground the earthworks must not move: under buildings and civic buildings that stay. */
+function keepUnder(sim: Sim, doomed: Set<number>): (x: number, z: number) => boolean {
+  return (x, z) => {
+    const p = { x, z };
+    for (const id of sim.bldHash.queryPoint(x, z, 3))
+      if (!doomed.has(id) && pointRectDistance(p, footprint(sim.state.buildings.get(id)!)) < 2) return true;
+    for (const id of sim.civHash.queryPoint(x, z, 3))
+      if (pointRectDistance(p, civicRect(sim.state.civics.get(id)!)) < 2) return true;
+    return false;
+  };
 }
 
 /**
@@ -244,6 +301,10 @@ export function undoRoad(
     sim.net.mergeSplit(sp);
   }
   for (const n of rec.nodes) sim.net.removeNodeIfOrphan(n);
+  if (rec.terrain) {
+    reshapeGround(sim, rec.terrain.idx, rec.terrain.before);
+    grow(samplesBox(rec.terrain.idx));
+  }
   if (box) sim.net.revalidate(box);
   sim.earn(rec.cost, 'refunds');
   sim.markNetworkChanged();

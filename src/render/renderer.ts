@@ -223,6 +223,13 @@ export class GameRenderer {
       }
       if (pts.length) this.trees.rebuildAround(pts);
     });
+    // Earthworks (M13): everything laid on the ground follows it.
+    world.onTerrain((box) => {
+      this.terrain.refresh(box);
+      this.roads.refresh(box);
+      this.zones.refresh(box);
+      this.trees.rebuildBox(box);
+    });
 
     this.controller = new CameraController(this.camera, canvas, (x, z) => world.heightAt(x, z));
     this.resize();

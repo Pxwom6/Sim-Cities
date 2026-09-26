@@ -10,6 +10,7 @@ import type { BuildingData, CityStats, DisasterData } from '../sim/protocol';
 import { ZONED_DEFS } from '../data/buildings';
 import { CELL } from '../data/zones';
 import { renderSounds, type SoundCheck } from '../audio/check';
+import { HEIGHT_RES, HEIGHT_STEP } from '../data/world';
 import type { AmbientMix } from '../audio/mix';
 
 export interface TestApi {
@@ -64,6 +65,17 @@ export interface TestApi {
   }[];
   /** Client (CSS pixel) coordinates of a world point on the ground. */
   worldToScreen(x: number, z: number): { x: number; y: number };
+  /**
+   * Earthworks as the client sees them (M13): samples changed from the generated terrain, the box
+   * around them, the biggest cut and fill, and the terrain version.
+   */
+  getTerrainEdits(): {
+    edited: number;
+    box: { minX: number; minZ: number; maxX: number; maxZ: number } | null;
+    maxCut: number;
+    maxFill: number;
+    version: number;
+  };
   advance(ticks: number): Promise<number>;
   setCamera(preset: CameraPresetName | Partial<CameraPose>): void;
   getCamera(): CameraPose;
@@ -175,6 +187,30 @@ export function installTestApi(game: Game): TestApi {
       return null;
     },
     heightAt: (x, z) => game.world.heightAt(x, z),
+    getTerrainEdits: () => {
+      const d = game.world.terrainDelta;
+      let edited = 0;
+      let maxCut = 0;
+      let maxFill = 0;
+      let box: { minX: number; minZ: number; maxX: number; maxZ: number } | null = null;
+      for (let i = 0; i < d.length; i++) {
+        if (!d[i]) continue;
+        edited++;
+        maxCut = Math.max(maxCut, -d[i]!);
+        maxFill = Math.max(maxFill, d[i]!);
+        const x = (i % HEIGHT_RES) * HEIGHT_STEP;
+        const z = Math.floor(i / HEIGHT_RES) * HEIGHT_STEP;
+        box = box
+          ? {
+              minX: Math.min(box.minX, x),
+              minZ: Math.min(box.minZ, z),
+              maxX: Math.max(box.maxX, x),
+              maxZ: Math.max(box.maxZ, z),
+            }
+          : { minX: x, minZ: z, maxX: x, maxZ: z };
+      }
+      return { edited, box, maxCut, maxFill, version: game.world.terrainVersion };
+    },
     segmentAt: (x, z) => {
       const hit = game.world.net.nearestSegment({ x, z }, 20);
       return hit ? { id: hit.seg, type: game.world.net.segment(hit.seg).type } : null;

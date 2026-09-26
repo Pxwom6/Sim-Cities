@@ -81,6 +81,8 @@ export interface SimState {
   incidents: Map<number, Incident>;
   /** Crime raster (GRID_RES²), 0..1. */
   crime: Float32Array;
+  /** Earthworks (M13): height change at each terrain sample (HEIGHT_RES²), on top of the seed. */
+  terrainDelta: Float32Array;
   /** Daily traffic per road segment (passenger-car units, both directions). */
   traffic: Map<number, number>;
   /** Bus stops and last round's ridership. */

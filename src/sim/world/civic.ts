@@ -1,11 +1,12 @@
 import { MODULE } from '../../data/modules';
 import { CIVIC, SPECIALISATION, type CivicDef } from '../../data/civic';
-import { ROAD_RULES, ROAD_TYPES } from '../../data/roads';
+import { GRADING, ROAD_RULES, ROAD_TYPES } from '../../data/roads';
 import { MAP_SIZE, SHORE_HEIGHT, GRID_CELL, GRID_RES } from '../../data/world';
 import { fail, ok, type CommandResult } from '../commands';
 import { pointRectDistance, rectsOverlap, type ORect, type Vec2 } from '../geom';
 import type { Sim } from '../sim';
 import { clearTreesUnder, footprint as zonedFootprint } from './buildings';
+import { planPad, reshapeGround, type EarthPlan, type TerrainEdit } from './earthworks';
 
 /** A player-placed civic building (utility, service, park, landmark). */
 export interface Civic {
@@ -153,6 +154,8 @@ export interface PlacementCheck {
   demolish: number[];
   access: { seg: number; s: number } | null;
   y: number;
+  /** Earthworks for a level pad on uneven ground (M13), or null. */
+  pad: EarthPlan | null;
 }
 
 export function checkPlacement(
@@ -165,7 +168,7 @@ export function checkPlacement(
   ignoreCivic = 0,
 ): PlacementCheck {
   const def = CIVIC.get(defId);
-  const res: PlacementCheck = { ok: false, demolish: [], access: null, y: 0 };
+  const res: PlacementCheck = { ok: false, demolish: [], access: null, y: 0, pad: null };
   if (!def) return { ...res, reason: 'Unknown building' };
   if (![x, z, angle].every(Number.isFinite)) return { ...res, reason: 'Invalid position' };
   const rect: ORect = { x, z, hw: def.w / 2, hd: def.d / 2, angle };
@@ -194,7 +197,7 @@ export function checkPlacement(
     lo = Math.min(lo, h);
     hi = Math.max(hi, h);
   }
-  if (hi - lo > 7) return { ...res, reason: 'Ground is too steep' };
+  if (hi - lo > GRADING.padMax) return { ...res, reason: 'Ground is too steep' };
   res.y = hi;
   if (def.nearWater !== undefined) {
     const i = Math.min(GRID_RES - 1, Math.max(0, Math.floor(x / GRID_CELL)));
@@ -240,7 +243,23 @@ export function checkPlacement(
   }
   if (!sim.isUnlocked(def.unlockPopulation))
     return { ...res, reason: `Unlocks at ${def.unlockPopulation.toLocaleString('en-US')} residents` };
-  if (!sim.state.options.sandbox && sim.state.treasury < def.cost)
+  // Uneven ground: level a pad at the height where the building meets its road (M13).
+  if (hi - lo > GRADING.padFrom) {
+    const away = awayDir(angle, side);
+    const front = sim.terrain.heightAt(x - away.x * rect.hd, z - away.z * rect.hd);
+    res.y = Math.min(hi, Math.max(lo, front));
+    const doomed = new Set(res.demolish);
+    res.pad = planPad(sim.terrain, sim.net, rect, res.y, (px, pz) => {
+      const p = { x: px, z: pz };
+      for (const id of sim.bldHash.queryPoint(px, pz, 3))
+        if (!doomed.has(id) && pointRectDistance(p, zonedFootprint(sim.state.buildings.get(id)!)) < 2)
+          return true;
+      for (const id of sim.civHash.queryPoint(px, pz, 3))
+        if (id !== ignoreCivic && pointRectDistance(p, civicRect(sim.state.civics.get(id)!)) < 2) return true;
+      return false;
+    });
+  }
+  if (!sim.state.options.sandbox && sim.state.treasury < def.cost + (res.pad?.cost ?? 0))
     return { ...res, reason: 'Not enough money' };
   res.ok = true;
   return res;
@@ -257,9 +276,11 @@ export function placeCivic(
 ): CommandResult {
   const chk = checkPlacement(sim, defId, x, z, angle, side);
   const def = CIVIC.get(defId);
-  const info = { demolish: chk.demolish.length, access: !!chk.access };
+  const earth = chk.pad ? { volume: chk.pad.volume, cost: chk.pad.cost } : null;
+  const info = { demolish: chk.demolish.length, access: !!chk.access, earth };
   if (!chk.ok || !def) return fail(chk.reason ?? 'Invalid placement', { at: { x, z }, info });
-  if (dryRun) return ok(def.cost, { info });
+  const total = def.cost + (earth?.cost ?? 0);
+  if (dryRun) return ok(total, { info });
   const s = sim.state;
   const civ: Civic = {
     id: s.nextId++,
@@ -283,10 +304,21 @@ export function placeCivic(
   };
   for (const id of chk.demolish) sim.removeBuilding(id);
   sim.addCivic(civ);
-  sim.spend(def.cost, 'construction');
+  sim.spend(total, 'construction');
+  let terrain: TerrainEdit | undefined;
+  if (chk.pad?.idx.length) {
+    terrain = reshapeGround(sim, chk.pad.idx, chk.pad.to);
+    sim.net.revalidate(chk.pad.box!);
+  }
   clearTreesUnder(sim, civicRect(civ, 0));
-  sim.pushUndo({ kind: 'civic', tick: s.tick, id: civ.id, cost: def.cost });
-  return ok(def.cost, { created: [civ.id], info });
+  sim.pushUndo({
+    kind: 'civic',
+    tick: s.tick,
+    id: civ.id,
+    cost: def.cost,
+    ...(terrain ? { terrain, earthCost: earth!.cost } : {}),
+  });
+  return ok(total, { created: [civ.id], info });
 }
 
 export function bulldozeCivic(

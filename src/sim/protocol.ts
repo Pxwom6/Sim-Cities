@@ -208,6 +208,8 @@ export interface SegmentData {
   type: RoadTypeId;
   left: number;
   right: number;
+  /** Viaduct deck heights (M13), see RoadSegment.deck. */
+  deck?: number[];
 }
 export interface BlockData {
   id: number;
@@ -233,6 +235,8 @@ export interface Snapshot {
   options: GameOptions;
   terrainParams: TerrainParams;
   heights: Float32Array;
+  /** Earthworks (M13): height change at each sample, on top of the seed's terrain. */
+  terrainDelta: Float32Array;
   trees: Uint8Array;
   groundwater: Uint8Array;
   ore: Uint8Array;
@@ -283,6 +287,8 @@ export interface FrameDiff {
   stats: CityStats;
   /** Tree density changes: raster index → new density. */
   trees?: { idx: number[]; val: number[] };
+  /** Earthworks (M13): terrain samples whose height changed, their new height and delta. */
+  terrain?: { idx: number[]; h: number[]; d: number[] };
   net?: NetDiff;
   buildings?: { upserts: BuildingData[]; removed: number[] };
   civics?: { upserts: CivicData[]; removed: number[] };

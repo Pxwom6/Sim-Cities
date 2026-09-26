@@ -4,6 +4,32 @@ import { mid, type Vec2 } from '../sim/geom';
 import type { Game } from '../game';
 import { fitFreeform, snapPoint, type SnapResult } from './snap';
 import type { Tool, ToolPointer } from './tool';
+import type { GhostProfile } from '../render/ghost';
+
+/** What a road build preview reports (see buildRoad in src/sim/actions/roads.ts). */
+interface PreviewInfo {
+  pieces?: { a: Vec2; c: Vec2; b: Vec2 }[];
+  grade?: {
+    limit: number;
+    max: number;
+    ground: number;
+    earth: { volume: number; cost: number } | null;
+    viaduct: number;
+    pieces: (GhostProfile | null)[];
+  };
+}
+
+/** Hint notes on grading (M13): how steep it climbs against the limit, earthworks and viaducts. */
+export function gradeNotes(info: PreviewInfo | undefined): string[] {
+  const g = info?.grade;
+  if (!g) return [];
+  const pct = (v: number) => `${Math.round(v * 100)} %`;
+  const out: string[] = [];
+  if (g.max >= 0.02) out.push(`climbs ${pct(g.max)} (max ${pct(g.limit)})`);
+  if (g.earth && g.earth.cost > 0) out.push(`earthworks $${g.earth.cost.toLocaleString('en-US')}`);
+  if (g.viaduct > 0) out.push(`${g.viaduct} m on a viaduct`);
+  return out;
+}
 
 export type RoadMode = 'straight' | 'curve' | 'free' | 'upgrade';
 
@@ -163,7 +189,15 @@ export class RoadTool implements Tool {
     const res = this.lastResult?.res;
     const fresh = this.lastResult && this.lastResult.seq === this.previewSeq;
     const state = !res ? 'pending' : res.ok ? 'ok' : 'bad';
-    g.showRoad(pieces, this.type, fresh || !res ? state : state === 'ok' ? 'ok' : 'bad');
+    // A fresh preview carries the planned pieces (split at junctions) and their graded profiles.
+    const info = fresh ? (res?.info as PreviewInfo | undefined) : undefined;
+    const planned = info?.grade && info.pieces?.length === info.grade.pieces.length ? info : undefined;
+    g.showRoad(
+      planned?.pieces ?? pieces,
+      this.type,
+      fresh || !res ? state : state === 'ok' ? 'ok' : 'bad',
+      planned ? planned.grade : null,
+    );
     g.showMarker(res && !res.ok && res.at ? res.at : null);
     const len = pieces.reduce((s, p) => s + Math.hypot(p.b.x - p.a.x, p.b.z - p.a.z), 0);
     if (!res)
@@ -172,7 +206,9 @@ export class RoadTool implements Tool {
       this.game.setHint({
         x: this.pointer.x,
         y: this.pointer.y,
-        text: `$${res.cost.toLocaleString('en-US')} · ${Math.round(len)} m`,
+        text: [`$${res.cost.toLocaleString('en-US')} · ${Math.round(len)} m`, ...gradeNotes(info)].join(
+          ' · ',
+        ),
         tone: 'ok',
       });
     else this.game.setHint({ x: this.pointer.x, y: this.pointer.y, text: res.reason, tone: 'bad' });

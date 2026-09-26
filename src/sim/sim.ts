@@ -29,7 +29,7 @@ import { UNDO_LIMIT, type UndoRecord } from './undo';
 import { buildRoad, bulldoze, undoRoad, undoUpgrade, upgradeRoad } from './actions/roads';
 import { undoZone, zone } from './actions/zoning';
 import { v2 } from './geom';
-import { GRID_RES } from '../data/world';
+import { GRID_RES, HEIGHT_RES } from '../data/world';
 import {
   BState,
   accessOf,
@@ -42,6 +42,7 @@ import {
 } from './world/buildings';
 import { RoadGraph } from './systems/graph';
 import { SpatialHash } from './world/spatial';
+import { reshapeGround, samplesBox, seatHeight } from './world/earthworks';
 import { computeTotals, emptyTotals } from './systems/totals';
 import { emptyDemand, updateDemand } from './systems/demand';
 import { updateLandValue, waterDistance } from './systems/landValue';
@@ -50,7 +51,7 @@ import { happinessFactors, updateHappiness } from './systems/happiness';
 import { MatchRound } from './systems/commute';
 import { advise } from './systems/advisors';
 import { thoughts } from './systems/thoughts';
-import { deckAt, deckProfile, type DeckProfile } from './world/bridge';
+import { deckAt, deckProfile, viaductDeck, type DeckProfile } from './world/bridge';
 import {
   computeLines,
   emptyTransit,
@@ -168,6 +169,7 @@ export class Sim {
   events: SimEvent[] = [];
 
   private dirtyTrees = new Set<number>();
+  private dirtyTerrain = new Set<number>();
   private dirtyBuildings = new Set<number>();
   private removedBuildings = new Set<number>();
   private graphCache: RoadGraph | null = null;
@@ -188,6 +190,7 @@ export class Sim {
   private constructor(state: SimState, terrain: Terrain) {
     this.state = state;
     this.terrain = terrain;
+    terrain.applyDelta(state.terrainDelta);
     this.rng = {} as Record<RngStream, Rng>;
     for (const s of RNG_STREAMS) this.rng[s] = new Rng(state.rng[s]);
     this.net = new Network(state.net, terrain, {
@@ -231,6 +234,7 @@ export class Sim {
       burning: [],
       incidents: new Map(),
       crime: new Float32Array(GRID_RES * GRID_RES),
+      terrainDelta: new Float32Array(HEIGHT_RES * HEIGHT_RES),
       traffic: new Map(),
       transit: emptyTransit(),
       airPollution: new Float32Array(GRID_RES * GRID_RES),
@@ -327,9 +331,12 @@ export class Sim {
   deck(segId: number): DeckProfile | null {
     let d = this.deckCache.get(segId);
     if (d === undefined) {
-      d = this.state.net.segments.has(segId)
-        ? deckProfile(this.net.curve(segId), (x, z) => this.terrain.heightAt(x, z))
-        : null;
+      const seg = this.state.net.segments.get(segId);
+      d = !seg
+        ? null
+        : seg.deck
+          ? viaductDeck(seg.deck, this.net.curve(segId), (x, z) => this.terrain.heightAt(x, z))
+          : deckProfile(this.net.curve(segId), (x, z) => this.terrain.heightAt(x, z));
       this.deckCache.set(segId, d);
     }
     return d;
@@ -788,6 +795,13 @@ export class Sim {
     else {
       if (!this.state.civics.has(rec.id)) return fail("Can't undo: that building is gone");
       res = bulldozeCivic(this, rec.id, dryRun, 1);
+      if (res.ok && rec.earthCost) res = { ...res, cost: (res.cost ?? 0) - rec.earthCost };
+      if (res.ok && !dryRun && rec.terrain) {
+        // Put the ground back the way it was before the pad was levelled (M13).
+        reshapeGround(this, rec.terrain.idx, rec.terrain.before);
+        this.net.revalidate(samplesBox(rec.terrain.idx));
+        this.earn(rec.earthCost ?? 0, 'refunds');
+      }
     }
     if (!dryRun) this.state.undo.pop();
     return res;
@@ -1066,6 +1080,7 @@ export class Sim {
       options: { ...this.state.options },
       terrainParams: this.terrain.gen.params,
       heights: this.terrain.heights.slice(),
+      terrainDelta: this.state.terrainDelta.slice(),
       trees: this.state.trees.slice(),
       groundwater: this.terrain.groundwater.slice(),
       ore: this.terrain.ore.slice(),
@@ -1185,6 +1200,15 @@ export class Sim {
       frame.trees = { idx, val: idx.map((i) => this.state.trees[i]!) };
       this.dirtyTrees.clear();
     }
+    if (this.dirtyTerrain.size) {
+      const idx = [...this.dirtyTerrain].sort((a, b) => a - b);
+      frame.terrain = {
+        idx,
+        h: idx.map((i) => this.terrain.heights[i]!),
+        d: idx.map((i) => this.state.terrainDelta[i]!),
+      };
+      this.dirtyTerrain.clear();
+    }
     const d = this.net.dirty;
     const r = this.net.removed;
     if (
@@ -1259,6 +1283,36 @@ export class Sim {
       this.events = [];
     }
     return frame;
+  }
+
+  /** Terrain samples changed by earthworks, for the client (M13). */
+  markTerrainDirty(idx: number): void {
+    this.dirtyTerrain.add(idx);
+  }
+
+  /**
+   * The ground moved inside `box` (earthworks, M13): buildings and civic buildings settle onto it
+   * and bridge decks near it are recomputed. Zone cells are rechecked by the caller.
+   */
+  groundMoved(box: { minX: number; minZ: number; maxX: number; maxZ: number }): void {
+    const h = (x: number, z: number) => this.terrain.heightAt(x, z);
+    for (const id of this.bldHash.query(box)) {
+      const b = this.state.buildings.get(id)!;
+      const y = seatHeight(h, footprint(b), false);
+      if (y !== b.y) {
+        b.y = y;
+        this.markBuildingDirty(id);
+      }
+    }
+    for (const id of this.civHash.query(box)) {
+      const c = this.state.civics.get(id)!;
+      const y = seatHeight(h, civicRect(c), true);
+      if (y !== c.y) {
+        c.y = y;
+        this.dirtyCivics.add(id);
+      }
+    }
+    for (const id of this.net.segHash.query(box)) this.deckCache.delete(id);
   }
 
   markTreesDirty(idx: number): void {
