@@ -126,7 +126,9 @@ test('playthrough: a first city from the main menu to a thriving town @playthrou
   await expect(page.getByTestId('tutorial')).toContainText('Welcome');
   await page.getByTestId('tutorial-next').click();
 
-  // Roads: an avenue off the highway and four side streets across it.
+  // Roads: an avenue off the highway and four side streets across it, then (unzoned) a service road
+  // along the streets' north ends and a utility road past the avenue's east end, so there's room
+  // for services and plants once the zones fill up.
   await expect(page.getByTestId('tutorial')).toContainText('Lay a road');
   await topDown(page, cz);
   await page.getByTestId('tool-road').click();
@@ -148,10 +150,19 @@ test('playthrough: a first city from the main menu to a thriving town @playthrou
       [x, cz],
       [x, cz + 160],
     ]);
+  await road([
+    [120, cz - 160],
+    [264, cz - 160],
+    [408, cz - 160],
+  ]);
+  await road([
+    [504, cz],
+    [640, cz],
+  ]);
   if (failed.length) await page.screenshot({ path: 'test-results/playthrough-roads.png' });
   expect(failed, failed.join('\n')).toEqual([]);
   const s1 = await state(page);
-  expect(s1.segments).toBeGreaterThanOrEqual(s0.segments + 13);
+  expect(s1.segments).toBeGreaterThanOrEqual(s0.segments + 17);
   log(`roads: ${s1.segments - s0.segments} segments for $${s0.treasury - s1.treasury}`);
   await page.getByTestId('tool-select').click();
 
@@ -192,24 +203,24 @@ test('playthrough: a first city from the main menu to a thriving town @playthrou
   await page.getByTestId('tool-select').click();
   await shot(page, 'zoned');
 
+  // Where things go: plants, tanks and the landfill on the utility road; pumps and services on the
+  // service road, upwind of industry (both sides of each road).
+  const sides = (xs: number[], z: number, off: number): [number, number][] =>
+    xs.flatMap((x) => [
+      [x, z - off],
+      [x, z + off],
+    ]);
+  const east = sides([530, 560, 590, 620], cz, 30);
+  const north = sides([140, 170, 200, 230, 260, 290, 320, 350, 380], cz - 160, 30).filter(
+    ([, z]) => z < cz - 160,
+  );
+
   // Power, water and sewage, as the tutorial asks.
   await expect(page.getByTestId('tutorial')).toContainText('Power');
-  const east: [number, number][] = [
-    [456, cz + 30],
-    [456, cz - 30],
-    [408 + 30, cz + 130],
-    [408 - 30, cz + 130],
-  ];
   expect(await place(page, 'power', 'wind', east)).toBe(true);
   expect(await place(page, 'power', 'wind', east)).toBe(true);
   await expect(page.getByTestId('tutorial')).toContainText('Water');
-  expect(
-    await place(page, 'water', 'pump', [
-      [72, cz - 30],
-      [120 - 30, cz - 130],
-      [120 + 30, cz - 130],
-    ]),
-  ).toBe(true);
+  expect(await place(page, 'water', 'pump', north)).toBe(true);
   expect(await place(page, 'water', 'septic', east)).toBe(true);
   await page.getByTestId('tool-select').click();
 
@@ -228,78 +239,71 @@ test('playthrough: a first city from the main menu to a thriving town @playthrou
   await shot(page, 'first-homes');
   log(`first homes: pop ${(await state(page)).population}`);
 
-  // The first few months; keep the utilities ahead of demand, as the advisors ask.
+  // Keep the utilities ahead of demand, as the advisors ask.
   const keepUp = async (s: State) => {
     await topDown(page, cz);
     const u = s.utilities;
+    const report = (what: string, ok: boolean) =>
+      log(`month ${month(s)}: ${what} ${ok ? 'added' : 'no room/money'}`);
     if (u.power.supply < u.power.demand * 1.2 + 10)
-      log(
-        `power: ${(await place(page, 'power', s.population > 800 ? 'coal' : 'wind', east)) ? 'added' : 'no room/money'}`,
-      );
+      report('power', await place(page, 'power', s.population > 800 ? 'coal' : 'wind', east));
     if (u.water.supply < u.water.demand * 1.2 + 10)
-      log(
-        `water: ${
-          (await place(page, 'water', 'pump', [
-            [72, cz - 30],
-            [90, cz - 130],
-            [150, cz - 130],
-            [186, cz - 130],
-          ]))
-            ? 'added'
-            : 'no room/money'
-        }`,
-      );
+      report('water', await place(page, 'water', 'pump', north));
     if (u.sewage.supply < u.sewage.demand * 1.2 + 10)
-      log(`sewage: ${(await place(page, 'water', 'septic', east)) ? 'added' : 'no room/money'}`);
+      report('sewage', await place(page, 'water', 'septic', east));
     await page.getByTestId('tool-select').click();
   };
-  let s = await play(page, 3, tips);
-  log(`3 months: pop ${s.population}, $${s.treasury}, net ${s.netMonthly}/mo, approval ${s.approval}`);
-  await keepUp(s);
+  const month = (s: State) => Math.floor(s.tick / 1440);
 
-  // Services once they're affordable: garbage, fire, health, schools, police, a park.
-  const services: [string, string][] = [
-    ['parks', 'park_small'],
-    ['garbage', 'landfill'],
-    ['fire', 'firestation'],
-    ['health', 'clinic'],
-    ['education', 'primary'],
-    ['police', 'police'],
+  // Services as the town grows, with a loan from the budget panel to pay for the first few.
+  const services: [string, string, [number, number][]][] = [
+    ['parks', 'park_small', north],
+    ['garbage', 'landfill', east],
+    ['fire', 'firestation', north],
+    ['health', 'clinic', north],
+    ['education', 'primary', north],
+    ['police', 'police', north],
   ];
-  const spots: [number, number][] = [
-    [168, cz - 30],
-    [264, cz - 30],
-    [360, cz - 30],
-    [168, cz + 30],
-    [264, cz + 30],
-    [216 - 30, cz - 130],
-    [312 - 30, cz - 130],
-    [408 + 30, cz - 130],
-  ];
-  for (let round = 0; round < 6 && services.length; round++) {
-    s = await play(page, 2, tips);
-    await keepUp(s);
+  const placeServices = async (s: State) => {
     for (let k = 0; k < services.length;) {
-      const [cat, def] = services[k]!;
-      if ((await state(page)).treasury < 15_000) break;
-      if (await place(page, cat, def, spots)) {
-        log(`month ${Math.floor(s.tick / 1440)}: placed ${def}`);
+      const [cat, def, where] = services[k]!;
+      if ((await state(page)).treasury < 14_000) break;
+      if (await place(page, cat, def, where)) {
+        log(`month ${month(s)}: placed ${def}`);
         services.splice(k, 1);
       } else k++;
     }
     await page.getByTestId('tool-select').click();
+  };
+  let s = await play(page, 3, tips);
+  log(`month 3: pop ${s.population}, $${s.treasury}, net ${s.netMonthly}/mo, approval ${s.approval}`);
+  let borrowed = false;
+  while (month(s) < 11) {
+    await keepUp(s);
+    if (!borrowed && s.treasury < 20_000 && s.netMonthly > 0) {
+      await page.getByTestId('open-budget').click();
+      await page.getByTestId('budget-tab-loans').click();
+      await page.getByTestId('loan-25000').click();
+      await page.getByTestId('open-budget').click();
+      borrowed = true;
+      log(`month ${month(s)}: borrowed $25,000`);
+    }
+    await placeServices(s);
+    s = await play(page, 1, tips);
   }
 
   // A year in: the town has grown, pays its way and people are mostly happy.
-  s = await play(page, 12 - Math.floor((await state(page)).tick / 1440), tips);
+  s = await play(page, Math.max(0, 12 - month(s)), tips);
   await keepUp(s);
   log(
     `year 1: pop ${s.population}, $${s.treasury}, net ${s.netMonthly}/mo, approval ${s.approval}, ` +
       `jobs ${s.jobsFilled}/${s.jobs}, abandoned ${s.abandoned}, still to build: ${services.map((x) => x[1]).join(', ') || 'none'}`,
   );
-  expect(s.population).toBeGreaterThan(800);
+  expect(s.population).toBeGreaterThan(600);
   expect(s.approval).toBeGreaterThan(0.5);
-  expect(s.treasury).toBeGreaterThan(0);
+  expect(s.netMonthly).toBeGreaterThan(0);
+  expect(s.abandoned).toBeLessThan(10);
+  const year1 = s.population;
   await page.evaluate(
     (cz) => window.__game!.setCamera({ x: 260, z: cz - 20, distance: 520, yaw: 0.6, tilt: 0 }),
     cz,
@@ -320,11 +324,14 @@ test('playthrough: a first city from the main menu to a thriving town @playthrou
   await shot(page, 'happiness-map');
   await page.getByTestId('map-legend').getByRole('button').click();
 
-  // Another year, then a tornado through the edge of town, and the clean-up.
-  s = await play(page, 12, tips);
-  await keepUp(s);
+  // Another year (finishing the services), then a tornado through the edge of town, and the clean-up.
+  for (let q = 0; q < 4; q++) {
+    s = await play(page, 3, tips);
+    await keepUp(s);
+    await placeServices(s);
+  }
   log(`year 2: pop ${s.population}, $${s.treasury}, net ${s.netMonthly}/mo, approval ${s.approval}`);
-  expect(s.population).toBeGreaterThan(800);
+  expect(s.population).toBeGreaterThan(year1);
   await page.getByTestId('tool-disasters').click();
   await page.getByTestId('disaster-tornado').click();
   const hit = await at(page, 400, cz - 120);

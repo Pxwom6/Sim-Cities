@@ -165,6 +165,14 @@ export class Network {
     return { x: dx / l, z: dz / l };
   }
 
+  /** Nodes inside a box. */
+  nodesIn(box: { minX: number; minZ: number; maxX: number; maxZ: number }): RoadNode[] {
+    const out: RoadNode[] = [];
+    for (const n of this.st.nodes.values())
+      if (n.x >= box.minX && n.x <= box.maxX && n.z >= box.minZ && n.z <= box.maxZ) out.push(n);
+    return out;
+  }
+
   nearestNode(p: Vec2, tol: number): RoadNode | null {
     let best: RoadNode | null = null;
     let bd = tol;

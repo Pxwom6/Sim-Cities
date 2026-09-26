@@ -190,6 +190,15 @@ export function planRoad(
         if (!cuts.some((c) => Math.abs(c.s - x.sa) < 1)) cuts.push({ s: x.sa, ep });
       }
     }
+    // Road ends and junctions lying on the new road join it (closing a grid along the dead ends of
+    // several streets makes T-junctions); they only touch it, so the crossing test above misses them.
+    for (const n of net.nodesIn(box)) {
+      if ((r.ea.kind === 'node' && r.ea.id === n.id) || (r.eb.kind === 'node' && r.eb.id === n.id)) continue;
+      const pr = curve.project(n);
+      if (pr.d > ROAD_RULES.nodeOnPath || pr.s < 2 || pr.s > curve.length - 2) continue;
+      if (!cuts.some((c) => Math.abs(c.s - pr.s) < 1))
+        cuts.push({ s: pr.s, ep: { kind: 'node', id: n.id, x: n.x, z: n.z } });
+    }
     cuts.sort((p, q) => p.s - q.s);
     for (const c of cuts) addSplit(c.ep);
     const subs = subdivide(

@@ -123,6 +123,8 @@ export const ROAD_RULES = {
   nodeTolerance: 1.0,
   /** Endpoints this close to a segment split it. */
   segmentTolerance: 1.0,
+  /** A node this close to a new road's centre line joins it as a junction. */
+  nodeOnPath: 2.5,
   /** Extra clearance between the corridors of unconnected roads. */
   clearance: 2,
   /** Share of the build cost refunded when bulldozing. */

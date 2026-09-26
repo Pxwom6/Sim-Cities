@@ -93,6 +93,28 @@ describe('building roads', () => {
     expect(three.length).toBe(1);
   });
 
+  it('a road drawn along the dead ends of several streets joins each of them', () => {
+    const sim = newSim();
+    const c = connectPoint(sim);
+    road(sim, [c, { x: c.x + 480, z: c.z }]);
+    // Drawn by hand, the middle streets end a little short of where the closing road will run.
+    const endZ = [160, 158.5, 161.5, 160];
+    [96, 192, 288, 384].forEach((dx, i) =>
+      road(sim, [
+        { x: c.x + dx, z: c.z },
+        { x: c.x + dx, z: c.z - endZ[i]! },
+      ]),
+    );
+    // Closing the grid along the ends: the middle ends lie on the new road and become T-junctions.
+    const r = road(sim, [
+      { x: c.x + 96, z: c.z - 160 },
+      { x: c.x + 384, z: c.z - 160 },
+    ]);
+    expect(r.created!.length).toBe(3);
+    const ends = [96, 192, 288, 384].map((dx) => sim.net.nearestNode({ x: c.x + dx, z: c.z - 160 }, 3)!);
+    expect(ends.map((n) => nodeDegree(sim, n.id))).toEqual([2, 3, 3, 2]);
+  });
+
   it('rejects invalid roads with a reason and charges nothing', () => {
     const sim = newSim();
     const c = connectPoint(sim);
