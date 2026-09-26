@@ -88,6 +88,8 @@ test('every visible button has a readable label or accessible name, across the i
   await serveTownViaApi(page);
   await page.evaluate(async () => {
     const g = window.__game!;
+    // Enough for every service below (roads cost more with earthworks since M13; money isn't under test).
+    await g.dispatch({ type: 'cheat', cheat: 'addMoney', amount: 100_000 });
     for (const def of ['firestation', 'police', 'clinic', 'primary', 'park_small', 'busdepot'])
       await g.placeCivic(def, { x: 300, z: (await g.getState()).highwayZ + 170 });
     await g.advance(1440 * 2);
