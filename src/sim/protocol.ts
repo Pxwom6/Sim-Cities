@@ -63,12 +63,28 @@ export interface CivicDetails {
   produces: { utility: string; output: number }[];
   polluted: boolean;
   garbage: {
+    /** Trucks it runs at current funding, out now, and extra ones bought (of the most it can take). */
     trucks: number;
     out: number;
+    extraTrucks: number;
+    maxExtraTrucks: number;
     stored: number;
     storage: number;
     processedToday: number;
     process: number;
+    /** Units its trucks brought back today so far and yesterday, and all sites' yesterday. */
+    collectedToday: number;
+    collectedLastDay: number;
+    collectedAllLastDay: number;
+    /** Garbage the whole city makes a day, and what's lying on the streets (and at how many buildings with piles). */
+    producedPerDay: number;
+    backlog: number;
+    piles: number;
+    /** Its trucks' rounds yesterday (or today so far): hours out, stops and load per round. */
+    roundHours: number;
+    stopsPerRound: number;
+    loadPerRound: number;
+    truckCapacity: number;
   } | null;
   service: {
     kind: string;

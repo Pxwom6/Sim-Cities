@@ -76,7 +76,7 @@ import {
   type Civic,
 } from './world/civic';
 import { civicOutput, emptyUtilityStats, updateUtilities, utilityConsequences } from './systems/utilities';
-import { dispatchGarbage, garbageHour } from './systems/garbage';
+import { dispatchGarbage, garbageHour, garbageRate, rollCollectionDay, trucksFor } from './systems/garbage';
 import { segSpeed, stepVehicles } from './systems/vehicles';
 import { computeOverlay } from './systems/overlays';
 import {
@@ -97,6 +97,7 @@ import { POLICY, type PolicyId } from '../data/policies';
 import { decayCrime, splatField } from './systems/pollution';
 import type { ServiceKind } from '../data/civic';
 import { GARBAGE, UTILITIES, VEHICLE_SPEED_SCALE } from '../data/civic';
+import { MODULE } from '../data/modules';
 import { fieldAt, updateAirPollution, updateGroundPollution } from './systems/pollution';
 import { healthHour } from './systems/health';
 import { rectsOverlap, type ORect } from './geom';
@@ -833,6 +834,7 @@ export class Sim {
       for (const c of s.civics.values()) {
         c.lastDay = c.processedToday;
         c.processedToday = 0;
+        rollCollectionDay(c);
       }
     }
     const run = this.timer ?? ((_name: string, fn: () => void) => fn());
@@ -1320,16 +1322,7 @@ export class Sim {
       polluted:
         produces.some((p) => p.utility === 'water') &&
         this.groundPollutionAt(c.x, c.z) > UTILITIES.pollutedPumpThreshold,
-      garbage: d.garbage
-        ? {
-            trucks: Math.round(d.garbage.trucks * this.fundingEff('garbage')),
-            out: c.out,
-            stored: Math.round(c.stored),
-            storage: d.garbage.storage ?? 0,
-            processedToday: Math.round(c.processedToday),
-            process: d.garbage.process ?? 0,
-          }
-        : null,
+      garbage: d.garbage ? this.garbageDetails(c) : null,
       service: d.service ? this.serviceDetails(c) : null,
       transit: d.transit ? this.transitDetails(c) : null,
       refund: Math.round(c.cost * 0.25),
@@ -1358,6 +1351,44 @@ export class Sim {
 
   /** Seats filled per school at the last hourly coverage pass (UI only; not saved). */
   schoolUse = new Map<number, number>();
+
+  /** What a garbage facility's inspector shows: its trucks, rounds and collection against production. */
+  private garbageDetails(c: Civic): NonNullable<CivicDetails['garbage']> {
+    const g = civicDef(c).garbage!;
+    let produced = 0;
+    let backlog = 0;
+    let piles = 0;
+    for (const b of this.state.buildings.values()) {
+      produced += garbageRate(this, b) * 24;
+      backlog += b.garbage;
+      if (b.garbage >= GARBAGE.visible) piles++;
+    }
+    let collectedAll = 0;
+    for (const o of this.state.civics.values()) collectedAll += o.collection?.last.units ?? 0;
+    // Yesterday's rounds, or today's so far for a site that opened today.
+    const day = c.collection && c.collection.last.rounds > 0 ? c.collection.last : c.collection?.today;
+    const extra = c.modules.filter((m) => m === 'garbageTruck').length;
+    return {
+      trucks: trucksFor(this, c),
+      out: c.out,
+      extraTrucks: extra,
+      maxExtraTrucks: MODULE.get('garbageTruck')!.max ?? 0,
+      stored: Math.round(c.stored),
+      storage: g.storage ?? 0,
+      processedToday: Math.round(c.processedToday),
+      process: g.process ?? 0,
+      collectedToday: Math.round(c.collection?.today.units ?? 0),
+      collectedLastDay: Math.round(c.collection?.last.units ?? 0),
+      collectedAllLastDay: Math.round(collectedAll),
+      producedPerDay: Math.round(produced),
+      backlog: Math.round(backlog),
+      piles,
+      roundHours: day && day.rounds ? Math.round((day.ticks / day.rounds / 60) * 10) / 10 : 0,
+      stopsPerRound: day && day.rounds ? Math.round((day.stops / day.rounds) * 10) / 10 : 0,
+      loadPerRound: day && day.rounds ? Math.round(day.units / day.rounds) : 0,
+      truckCapacity: g.truckCapacity,
+    };
+  }
 
   private serviceDetails(c: Civic): NonNullable<CivicDetails['service']> {
     const d = civicDef(c);

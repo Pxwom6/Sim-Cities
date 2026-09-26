@@ -31,8 +31,23 @@ export interface Civic {
   /** Hours until disaster damage is repaired (offline until then), and under flood water now. */
   damage: number;
   flooded: boolean;
-  /** Add-on modules installed (M10). */
+  /** Add-on modules installed (M10); a repeatable one appears once per copy. */
   modules: string[];
+  /** Garbage facilities: what their trucks brought back today and the day before (playtest fixes). */
+  collection?: { today: CollectionDay; last: CollectionDay };
+}
+
+/** A day of garbage collection at one facility: units unloaded, rounds finished, their minutes and stops. */
+export interface CollectionDay {
+  units: number;
+  rounds: number;
+  ticks: number;
+  stops: number;
+}
+
+/** Garbage trucks a facility has with its extra trucks (before funding). */
+export function civicTrucks(c: Civic): number {
+  return (civicDef(c).garbage?.trucks ?? 0) + c.modules.reduce((a, m) => a + (MODULE.get(m)?.trucks ?? 0), 0);
 }
 
 /** Vehicles, seats or beds, and buses a building has with its modules (before funding). */
@@ -60,7 +75,8 @@ export function addModule(sim: Sim, civicId: number, moduleId: string, dryRun: b
   const m = MODULE.get(moduleId);
   if (!c || !m) return { ok: false, reason: 'Nothing to add that to' };
   if (!m.for.includes(c.def)) return { ok: false, reason: "That module doesn't fit this building" };
-  if (c.modules.includes(m.id)) return { ok: false, reason: 'Already added' };
+  const have = c.modules.filter((x) => x === m.id).length;
+  if (have >= (m.max ?? 1)) return { ok: false, reason: m.max ? `Already has ${m.max}` : 'Already added' };
   if (!sim.isUnlocked(m.unlockPopulation))
     return { ok: false, reason: `Unlocks at ${m.unlockPopulation.toLocaleString('en-US')} residents` };
   if (!sim.state.options.sandbox && sim.state.treasury < m.cost)

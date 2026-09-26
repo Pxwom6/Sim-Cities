@@ -4,7 +4,8 @@ import { GRID_CELL, GRID_RES } from '../../data/world';
 import { EDUCATION } from '../../data/balance';
 import type { Sim } from '../sim';
 import { BState, type Building } from '../world/buildings';
-import { civicDef } from '../world/civic';
+import { civicDef, civicOnline } from '../world/civic';
+import { trucksFor } from './garbage';
 import { fieldAt } from './pollution';
 import { segVC } from './traffic';
 import { monthlyRates } from './economy';
@@ -44,6 +45,16 @@ function centre(list: Building[]): { x: number; z: number } | undefined {
 }
 
 /** Advice from every advisor, most urgent first (DESIGN §5). Pure: reads the state only. */
+/** What to do about piles of garbage, from what the city has: no sites, busy trucks, or out of reach. */
+function garbageAdvice(sim: Sim): string {
+  const sites = [...sim.state.civics.values()].filter((c) => civicDef(c).garbage && civicOnline(c));
+  if (!sites.length)
+    return 'Nobody collects it yet. Build a landfill at the edge of town, on a road that reaches these streets.';
+  if (sites.every((c) => c.out >= trucksFor(sim, c)))
+    return 'Every truck is out and still can’t keep up. Buy extra trucks at the landfill (click it), or add a site nearer these streets.';
+  return 'Our trucks don’t reach these streets. Connect them by road, or add a landfill or recycling centre nearby.';
+}
+
 export function advise(sim: Sim): Advice[] {
   const out: Advice[] = [];
   const s = sim.state;
@@ -123,7 +134,7 @@ export function advise(sim: Sim): Advice[] {
       advisor: 'utilities',
       severity: dirty.length > list.length * 0.1 ? 2 : 1,
       title: `Garbage piling up at ${plural(dirty.length, 'building')}`,
-      text: 'Our trucks can’t keep up. Add a landfill, recycling centre or incinerator near these streets.',
+      text: garbageAdvice(sim),
       at: centre(dirty.slice(0, 10)),
       map: 'garbage',
     });

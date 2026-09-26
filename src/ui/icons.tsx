@@ -2,7 +2,9 @@
 import type { JSX } from 'preact';
 
 type P = JSX.SVGAttributes<SVGSVGElement>;
+/** Icons are decorative: buttons carry their own text or aria-label. */
 const base = {
+  'aria-hidden': 'true',
   viewBox: '0 0 24 24',
   fill: 'none',
   stroke: 'currentColor',

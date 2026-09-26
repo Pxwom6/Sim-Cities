@@ -309,10 +309,17 @@ of the network first — readable on the data map. `served_b ∈ [0, 1]`.
   modifier. Sewage demand = water use; outflow pipes (within 36 m of water) emit ground/water pollution
   downstream; septic tanks (M12: cheap, 120 units, anywhere) taint the ground around them; treatment
   plants don't. Unserved sewage adds ground pollution at the building.
-- Garbage: `garbage_b += rate_b/h`. Landfills/recycling/incinerators dispatch trucks (real vehicles)
-  to the fullest buildings in their road coverage; a truck collects up to its capacity from the target
-  and its neighbours and returns. Landfills fill up; incinerators make power and air pollution; recycling
-  earns trade revenue. Piles are drawn above a threshold.
+- Garbage: `garbage_b += rate_b/h`, up to a cap of 120 per building (twice the level where it does
+  its worst). Landfills/recycling/incinerators dispatch trucks (real vehicles) to the fullest buildings
+  in their road coverage. A truck works a round (playtest fixes): it collects from its target and the
+  neighbours within 48 m, then drives on to the nearest building within 200 m with garbage that no
+  other truck is heading for, until it's 85 % full or has made 10 stops, and only then drives back to
+  unload. Vehicles move at their drawn speed, so a drive across town takes hours of game time; one
+  stop per trip left trucks carrying a fifth of a load. Each site has its starting trucks plus up to
+  four bought in its inspector ($1,200, +$45/month each), all scaled by garbage funding; the inspector
+  shows trucks out, collected vs made per day, the backlog and the last day's rounds. Landfills fill
+  up; incinerators make power and air pollution; recycling earns trade revenue. Piles are drawn above a
+  threshold.
 - Consequences escalate: happiness penalty immediately (§3.9) → businesses close after 12 h without
   power/water → distress towards abandonment (§3.4). Icons over buildings; advisor alerts.
 

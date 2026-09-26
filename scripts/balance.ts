@@ -20,6 +20,8 @@ import { roadsidePose } from '../src/sim/world/civic';
 import { happinessFactors } from '../src/sim/systems/happiness';
 import { BState } from '../src/sim/world/buildings';
 import { GROWTH } from '../src/data/balance';
+import { MODULE } from '../src/data/modules';
+import { trucksFor } from '../src/sim/systems/garbage';
 
 type Vec2 = { x: number; z: number };
 type StrategyId = 'careful' | 'greedy' | 'neglectful';
@@ -178,7 +180,7 @@ class Player {
   }
 
   /** Place a civic building, trying industrial side streets first (utilities) or anywhere. */
-  place(def: string, near: 'industry' | 'homes' | 'clean' = 'homes'): boolean {
+  place(def: string, near: 'industry' | 'homes' | 'clean' | 'edge' = 'homes'): boolean {
     const d = CIVIC.get(def);
     if (!d || !this.sim.isUnlocked(d.unlockPopulation)) return false;
     if (this.sim.state.treasury < d.cost + 1_000) return false;
@@ -189,8 +191,21 @@ class Player {
     };
     // Utilities go to the industrial (south-east) end of the newest districts; the rest spread out.
     // Pumps go where the ground water is best and cleanest, on the residential (north) side.
+    // Landfills go to the edge of town, as players put them: the road farthest from where people live.
+    let cx = this.c.x;
+    let cz = this.c.z;
+    if (near === 'edge') {
+      let n = 0;
+      for (const b of this.sim.state.buildings.values())
+        if (b.pop > 0) {
+          cx = (cx * n + b.x * b.pop) / (n + b.pop);
+          cz = (cz * n + b.z * b.pop) / (n + b.pop);
+          n += b.pop;
+        }
+    }
     const score = (id: number) => {
       const p = mid(id);
+      if (near === 'edge') return -Math.hypot(p.x - cx, p.z - cz);
       if (near === 'industry') return -(p.x - this.c.x) - 2 * (p.z - this.c.z);
       if (near === 'clean') {
         const i = Math.min(GRID_RES - 1, Math.max(0, Math.floor(p.x / GRID_CELL)));
@@ -293,7 +308,7 @@ class Player {
       primary: 2_500,
       highschool: 6_000,
     };
-    const act = (kind: string, def: string, near: 'industry' | 'homes' = 'homes') => {
+    const act = (kind: string, def: string, near: 'industry' | 'homes' | 'edge' = 'homes') => {
       if (now - (this.lastBuilt.get(kind) ?? -1e9) < TICKS_PER_MONTH * 2) return;
       if (this.count(def) >= Math.ceil(pop / (PER[def] ?? 1e9)) + 1) return;
       if (this.place(def, near)) this.lastBuilt.set(kind, now);
@@ -302,8 +317,9 @@ class Player {
       if (a.severity < 2) continue;
       const t = a.title.toLowerCase();
       if (a.advisor === 'utilities' && /garbage/.test(t)) {
-        // Spread out: trucks only reach so far.
-        act('garbage', 'landfill');
+        // A landfill whose trucks are all out gets another truck first (the inspector says so);
+        // new landfills go at the edge of town, as players put them; recycling spreads out.
+        if (!this.buyTruck()) act('garbage', 'landfill', 'edge');
         act('garbage2', 'recycling');
       } else if (a.advisor === 'safety' && /fire cover/.test(t)) act('fire', 'firestation');
       else if (a.advisor === 'safety' && /crime|police/.test(t)) act('police', 'police');
@@ -315,6 +331,23 @@ class Player {
         if (pop > 3_000) act('school2', 'highschool');
       }
     }
+  }
+
+  /** Buy an extra truck for a landfill whose trucks are all out, if it can take one (once a month). */
+  buyTruck(): boolean {
+    const now = this.sim.state.tick;
+    if (now - (this.lastBuilt.get('truck') ?? -1e9) < TICKS_PER_MONTH) return false;
+    const truck = MODULE.get('garbageTruck')!;
+    if (this.sim.state.treasury < truck.cost + 2_000) return false;
+    for (const c of [...this.sim.state.civics.values()].sort((a, b) => a.id - b.id)) {
+      if (c.def !== 'landfill' || c.out < trucksFor(this.sim, c)) continue;
+      if (this.sim.dispatch({ type: 'addModule', civic: c.id, module: truck.id }).ok) {
+        this.lastBuilt.set('truck', now);
+        this.log.push(`m${this.month()}: truck`);
+        return true;
+      }
+    }
+    return false;
   }
 
   /** One decision round (every six game hours). */
@@ -507,6 +540,8 @@ for (const id of strategies) {
   console.log(`approval   ${spark(col('approval'), 0, 1)}`);
   console.log(`demand R   ${spark(col('R'), -1, 1)}`);
   console.log(`first moves: ${p.log.slice(0, 14).join(', ')}`);
+  const trucks = p.log.filter((l) => l.endsWith(': truck')).map((l) => l.split(':')[0]);
+  if (trucks.length) console.log(`trucks bought: ${trucks.length} (${trucks.join(', ')})`);
   const built = new Map<string, number>();
   for (const c of p.sim.state.civics.values()) built.set(c.def, (built.get(c.def) ?? 0) + 1);
   console.log(`built: ${[...built].map(([d, n]) => `${d}×${n}`).join(' ')}`);

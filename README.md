@@ -38,7 +38,8 @@ money or random disasters. The tutorial is on for your first city and walks thro
    there's demand (the R, C and I bars in the top bar tell you what the city wants, and why).
 3. **Power, water and sewage** from the Utilities menu. Homes without them empty out.
 4. **Garbage, fire, police, health, schools and parks** as the town grows. The advisors say what's
-   missing, and the data maps show where.
+   missing, and the data maps show where. Click a landfill to see whether its trucks keep up, and
+   buy extra trucks there before you need a second landfill.
 5. **Taxes and budget**: the budget panel shows every line of income and cost. Keep an eye on it.
 
 New buildings, services, policies and landmarks unlock as the population passes each milestone.

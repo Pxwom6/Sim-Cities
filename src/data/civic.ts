@@ -716,8 +716,21 @@ export const GARBAGE = {
   visible: 20,
   bad: 60,
   moodPenalty: -0.15,
+  /**
+   * A pile stops growing here (twice `bad`, where it already does all its harm): without it a town
+   * with no landfill ran up a debt of hundreds per building that its first trucks spent days on.
+   */
+  maxPile: 120,
+  /** Trucks only set out for buildings with at least this much. */
+  pickupMin: 12,
   /** A truck collects from its target and neighbours within this radius. */
   pickupRadius: 48,
+  /**
+   * Collection rounds: after each stop a truck drives on to the nearest building with garbage
+   * within `radius` metres that no other truck is heading for, until it's `full` (share of its
+   * capacity) or has made `stops` stops, then drives back to unload.
+   */
+  round: { full: 0.85, stops: 10, radius: 200 },
   /** Coverage: road travel seconds from the facility. */
   range: 200,
 };
