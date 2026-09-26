@@ -16,9 +16,41 @@ import { StreetLabels } from './client/labels';
 import type { ToolHint } from './tools/tool';
 import type { AudioEngine } from './audio/engine';
 import { ambientScene } from './audio/scene';
-import { loadSettings, saveSettings, type Settings } from './client/settings';
+import { writeSlot } from './client/saves';
+import { TIPS, TUTORIAL, type Tip } from './client/tutorial';
+import {
+  DRAW_DISTANCE_PARAMS,
+  QUALITY_PARAMS,
+  loadSettings,
+  saveSettings,
+  type Settings,
+} from './client/settings';
 
 type Listener = () => void;
+
+let uiScale = 1;
+
+/**
+ * Size class of the interface, in scaled rem, for layouts that tighten on narrow screens or at large
+ * interface sizes (see `#ui[data-width]` in main.css).
+ */
+function layoutUi(): void {
+  const ui = document.getElementById('ui');
+  if (!ui) return;
+  const rem = window.innerWidth / (16 * uiScale);
+  ui.dataset.width = rem < 60 ? 'xs' : rem < 68 ? 's' : rem < 78 ? 'm' : 'l';
+}
+if (typeof window !== 'undefined') window.addEventListener('resize', layoutUi);
+
+/** Interface size: the UI root scales with a CSS variable (see main.css). */
+export function applyUiScale(scale: number): void {
+  uiScale = scale;
+  document.documentElement.style.setProperty('--ui-scale', String(scale));
+  layoutUi();
+}
+
+/** Full-screen menus: the main menu and new-game screen, the pause menu and the screens inside it. */
+export type Screen = 'main' | 'newGame' | 'pause' | 'save' | 'load' | 'settings';
 
 /** Something the player has clicked on and is inspecting. */
 export interface Selection {
@@ -70,6 +102,17 @@ export class Game {
   /** Player settings (volumes now; graphics and controls with the game shell). */
   settings: Settings = loadSettings();
   private ambientAt = 0;
+  /** 'menu': the main menu over a backdrop map; 'play': a city. */
+  mode: 'menu' | 'play' = 'play';
+  /** Open menu screens, innermost last (the pause menu, then save/load/settings inside it). */
+  screens: Screen[] = [];
+  private speedBeforeMenu: Speed | null = null;
+  /** Save slot this city was loaded from or last saved to, and when (performance.now()). */
+  slot: string | null = null;
+  lastSavedAt = 0;
+  saving = false;
+  /** Contextual tip on screen, if any. */
+  tip: Tip | null = null;
   readonly tools: ToolManager;
   readonly overlay: OverlayController;
   private listeners = new Set<Listener>();
@@ -90,7 +133,8 @@ export class Game {
       }
       if (sel?.kind === 'civic' && diff.civics?.removed.includes(sel.id)) this.select(null);
       this.perf = perf;
-      this.speed = speed;
+      // Not `this.speed = speed`: frames queued before a speed change still carry the old one, and
+      // would flip the speed buttons back for a moment. Only setSpeed() changes the speed.
       // Keep the smooth display clock close to the authoritative tick.
       if (Math.abs(this.world.displayTick - diff.tick) > 30 || speed === 0)
         this.world.displayTick = diff.tick;
@@ -106,9 +150,12 @@ export class Game {
       const hw = this.world.gen.params.highway;
       return { x: 260, z: hw.connectZ };
     };
-    renderer.tiltShiftOn = this.settings.tiltShift;
+    this.applySettings();
     void this.refreshAdvice();
-    setInterval(() => void this.refreshAdvice(), 2000);
+    setInterval(() => {
+      void this.refreshAdvice();
+      this.checkGuidance();
+    }, 2000);
   }
 
   subscribe(l: Listener): () => void {
@@ -365,9 +412,152 @@ export class Game {
   updateSettings(patch: Partial<Settings>): void {
     this.settings = { ...this.settings, ...patch };
     saveSettings(this.settings);
-    this.audio?.apply(this.settings);
-    this.renderer.tiltShiftOn = this.settings.tiltShift;
+    this.applySettings();
     this.notify();
+  }
+
+  /** Push the settings to the audio engine, renderer, camera and interface. */
+  applySettings(): void {
+    const s = this.settings;
+    this.audio?.apply(s);
+    const q = QUALITY_PARAMS[s.quality];
+    const d = DRAW_DISTANCE_PARAMS[s.drawDistance];
+    this.renderer.tiltShiftOn = s.tiltShift;
+    this.renderer.applyGraphics({
+      pixelRatio: q.pixelRatio,
+      shadows: s.shadows,
+      shadowMap: q.shadowMap,
+      fogScale: d.fog,
+      treeDetail: d.treeDetail,
+      crowd: q.crowd,
+    });
+    this.renderer.controller.edgeScroll = s.edgeScroll;
+    applyUiScale(s.uiScale);
+  }
+
+  inMenu(): boolean {
+    return this.mode === 'menu';
+  }
+
+  get screen(): Screen | null {
+    return this.screens[this.screens.length - 1] ?? null;
+  }
+
+  /** Open a menu screen on top of any others; in a city, the game pauses while menus are up. */
+  openScreen(s: Screen): void {
+    if (this.mode === 'play' && this.screens.length === 0) {
+      this.speedBeforeMenu = this.speed;
+      this.setSpeed(0);
+      this.tools.use('select');
+      this.select(null);
+    }
+    this.screens = [...this.screens, s];
+    this.renderer.controller.inputEnabled = false;
+    this.notify();
+  }
+
+  /** Back out of the top screen (the main menu itself never closes). */
+  closeScreen(): void {
+    if (this.mode === 'menu' && this.screens.length <= 1) return;
+    this.screens = this.screens.slice(0, -1);
+    if (this.screens.length === 0) this.resumeFromMenu();
+    this.notify();
+  }
+
+  /** Close every menu and carry on playing. */
+  resume(): void {
+    if (this.mode !== 'play') return;
+    this.screens = [];
+    this.resumeFromMenu();
+    this.notify();
+  }
+
+  private resumeFromMenu(): void {
+    this.renderer.controller.inputEnabled = true;
+    if (this.speedBeforeMenu !== null) this.setSpeed(this.speedBeforeMenu);
+    this.speedBeforeMenu = null;
+  }
+
+  /** Save the city to a slot (with an optional label for the slot list). */
+  async saveTo(slot: string, label?: string, quiet = false): Promise<boolean> {
+    if (this.saving) return false;
+    this.saving = true;
+    this.notify();
+    try {
+      const s = await this.client.save();
+      await writeSlot(slot, s, label);
+      this.lastSavedAt = performance.now();
+      if (slot !== 'auto') this.slot = slot;
+      if (!quiet) this.toast(`Saved “${s.meta.cityName}”`, 'ok');
+      return true;
+    } catch (e) {
+      this.toast(`Save failed: ${e instanceof Error ? e.message : String(e)}`, 'bad');
+      return false;
+    } finally {
+      this.saving = false;
+      this.notify();
+    }
+  }
+
+  /** Autosave now and then (settings), unless the city has gone bankrupt. */
+  private autosave(now: number): void {
+    const every = this.settings.autosaveMinutes * 60_000;
+    if (this.mode !== 'play' || every <= 0 || this.saving || this.world.stats.bankrupt) return;
+    if (!this.lastSavedAt) this.lastSavedAt = now;
+    if (now - this.lastSavedAt < every) return;
+    void this.saveTo('auto', 'Autosave', true);
+  }
+
+  private quitUnsaved = false;
+
+  /** Autosave, then go back to the main menu (if saving fails, a second try leaves without it). */
+  async quitToMenu(): Promise<void> {
+    if (!this.world.stats.bankrupt && !this.quitUnsaved && !(await this.saveTo('auto', 'Autosave', true))) {
+      this.quitUnsaved = true;
+      this.toast('The city could not be saved. Choose Quit again to leave without saving.', 'bad', 8000);
+      return;
+    }
+    location.href = location.pathname;
+  }
+
+  /** Start the first-city tutorial from its first step. */
+  startTutorial(): void {
+    this.updateSettings({ tutorialStep: 0 });
+  }
+
+  /** Move to the next tutorial step (finishing after the last). */
+  tutorialNext(): void {
+    const next = this.settings.tutorialStep + 1;
+    this.updateSettings({ tutorialStep: next >= TUTORIAL.length ? -1 : next });
+  }
+
+  endTutorial(): void {
+    this.updateSettings({ tutorialStep: -1 });
+  }
+
+  /** Advance past tutorial steps the player has already done; show a tip whose moment has come. */
+  private checkGuidance(): void {
+    if (this.mode !== 'play') return;
+    let step = this.settings.tutorialStep;
+    while (step >= 0 && step < TUTORIAL.length && TUTORIAL[step]!.done?.(this)) step++;
+    if (step !== this.settings.tutorialStep) {
+      this.updateSettings({ tutorialStep: step >= TUTORIAL.length ? -1 : step });
+      this.audio?.play('good');
+    }
+    // Tips wait for the tutorial, and come one at a time.
+    if (this.tip || !this.settings.tips || this.settings.tutorialStep >= 0) return;
+    const seen = new Set(this.settings.seenTips);
+    const tip = TIPS.find((t) => !seen.has(t.id) && t.when(this));
+    if (tip) {
+      this.tip = tip;
+      this.updateSettings({ seenTips: [...this.settings.seenTips, tip.id] });
+    }
+  }
+
+  dismissTip(turnOff = false): void {
+    this.tip = null;
+    if (turnOff) this.updateSettings({ tips: false });
+    else this.notify();
   }
 
   setHint(h: ToolHint | null): void {
@@ -407,7 +597,12 @@ export class Game {
   }
 
   async refreshAdvice(): Promise<void> {
-    this.advice = await this.client.query<Advice[]>({ type: 'advisors' });
+    // The main menu's backdrop map has nothing to advise on.
+    if (this.inMenu()) return;
+    const advice = await this.client.query<Advice[]>({ type: 'advisors' });
+    // (The mode is set just after construction, possibly while the first query is out.)
+    if (this.inMenu()) return;
+    this.advice = advice;
     this.adviceNotices();
     this.notify();
   }
@@ -433,6 +628,9 @@ export class Game {
       const next = w.displayTick + dt * SPEED_TICKS_PER_SECOND[this.speed];
       w.displayTick = Math.min(next, w.stats.tick + 8);
     }
+    // The main menu slowly circles the backdrop map.
+    if (this.mode === 'menu') this.renderer.controller.goal.yaw += dt * 0.025;
+    else this.autosave(now);
     this.renderer.frame(dt);
     this.labels.update();
     if (this.audio && now - this.ambientAt > 250) {

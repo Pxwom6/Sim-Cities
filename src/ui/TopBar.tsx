@@ -43,7 +43,7 @@ export function TopBar() {
           {formatNumber(st.population)}
         </span>
       </div>
-      <div class="stat">
+      <div class="stat stat-jobs">
         <span class="label">Jobs</span>
         <span class="value" data-testid="jobs">
           {formatNumber(st.jobsFilled)} / {formatNumber(st.jobs)}
@@ -60,7 +60,7 @@ export function TopBar() {
       <AdvisorsButton />
       <NotificationsButton />
       <span class="divider" />
-      <div class="stat">
+      <div class="stat stat-date">
         <span class="label">Date</span>
         <span class="value" data-testid="date">
           {formatDate(date)}

@@ -2,6 +2,7 @@ import { Vector3 } from 'three';
 import { CIVIC } from '../data/civic';
 import { roadsidePose } from '../sim/world/civic';
 import type { Game } from '../game';
+import type { ClientWorld } from './world';
 import type { Command, CommandResult } from '../sim/commands';
 import type { CameraPose, CameraPresetName } from '../render/camera';
 import type { RenderStats } from '../render/renderer';
@@ -25,6 +26,8 @@ export interface TestApi {
       /** Roads shaded by the service placement preview / the coverage data map. */
       coveragePreview: number;
       coverageMap: number;
+      /** The options the city was founded with. */
+      options: ClientWorld['options'];
     }
   >;
   /** Place a civic building beside any road that has room (test helper). Returns its id or null. */
@@ -82,6 +85,16 @@ export interface TestApi {
   setSettings(patch: Record<string, unknown>): number;
   /** Render every sound effect and the ambient bed offline, and measure them. */
   renderSounds(): Promise<SoundCheck[]>;
+  /** Game shell state: menu or city, open screens, settings and what the renderer applied. */
+  getShell(): {
+    mode: 'menu' | 'play';
+    screens: string[];
+    slot: string | null;
+    settings: Record<string, unknown>;
+    applied: { pixelRatio: number; shadows: boolean; fogScale: number; uiScale: string; edgeScroll: boolean };
+    randomDisasters: boolean;
+    tip: string | null;
+  };
   /** Live audio state: context running, effects played, ambient mix and scheduled events. */
   getAudio(): {
     running: boolean;
@@ -112,6 +125,7 @@ export function installTestApi(game: Game): TestApi {
         zoned: countZones(game),
         coveragePreview: game.renderer.ghost.coveragePieces,
         coverageMap: game.renderer.coverageMap.pieces,
+        options: { ...w.options },
       };
     },
     advance: async (ticks) => {
@@ -208,6 +222,21 @@ export function installTestApi(game: Game): TestApi {
       game.updateSettings(patch);
       return game.renderer.tiltShift.frames;
     },
+    getShell: () => ({
+      mode: game.mode,
+      screens: [...game.screens],
+      slot: game.slot,
+      settings: { ...game.settings },
+      applied: {
+        pixelRatio: game.renderer.renderer.getPixelRatio(),
+        shadows: game.renderer.renderer.shadowMap.enabled,
+        fogScale: game.renderer.fogScale,
+        uiScale: getComputedStyle(document.documentElement).getPropertyValue('--ui-scale').trim(),
+        edgeScroll: game.renderer.controller.edgeScroll,
+      },
+      randomDisasters: game.randomDisasters,
+      tip: game.tip?.id ?? null,
+    }),
     showGallery: (defs, at, variants) => {
       const w = game.world;
       const upserts: BuildingData[] = [];

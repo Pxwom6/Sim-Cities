@@ -98,15 +98,27 @@ export class ToolManager {
     if (!this.active.cancel() && this.active !== this.select) this.use('select');
   }
 
+  /** Escape: cancel or leave the tool; with nothing left, close the open panel or pause. */
+  private escape(): void {
+    if (this.active.cancel()) return;
+    if (this.active !== this.select) this.use('select');
+    else if (this.game.panel) this.game.openPanel(this.game.panel);
+    else this.game.openScreen('pause');
+  }
+
   private onKey(e: KeyboardEvent): void {
     const t = e.target as HTMLElement | null;
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
+    // Menus handle their own keys.
+    if (this.game.screen) return;
     if (this.active.key?.(e)) {
       e.preventDefault();
       return;
     }
     if (e.code === 'Escape') {
-      this.cancelOrExit();
+      // Handled here: the menus' own Escape listener must not undo what this press opened.
+      e.preventDefault();
+      this.escape();
       return;
     }
     if ((e.code === 'KeyZ' && (e.ctrlKey || e.metaKey)) || e.code === 'KeyU') {

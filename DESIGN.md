@@ -291,6 +291,9 @@ Trade       = export revenue, specialisation revenue (M10)
 - **Bankruptcy.** Treasury < 0 ⇒ escalating warnings; after 2 months continuously negative
   (the grace period) the city is **bankrupt**: game over screen, the sim refuses further commands except
   load/new game. Sandbox: huge treasury and no bankruptcy.
+- **Difficulty** (`DIFFICULTY` in `data/economy.ts`, M11): Relaxed / Standard / Tough start with
+  $100k / $60k / $35k, and the upkeep of roads and buildings is ×0.8 / ×1 / ×1.25 (applied in the
+  monthly rates, so the inspector, budget projection and ledger all agree).
 
 ### 3.6 Utilities (power, water, sewage, garbage)
 
@@ -627,11 +630,44 @@ menus.
   at close zoom (≤ 10, DOM); inspectors and advisors use addresses ("Maple Street, Northgate"). The UI reads `ClientWorld` via a small subscribe/selector hook and sends commands through
 `SimClient`.
 
+- **Game shell (M11)** (`src/ui/Shell.tsx`, state in `Game.mode`/`Game.screens`). A page opened
+  without city parameters boots a fixed backdrop map, paused, with the camera slowly circling, and
+  shows only the main menu: Continue (the newest save of any kind), New city, Load city, Settings.
+  New city picks a name, one of the four presets (a 128² preview is drawn on a canvas by sampling the
+  sim's own `TerrainGen`, so it matches the map exactly), a seed, difficulty, sandbox, random disasters
+  and the tutorial, then reloads the page with those as URL parameters (`?new=1&seed=…`); a load is
+  `?load=<slot>`. After booting either, the URL is reset to `/`, so a reload returns to the main menu
+  rather than re-creating the city; tests and dev links keep using `?seed=…&paused=1` directly, which
+  skips the menu. A loaded city opens paused. Reloading the page is the one way to swap worlds: the worker, renderer and mirror
+  never need tearing down.
+- **Pause menu**: Escape with nothing left to cancel (no drag, tool, selection or panel), or the ☰
+  button. Any menu over a city pauses it (the previous speed returns on close), turns off camera keys
+  and edge scrolling, and swallows tool shortcuts. Resume, Save (named slots, overwrite with a
+  confirm), Quick save, Load, Settings, Export/Import, Quit to main menu (autosaves first).
+- **Settings** (`client/settings.ts`, localStorage, validated field by field on load): graphics quality
+  (pixel ratio cap 0.75/1/2, shadow map 1024/1536/2048, crowd share 40/70/100 % of cars and walkers),
+  shadows, draw distance (fog ×0.65/1/1.5 and the tree low-poly distance 450/750/1200 m), tilt-shift,
+  interface size (the `--ui-scale` root font size; every UI length is in rem, and `#ui[data-width]`
+  size classes, computed from the viewport width in scaled rem, tighten the top bar on narrow screens or
+  large interface sizes), edge scrolling, tips,
+  volumes and mute, random disasters (this city and new ones) and the autosave interval (off/2/5/10 min
+  of real time, into the `auto` slot; also on quitting). `Game.applySettings()` pushes them all to the
+  renderer, camera, audio and CSS at start-up and on every change.
+- **Tutorial and tips** (`client/tutorial.ts`): eight steps (welcome, road, homes, jobs, power,
+  water/sewage, run time, keeping people happy); each step with a `done(game)` check ticks itself off
+  (checked every 2 s), so a resumed tutorial skips work already done; the step's button pulses.
+  Progress lives in settings, so it survives a reload. Contextual tips (no power, no water, deficit,
+  unemployment, abandonment, no fire station at 400 residents, long commutes, first milestone) each
+  show once, one at a time, never during the tutorial, and can be switched off.
+
 ## 6. Saves
 
 `{format: 'citybloom-save', version, meta {name, population, date, savedAt}, state}`; typed arrays are
-base64 in JSON; compressed with gzip (fflate) and stored in IndexedDB (slots + autosave), exported/imported
-as files. `migrations[v]` upgrades version v → v+1 on load. Round-trip is tested by state hash.
+base64 in JSON; compressed with gzip (fflate) and stored in IndexedDB, one record per slot with a label:
+`auto` (autosave), `quick`, and one per named save (`s<time><rand>`); imports get their own slot.
+Export writes a `.citybloom` file (gzip JSON); import accepts it (or plain JSON) and opens it.
+`migrations[v]` upgrades version v → v+1 on load. Round-trip is tested by state hash, including through
+the main menu's Continue and an exported-then-imported file (e2e `m11-shell`).
 
 ## 7. Testing and tooling
 

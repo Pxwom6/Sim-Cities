@@ -1,0 +1,148 @@
+import type { Game } from '../game';
+import { CIVIC } from '../data/civic';
+import { ZONE_C, ZONE_I, ZONE_R } from '../data/zones';
+
+/**
+ * The first-city tutorial and contextual tips (DESIGN.md §5). Steps finish by themselves when the
+ * player has done what they ask, so a tutorial resumed after a reload skips what's already built.
+ */
+export interface TutorialStep {
+  title: string;
+  text: string;
+  /** Test id of the button to point at. */
+  target?: string;
+  /** The step is done once this holds; steps without it wait for "Next". */
+  done?: (g: Game) => boolean;
+}
+
+function hasZone(g: Game, zone: number): boolean {
+  for (const b of g.world.netState.blocks.values()) if (b.zone.includes(zone)) return true;
+  return false;
+}
+
+function hasCivic(g: Game, test: (def: string, category: string) => boolean): boolean {
+  for (const c of g.world.civics.values()) if (test(c.def, CIVIC.get(c.def)?.category ?? '')) return true;
+  return false;
+}
+
+export const TUTORIAL: TutorialStep[] = [
+  {
+    title: 'Welcome, Mayor',
+    text:
+      'This valley is yours to build. Drag with the left mouse button to move around, the right button ' +
+      'to turn, and scroll to zoom (or use W A S D and Q E). Settlers arrive along the highway at the ' +
+      'edge of the map.',
+  },
+  {
+    title: 'Lay a road',
+    text:
+      'Pick the road tool and drag out from the end of the highway. Click to add bends; every road ' +
+      'needs to connect back to the highway so people can reach it.',
+    target: 'tool-road',
+    done: (g) => [...g.world.netState.segments.values()].some((s) => s.type !== 'highway'),
+  },
+  {
+    title: 'Zone homes',
+    text:
+      'Open the zone tool and paint residential land (green) along your road. Houses grow there when ' +
+      'people want to move in: watch the R bar in the top bar.',
+    target: 'tool-zone',
+    done: (g) => hasZone(g, ZONE_R),
+  },
+  {
+    title: 'Jobs and shops',
+    text:
+      'Residents need work. Zone some commercial land (blue) for shops and offices, and industry ' +
+      '(yellow) a little way off: factories are noisy and dirty.',
+    target: 'tool-zone',
+    done: (g) => hasZone(g, ZONE_C) && hasZone(g, ZONE_I),
+  },
+  {
+    title: 'Power',
+    text:
+      'Buildings need electricity. Place a power plant beside a road: wind turbines are cheap and clean, ' +
+      'coal is powerful but smoky. Power reaches every building along connected roads.',
+    target: 'tool-power',
+    done: (g) => hasCivic(g, (_d, cat) => cat === 'power'),
+  },
+  {
+    title: 'Water and sewage',
+    text:
+      'Place a water pump where the ground water is good, then a sewage outflow or treatment plant ' +
+      'downstream. The water tool shows a map of ground water while you place.',
+    target: 'tool-water',
+    done: (g) =>
+      hasCivic(g, (d) => d === 'pump' || d === 'riverpump') &&
+      hasCivic(g, (d) => d === 'outflow' || d === 'treatment'),
+  },
+  {
+    title: 'Let time run',
+    text: 'Press play (or the space bar) and speed up with 2 and 3. Watch the first families move in.',
+    target: 'speed-1',
+    done: (g) => g.world.stats.population >= 40,
+  },
+  {
+    title: 'Keep the city happy',
+    text:
+      'Click any building to see how it is doing and why. The advisors (J) flag problems, the budget (M) ' +
+      'sets taxes and spending, and the layers button shows data maps. Fire, police, clinics and schools ' +
+      'come next. Good luck!',
+    target: 'open-advisors',
+  },
+];
+
+/** A tip shown once, the first time its situation comes up. */
+export interface Tip {
+  id: string;
+  text: string;
+  when: (g: Game) => boolean;
+}
+
+export const TIPS: Tip[] = [
+  {
+    id: 'noPower',
+    text: 'Some buildings have no power (the lightning icon). Build a power plant beside a connected road.',
+    when: (g) => g.world.stats.utilities.power.unserved > 3,
+  },
+  {
+    id: 'noWater',
+    text: 'Some buildings have no water (the drop icon). Place a pump, and a sewage outflow for the waste.',
+    when: (g) => g.world.stats.utilities.water.unserved > 3 && g.world.stats.utilities.power.unserved === 0,
+  },
+  {
+    id: 'money',
+    text:
+      'The city spends more than it earns. Open the budget (M) to raise taxes a little, fund services ' +
+      'less, or take a loan while the city grows.',
+    when: (g) => g.world.stats.netMonthly < 0 && g.world.stats.population > 100,
+  },
+  {
+    id: 'jobs',
+    text: 'Many residents are out of work. Zone commercial or industrial land, and connect it by road.',
+    when: (g) => g.world.stats.unemployed > 60 && g.world.stats.unemployed > g.world.stats.workers * 0.15,
+  },
+  {
+    id: 'abandoned',
+    text: 'A building was abandoned. Click it: the inspector says why (no power, no jobs, crime, pollution…).',
+    when: (g) => g.world.stats.abandoned > 0,
+  },
+  {
+    id: 'services',
+    text:
+      'The town is big enough to need a fire station, police and a clinic. Their data maps show which ' +
+      'streets they reach.',
+    when: (g) => g.world.stats.population > 400 && !hasCivic(g, (d) => d === 'firestation'),
+  },
+  {
+    id: 'traffic',
+    text:
+      'Commutes are getting long. The traffic map (layers button) shows the busiest roads: add a parallel ' +
+      'street, upgrade to an avenue, or start a bus line.',
+    when: (g) => g.world.stats.avgCommute > 28 && g.world.stats.population > 500,
+  },
+  {
+    id: 'milestone',
+    text: 'New buildings, policies and a bigger loan unlocked. The city panel (P) shows them and what comes next.',
+    when: (g) => g.world.stats.milestone >= 1,
+  },
+];

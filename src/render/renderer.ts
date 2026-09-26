@@ -87,6 +87,8 @@ export class GameRenderer {
   readonly disasters: DisasterRenderer;
   /** Tilt-shift blur when zoomed in (a player setting). */
   tiltShiftOn = false;
+  /** Draw-distance setting: scales how far the fog sits. */
+  fogScale = 1;
   /** Route of the selected car. */
   readonly routeTint: RoadTint;
   /** Road ribbons for the service coverage data maps. */
@@ -269,6 +271,33 @@ export class GameRenderer {
     this.lighting.sun.castShadow = on;
   }
 
+  /** Graphics settings: resolution, shadows and their detail, draw distance, crowd sizes. */
+  applyGraphics(g: {
+    pixelRatio: number;
+    shadows: boolean;
+    shadowMap: number;
+    fogScale: number;
+    treeDetail: number;
+    crowd: number;
+  }): void {
+    const ratio = Math.min(window.devicePixelRatio || 1, g.pixelRatio);
+    if (this.renderer.getPixelRatio() !== ratio) {
+      this.renderer.setPixelRatio(ratio);
+      this.resize();
+    }
+    this.setShadows(g.shadows);
+    const shadow = this.lighting.sun.shadow;
+    if (shadow.mapSize.x !== g.shadowMap) {
+      shadow.mapSize.set(g.shadowMap, g.shadowMap);
+      shadow.map?.dispose();
+      shadow.map = null;
+    }
+    this.fogScale = g.fogScale;
+    this.trees.lodDistance = g.treeDetail;
+    this.pedestrians.crowd = g.crowd;
+    this.traffic.maxCars = Math.round(360 * g.crowd);
+  }
+
   frame(dt: number): void {
     this.time += dt;
     this.controller.update(dt);
@@ -282,8 +311,8 @@ export class GameRenderer {
       this.controller.current.distance * 0.9,
       this.camera.far,
     );
-    l.fog.near = Math.max(900, this.controller.current.distance * 1.1);
-    l.fog.far = Math.max(7500, this.controller.current.distance * 3.5);
+    l.fog.near = Math.max(900, this.controller.current.distance * 1.1) * this.fogScale;
+    l.fog.far = Math.max(7500, this.controller.current.distance * 3.5) * this.fogScale;
     this.renderer.toneMappingExposure = 1.0 + l.night * 0.12;
     this.terrain.update(this.time);
     this.buildings.update(l.night);

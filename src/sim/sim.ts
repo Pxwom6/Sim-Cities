@@ -110,10 +110,8 @@ import {
   setTax,
   takeLoan,
 } from './systems/economy';
-import { fundingEffect, type Dept } from '../data/economy';
+import { DIFFICULTY, SANDBOX_FUNDS, fundingEffect, type Dept } from '../data/economy';
 
-export const STARTING_FUNDS = { easy: 100_000, normal: 60_000, hard: 35_000 } as const;
-const SANDBOX_FUNDS = 999_999_999;
 /** The highway connection node sits this far inside the west edge. */
 export const HIGHWAY_CONNECT_X = 24;
 
@@ -211,7 +209,7 @@ export class Sim {
       tick: 0,
       nextId: 1,
       rng,
-      treasury: options.sandbox ? SANDBOX_FUNDS : STARTING_FUNDS[options.difficulty],
+      treasury: options.sandbox ? SANDBOX_FUNDS : DIFFICULTY[options.difficulty].funds,
       cityName: options.cityName,
       trees: terrain.initialTrees.slice(),
       net: { nodes: new Map(), segments: new Map(), blocks: new Map() },
@@ -222,7 +220,7 @@ export class Sim {
       demand: emptyDemand(),
       landValue: new Float32Array(GRID_RES * GRID_RES),
       cursors: { growth: 0, matchRound: 0 },
-      economy: defaultEconomy(options.sandbox ? SANDBOX_FUNDS : STARTING_FUNDS[options.difficulty]),
+      economy: defaultEconomy(options.sandbox ? SANDBOX_FUNDS : DIFFICULTY[options.difficulty].funds),
       civics: new Map(),
       vehicles: new Map(),
       groundPollution: new Float32Array(GRID_RES * GRID_RES),
@@ -290,6 +288,11 @@ export class Sim {
   }
 
   /** Monthly upkeep at 100 % funding of every department's civic buildings. */
+  /** Running costs scale with difficulty. */
+  upkeepScale(): number {
+    return DIFFICULTY[this.state.options.difficulty]?.upkeep ?? 1;
+  }
+
   departmentUpkeep(): Partial<Record<Dept, number>> {
     const out: Partial<Record<Dept, number>> = {};
     for (const c of this.state.civics.values()) {
@@ -1236,7 +1239,7 @@ export class Sim {
       name: d.name,
       category: d.category,
       blurb: d.blurb,
-      upkeep: Math.round(civicUpkeep(c) * (this.state.economy.funding[d.dept] / 100)),
+      upkeep: Math.round(civicUpkeep(c) * (this.state.economy.funding[d.dept] / 100) * this.upkeepScale()),
       funding: this.state.economy.funding[d.dept],
       access: !!c.access,
       produces,

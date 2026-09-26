@@ -80,5 +80,6 @@
   --z-hud: 10;
   --z-panel: 20;
   --z-modal: 40;
+  --z-shell: 45;
   --z-toast: 50;
 }

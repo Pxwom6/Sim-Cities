@@ -29,6 +29,8 @@ export class CameraController {
   readonly target = new Vector3();
   leftDragPans = true;
   edgeScroll = false;
+  /** Off while a menu covers the game: keys and screen edges don't move the camera. */
+  inputEnabled = true;
   /** Set by the app so presets can focus on where the city is. */
   focus: () => { x: number; z: number } = () => ({ x: MAP_SIZE / 2, z: MAP_SIZE / 2 });
   private keys = new Set<string>();
@@ -220,6 +222,7 @@ export class CameraController {
   private onKeyDown = (e: KeyboardEvent): void => {
     const t = e.target as HTMLElement | null;
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    if (!this.inputEnabled) return;
     this.keys.add(e.code);
   };
 
@@ -229,11 +232,12 @@ export class CameraController {
     const panSpeed = g.distance * 0.9 * dt;
     let fx = 0;
     let fz = 0;
+    if (!this.inputEnabled) k.clear();
     if (k.has('KeyW') || k.has('ArrowUp')) fz -= 1;
     if (k.has('KeyS') || k.has('ArrowDown')) fz += 1;
     if (k.has('KeyA') || k.has('ArrowLeft')) fx -= 1;
     if (k.has('KeyD') || k.has('ArrowRight')) fx += 1;
-    if (this.edgeScroll && this.pointer.inside && !this.drag) {
+    if (this.edgeScroll && this.inputEnabled && this.pointer.inside && !this.drag) {
       const rect = this.dom.getBoundingClientRect();
       const m = 14;
       if (this.pointer.x < m) fx -= 1;

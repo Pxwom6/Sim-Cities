@@ -121,9 +121,10 @@ export function monthlyRates(sim: Sim): Record<string, number> {
     const deck = sim.deck(seg.id);
     if (deck) roadUpkeep += deck.overWater * perMetre * (BRIDGE.upkeepFactor - 1);
   }
-  add('roadUpkeep', -roadUpkeep * (e.funding.roads / 100));
+  const scale = sim.upkeepScale();
+  add('roadUpkeep', -roadUpkeep * (e.funding.roads / 100) * scale);
   for (const [dept, cost] of Object.entries(sim.departmentUpkeep()))
-    add(`upkeep:${dept}`, -cost * (e.funding[dept as Dept] / 100));
+    add(`upkeep:${dept}`, -cost * (e.funding[dept as Dept] / 100) * scale);
   for (const [k, v] of Object.entries(specialisationIncome(sim))) add(k, v);
   for (const id of s.policies) {
     const p = POLICY.get(id as PolicyId);

@@ -10,6 +10,8 @@ const STORE = 'saves';
 
 export interface SlotInfo {
   slot: string;
+  /** What the player called the save (autosaves and quick saves have fixed labels). */
+  label: string;
   cityName: string;
   population: number;
   tick: number;
@@ -56,10 +58,24 @@ export function decodeSave(bytes: Uint8Array): SaveFile {
   return JSON.parse(text) as SaveFile;
 }
 
-export async function writeSlot(slot: string, save: SaveFile): Promise<SlotInfo> {
+/** A fixed label for the special slots, else the player's own. */
+export function defaultLabel(slot: string, cityName: string): string {
+  if (slot === 'auto') return 'Autosave';
+  if (slot === 'quick') return 'Quick save';
+  if (slot === 'import') return 'Imported';
+  return cityName;
+}
+
+/** A fresh slot id for a new save. */
+export function newSlotId(): string {
+  return `s${Date.now().toString(36)}${Math.floor(Math.random() * 1296).toString(36)}`;
+}
+
+export async function writeSlot(slot: string, save: SaveFile, label?: string): Promise<SlotInfo> {
   const data = encodeSave(save);
   const rec: SlotRecord = {
     slot,
+    label: label?.trim() || defaultLabel(slot, save.meta.cityName),
     cityName: save.meta.cityName,
     population: save.meta.population,
     tick: save.meta.tick,
@@ -82,7 +98,12 @@ export async function readSlot(slot: string): Promise<SaveFile | null> {
 
 export async function listSlots(): Promise<SlotInfo[]> {
   const all = await tx<SlotRecord[]>('readonly', (s) => s.getAll() as IDBRequest<SlotRecord[]>);
-  return all.map(({ data: _d, ...info }) => info).sort((a, b) => b.savedAt.localeCompare(a.savedAt));
+  return all
+    .map(({ data: _d, ...info }) => ({
+      ...info,
+      label: info.label || defaultLabel(info.slot, info.cityName),
+    }))
+    .sort((a, b) => b.savedAt.localeCompare(a.savedAt));
 }
 
 export async function deleteSlot(slot: string): Promise<void> {

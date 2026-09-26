@@ -136,3 +136,17 @@ One line each: what was decided and why. Newest at the bottom of each section.
 - Landmarks are unique; hotels, mines, wells and freight terminals aren't (a second terminal adds half again, a third nothing).
 - Achievements are checked in the sim (deterministic, saved with the city) and are off in sandbox mode.
 - Growth all the way to 100,000 residents is exercised in M12's large-city benchmark; M10 checks the unlock table itself (every milestone unlocks something, nothing unlocks between them).
+
+## M11
+- Starting, loading or quitting a city reloads the page (with `?new=1&…` or `?load=<slot>`), instead of tearing down and rebuilding the worker, renderer and mirror in place: it's the simplest way to guarantee a clean slate every time. The URL is reset to `/` after boot so a browser reload lands on the main menu, not on a fresh copy of the city.
+- The main menu is drawn over a real, paused map (the default seed) with the camera slowly circling, rather than a static picture, so the first thing a player sees is the game's own look.
+- Continue opens the newest save of any kind (autosave, quick or named). Quitting to the menu autosaves first, so Continue always resumes exactly where the player left.
+- Escape opens the pause menu only when there's nothing else for it to do (cancel a drag, leave a tool, deselect, close a panel), as in most PC games. Any menu over a city pauses it and restores the previous speed on close.
+- Settings are per device (localStorage), not per city; the Random disasters switch in Settings changes both the city being played and the default for new ones.
+- Graphics quality is three presets (pixel ratio, shadow map size, crowd sizes) rather than many sliders; shadows, draw distance and tilt-shift have their own switches. The shadow-map sizes top out at the size the game already used (2048), so "High" is unchanged.
+- UI scale reuses the rem-based `--ui-scale` root font size the design tokens were built on, instead of CSS zoom.
+- Difficulty changes starting money and upkeep only (×0.8 / ×1 / ×1.25): it makes the early budget easier or harder without changing how the city grows, which the balance work in M12 tunes.
+- The new-game screen previews the map by sampling the sim's own terrain generator on the main thread (128² samples), so the preview always matches what gets built.
+- The tutorial's steps check the city's state rather than counting clicks, so doing things out of order or reloading mid-tutorial works; its progress is kept in settings. Tips show once each and never during the tutorial.
+- Autosave defaults to every 5 minutes of real time (not game time), into a single `auto` slot; manual saves are never overwritten without a confirm.
+- A loaded or continued city opens paused (the player gets their bearings, and nothing happens behind a loading screen); a new city starts at normal speed, since nothing happens until the first road anyway.

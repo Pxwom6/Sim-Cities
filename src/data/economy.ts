@@ -61,6 +61,22 @@ export const LOAN_OPTIONS: {
 ];
 export const MAX_LOANS = 3;
 
+export type Difficulty = 'easy' | 'normal' | 'hard';
+
+/** What each difficulty changes: starting money and the running costs of roads and buildings. */
+export const DIFFICULTY: Record<Difficulty, { name: string; funds: number; upkeep: number; blurb: string }> =
+  {
+    easy: { name: 'Relaxed', funds: 100_000, upkeep: 0.8, blurb: 'More money to start and cheaper upkeep.' },
+    normal: { name: 'Standard', funds: 60_000, upkeep: 1, blurb: 'The intended balance.' },
+    hard: {
+      name: 'Tough',
+      funds: 35_000,
+      upkeep: 1.25,
+      blurb: 'Little money and dearer upkeep: plan carefully.',
+    },
+  };
+export const SANDBOX_FUNDS = 999_999_999;
+
 export const BANKRUPTCY = {
   /** Hours the treasury may stay negative before the city is declared bankrupt (2 months). */
   graceHours: 48,

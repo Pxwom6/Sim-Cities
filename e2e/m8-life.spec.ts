@@ -149,7 +149,8 @@ test('M8: night city, pedestrians, audio and tilt-shift', async ({ page }) => {
       picked = true;
       break;
     }
-    await page.keyboard.press('Escape');
+    // Deselect whatever was picked instead (with nothing selected, Escape would open the pause menu).
+    if (text) await page.keyboard.press('Escape');
   }
   expect(picked).toBe(true);
   await shot(page, 'm8-pedestrian');
@@ -175,9 +176,11 @@ test('M8: night city, pedestrians, audio and tilt-shift', async ({ page }) => {
   // Tilt-shift and volumes through the menu, and they persist across a reload.
   await advanceTo(page, 15);
   await page.getByTestId('menu-button').click();
+  await page.getByTestId('pause-settings').click();
   await page.getByTestId('tilt-shift').check();
   await page.getByTestId('vol-masterVolume').fill('30');
-  await page.getByTestId('menu-button').click();
+  await page.getByTestId('shell-back').click();
+  await page.getByTestId('pause-resume').click();
   await page.evaluate(
     (cz) => window.__game!.setCamera({ x: 150, z: cz - 60, distance: 110, yaw: 0.8, tilt: 0 }),
     cz,
@@ -187,6 +190,7 @@ test('M8: night city, pedestrians, audio and tilt-shift', async ({ page }) => {
   await shot(page, 'm8-tilt-shift');
   await openGame(page);
   await page.getByTestId('menu-button').click();
+  await page.getByTestId('pause-settings').click();
   await expect(page.getByTestId('tilt-shift')).toBeChecked();
   await expect(page.getByTestId('vol-masterVolume')).toHaveValue('30');
   errs.check();

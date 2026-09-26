@@ -77,6 +77,8 @@ export class TreeRenderer {
   private up = new Vector3(0, 1, 0);
   private c = new Color();
   density = 1;
+  /** Beyond this distance (metres) a forest region switches to low-poly trees (draw-distance setting). */
+  lodDistance = LOD_DISTANCE;
 
   constructor(private world: ClientWorld) {
     for (let r = 0; r < REGIONS * REGIONS; r++) this.regionMeshes.push([null, null]);
@@ -248,7 +250,7 @@ export class TreeRenderer {
       const mesh = o as InstancedMesh;
       const u = mesh.userData as { species: 0 | 1; cx: number; cz: number; radius: number };
       const d = Math.hypot(camX - u.cx, camZ - u.cz) - u.radius;
-      const geo = d > LOD_DISTANCE ? this.lowGeos[u.species]! : this.geos[u.species]!;
+      const geo = d > this.lodDistance ? this.lowGeos[u.species]! : this.geos[u.species]!;
       if (mesh.geometry !== geo) mesh.geometry = geo;
     }
   }

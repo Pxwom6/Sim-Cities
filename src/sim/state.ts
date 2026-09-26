@@ -1,4 +1,5 @@
 import type { MapPreset } from '../data/world';
+import type { Difficulty } from '../data/economy';
 import type { RngState } from './rng';
 import type { NetworkState } from './world/network';
 import type { UndoRecord } from './undo';
@@ -14,7 +15,7 @@ import type { TransitState } from './systems/transit';
 import type { Crater, Disaster } from './systems/disasters';
 import type { TourismState } from './systems/specialisations';
 
-export type Difficulty = 'easy' | 'normal' | 'hard';
+export type { Difficulty };
 
 export interface GameOptions {
   seed: string;

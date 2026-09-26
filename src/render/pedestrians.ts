@@ -67,6 +67,8 @@ function shirt() {
  */
 export class PedestrianRenderer {
   readonly group = new Group();
+  /** Share of the full crowd to show (graphics quality). */
+  crowd = 1;
   walkers: Walker[] = [];
   private mesh: InstancedMesh;
   private shirts: InstancedMesh;
@@ -192,7 +194,7 @@ export class PedestrianRenderer {
     this.refreshCandidates(cam.x, cam.z, r);
     const hour = hourOfDay(displayTick);
     const share = TRAFFIC.profile[Math.floor(hour)] ?? 0.5;
-    const target = Math.min(MAX, Math.round(this.candidates.length * 3 * Math.max(0.15, share)));
+    const target = Math.min(MAX, Math.round(this.candidates.length * 3 * Math.max(0.15, share) * this.crowd));
     let spawns = 0;
     while (this.walkers.length < target && spawns++ < 6) this.spawn(hour, cam.x, cam.z, r);
     const net = this.world.net;

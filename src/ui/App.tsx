@@ -12,12 +12,15 @@ import { AdvisorsPanel } from './Advisors';
 import { NotificationsPanel } from './Notifications';
 import { ThoughtsFeed } from './Thoughts';
 import { CityPanel, MilestoneBanner } from './CityPanel';
+import { Shell } from './Shell';
+import { TipCard, TutorialCard } from './Guide';
 
 function Shortcuts({ game }: { game: Game }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
+      if (game.screen) return;
       if (e.code === 'Backquote') game.toggleDebug();
       else if (e.code === 'Space') {
         e.preventDefault();
@@ -39,6 +42,14 @@ function Shortcuts({ game }: { game: Game }) {
 }
 
 export function App({ game }: { game: Game }) {
+  // The main menu shows only itself over the backdrop map.
+  if (game.mode === 'menu')
+    return (
+      <GameContext.Provider value={game}>
+        <Shell />
+        <ToastLayer />
+      </GameContext.Provider>
+    );
   return (
     <GameContext.Provider value={game}>
       <Shortcuts game={game} />
@@ -55,7 +66,10 @@ export function App({ game }: { game: Game }) {
       <MilestoneBanner />
       <ThoughtsFeed />
       <MoneyBanner />
+      <TutorialCard />
+      <TipCard />
       <ToastLayer />
+      <Shell />
     </GameContext.Provider>
   );
 }
@@ -79,11 +93,15 @@ function MoneyBanner() {
             its finances.
           </p>
           <div class="modal-actions">
-            <button class="btn" onClick={() => (location.search = '?load=quick')}>
-              Load quick save
+            <button class="btn" data-testid="bankrupt-load" onClick={() => game.openScreen('load')}>
+              Load a saved city
             </button>
-            <button class="btn active" onClick={() => (location.search = '')}>
-              Start a new city
+            <button
+              class="btn active"
+              data-testid="bankrupt-menu"
+              onClick={() => (location.href = location.pathname)}
+            >
+              Main menu
             </button>
           </div>
         </div>
