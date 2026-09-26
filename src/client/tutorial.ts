@@ -68,12 +68,13 @@ export const TUTORIAL: TutorialStep[] = [
   {
     title: 'Water and sewage',
     text:
-      'Place a water pump where the ground water is good, then a sewage outflow or treatment plant ' +
-      'downstream. The water tool shows a map of ground water while you place.',
+      'Place a water pump where the ground water is good, and septic tanks for the sewage, away from ' +
+      'homes. When the town reaches the river, an outflow there takes far more. The water tool shows ' +
+      'a map of ground water while you place.',
     target: 'tool-water',
     done: (g) =>
       hasCivic(g, (d) => d === 'pump' || d === 'riverpump') &&
-      hasCivic(g, (d) => d === 'outflow' || d === 'treatment'),
+      hasCivic(g, (d) => d === 'septic' || d === 'outflow' || d === 'treatment'),
   },
   {
     title: 'Let time run',

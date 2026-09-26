@@ -242,6 +242,19 @@ export function buildCivicModel(def: CivicDef, variant: number, fill = 0, module
       m.ground(-2, 2, D / 2 - 4, D / 2 - 0.3, 0.1, C('#7a6a4a'));
       break;
     }
+    case 'septic': {
+      // Two buried tanks (only their lids and vents show) on a fenced gravel plot, with a pump box.
+      base(m, W, D, GRASS);
+      m.ground(-W / 2 + 1.5, W / 2 - 1.5, -D / 2 + 1.5, D / 2 - 1.5, 0.08, GRAVEL);
+      for (const x of [-W / 5, W / 5]) {
+        m.cylinder(x, 1, 2.2, 0, 0.35, CONCRETE, 12);
+        m.cylinder(x, 1, 0.7, 0.35, 0.5, C('#6b6f73'), 8);
+        m.cylinder(x + 1.4, 2.4, 0.12, 0, 1.6, STEEL, 6);
+      }
+      m.box(-1.3, 1.3, 0, 1.4, -D / 2 + 2, -D / 2 + 4, C('#8d949a'));
+      fence(m, W, D);
+      break;
+    }
     case 'treatment': {
       base(m, W, D, GRASS);
       for (const [x, z] of [

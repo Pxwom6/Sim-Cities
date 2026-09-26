@@ -3,9 +3,9 @@ export type ZoneKey = 'R' | 'C' | 'I';
 
 /** Monthly taxable income per resident (R) or per worker (C/I) by wealth / industry tier, at 100 %. */
 export const TAX_BASE: Record<ZoneKey, [number, number, number]> = {
-  R: [12, 22, 40],
-  C: [30, 50, 80],
-  I: [25, 45, 70],
+  R: [24, 44, 80],
+  C: [60, 100, 160],
+  I: [50, 90, 140],
 };
 export const TAX_MIN = 0;
 export const TAX_MAX = 20;

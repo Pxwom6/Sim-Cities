@@ -99,7 +99,7 @@ export function advise(sim: Sim): Advice[] {
   const util = [
     ['power', 'a power plant', (b: Building) => b.power < 0.5],
     ['water', 'a water pump', (b: Building) => b.water < 0.5],
-    ['sewage', 'an outflow or treatment plant', (b: Building) => b.sewage < 0.5],
+    ['sewage', 'septic tanks, an outflow or a treatment plant', (b: Building) => b.sewage < 0.5],
   ] as const;
   let utilOk = true;
   for (const [u, fix, lacking] of util) {

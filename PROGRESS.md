@@ -15,32 +15,24 @@
 - [ ] M12 Balance, performance and polish
 
 ## In progress
-M12 Balance, performance and polish (not started). Plan:
-- `scripts/balance.ts`: headless strategies (careful, greedy, neglectful) played through commands for
-  20+ game years, printing population, treasury, approval and demand curves (CSV + ASCII); tune
-  `src/data` until careful play grows steadily with real trade-offs and careless play gets into trouble.
-  Start with the known issues below (early-game utility and service costs vs. taxes, early abandonment,
-  commercial demand in small towns).
-- Performance at scale: grow a ~100k-resident city in the benchmark, profile the hourly systems, and keep
-  the tick within budget (DESIGN §8); record draw calls and triangles; Mac checks below.
-- Soak test: a long e2e run at top speed over a grown city with random disasters on, asserting zero
-  console errors; invariants on in test mode.
-- Bug bash and a final review against every SPEC item (done, or explained in docs/DECISIONS.md); README;
-  summary and ideas for what's next at the top of this file.
+M12 Balance, performance and polish. Done so far: `scripts/balance.ts` (careful / greedy / neglectful
+over 20 years); economy retuned from its results (tax base ×2, septic tanks for hamlets, garbage
+trucks and facilities that keep up). 20-year curves now: careful grows ~0.8k → 2k → 4k → 14k by
+year 4, then fills the 15 district slots (~15k, approval ~60 %); greedy (15 % taxes, no services) stays
+~100 residents at ~15 % approval; neglectful stagnates at 300–570 with ~38 % approval. Easy grows
+faster, Tough stalls ~5 years before growing.
 
 ## Next tasks
-1. Write `scripts/balance.ts` with the three strategies; run it and record the curves.
-2. Tune the early game (utility/service upkeep vs. taxes, grace for new buildings without power).
-3. Scale the benchmark to 100k residents and optimise the slowest systems.
-4. Soak test, bug bash, README, final summary.
+1. Performance at scale: grow a ~100k city in the benchmark (bigger grid, dense zoning, sandbox),
+   profile the hourly systems, keep ticks within budget (DESIGN §8).
+2. Soak test (long run at top speed, disasters on, zero console errors), bug bash, SPEC review.
+3. Main-menu demo town; README; final summary at the top of this file.
 
 ## Known issues
+- Mature cities run a big surplus (≈ +$30k/month at 15k residents with 6 % taxes); intended as money for landmarks and big projects, but worth another look once the 100k benchmark exists.
+- Homes without power or water still empty after about two days; the balance runs show a careful player never hits this, so no grace period was added.
 - Visible cars and walkers follow trip samples from the last assignment round, so for up to two game hours after a road closes some still drive along it; commuters, services and utilities reroute at once.
 - Buildings along a road closed for repairs lose power and water until it reopens (lines run under the roads); with 6–24 h repairs this rarely empties them, but a big quake still costs a town a lot.
-- A town without utilities drops to ~0 % approval quickly; balance the early-game grace in M12 (e.g. softer penalties for the first days).
-- Early utility upkeep (coal + pumps + treatment + landfill ≈ $1,600/month) exceeds a small town's taxes; wind turbines are the cheap start. Tune in M12.
-- A full service kit (fire, police, clinic, school, park ≈ $1,240/month) plus utilities leaves a 750-resident town about $3,000/month in the red. Service costs vs. taxes need the M12 balance pass (the balance script will show it).
-- Homes without power or water are abandoned after about two days, even in a brand-new town; M12 should consider a grace period for buildings that never had power.
 - Visible cars don't queue or yield at junctions; they overlap when paths cross. Speeds do follow congestion.
 - Bus riders' door-to-door time includes walking and waiting, so a bus line mainly helps by taking cars off jammed roads (≈10–20 % less traffic in the test town), not by being faster than driving.
 - Towns without services still lose many residents over time (approval ≈ 50 %); fire outbreaks are now contained but crime and unanswered emergencies pile up. Part of the M12 balance pass.

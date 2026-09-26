@@ -273,9 +273,9 @@ is lost and at every instant `Δtreasury = Σ ledger entries` exactly (one-off c
 are ledger entries too). Monthly rates below are divided by 24 per hour.
 
 ```
-Tax(R, b)   = residents_b · RES_INCOME[w] · rateR[w] / 100            RES_INCOME = 12, 22, 40 $/month
-Tax(C, b)   = workers_b · COM_INCOME[w] · rateC[w] / 100 · (0.5 + 0.5·customers_b)   30, 50, 80
-Tax(I, b)   = workers_b · IND_INCOME[t] · rateI[t] / 100 · (0.6 + 0.4·freightOK_b)    25, 45, 70
+Tax(R, b)   = residents_b · RES_INCOME[w] · rateR[w] / 100            RES_INCOME = 24, 44, 80 $/month
+Tax(C, b)   = workers_b · COM_INCOME[w] · rateC[w] / 100 · (0.5 + 0.5·customers_b)   60, 100, 160
+Tax(I, b)   = workers_b · IND_INCOME[t] · rateI[t] / 100 · (0.6 + 0.4·freightOK_b)    50, 90, 140
 Upkeep(b)   = def.upkeep · funding_dept(0–150 %) · (1 + 0.5·modules)
 Roads       = Σ length · ROAD_UPKEEP[type]                             $/m/month
 Loans       = annuity payment: P · r / (1 − (1 + r)^−n), r = annual/12, n months
@@ -308,7 +308,8 @@ pump; river pumps full). Consumers are sorted by road travel distance to the nea
 of the network first — readable on the data map. `served_b ∈ [0, 1]`.
 
 - Water is **polluted** if ground pollution at a pump > 0.3: buildings on that component get a sickness
-  modifier. Sewage demand = water use; outflow pipes emit ground/water pollution downstream; treatment
+  modifier. Sewage demand = water use; outflow pipes (within 36 m of water) emit ground/water pollution
+  downstream; septic tanks (M12: cheap, 120 units, anywhere) taint the ground around them; treatment
   plants don't. Unserved sewage adds ground pollution at the building.
 - Garbage: `garbage_b += rate_b/h`. Landfills/recycling/incinerators dispatch trucks (real vehicles)
   to the fullest buildings in their road coverage; a truck collects up to its capacity from the target

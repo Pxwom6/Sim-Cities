@@ -150,3 +150,11 @@ One line each: what was decided and why. Newest at the bottom of each section.
 - The tutorial's steps check the city's state rather than counting clicks, so doing things out of order or reloading mid-tutorial works; its progress is kept in settings. Tips show once each and never during the tutorial.
 - Autosave defaults to every 5 minutes of real time (not game time), into a single `auto` slot; manual saves are never overwritten without a confirm.
 - A loaded or continued city opens paused (the player gets their bearings, and nothing happens behind a loading screen); a new city starts at normal speed, since nothing happens until the first road anyway.
+
+## M12
+- Balance is judged with `scripts/balance.ts`, which plays three scripted mayors headlessly for 20 years. The careful one is meant to play like a sensible person: it follows the advisors (matching on advisor and title, one fix per kind every two months, services in proportion to population), sites pumps on clean ground water, clears abandoned buildings or small homes when a service needs room, expands a district at a time and borrows only while the budget is positive, and cuts taxes when comfortably off.
+- Septic tanks (new: $1,500, 120 sewage, placeable anywhere, taint the ground nearby) give a hamlet sewage without a kilometre of road to the river: water is 0.7–1.6 km from the highway on every preset, so the outflow alone was a wall rather than a trade-off.
+- The tax base doubled (R 24/44/80, C 60/100/160, I 50/90/140 per month at 100 %): at the old rates a 700-resident town earned about $1,400 a month against about $2,200 for basic utilities and four services, so even careful play went broke. At 2× the careful city is tight for its first years and then grows steadily; 1.25× and 1.5× stalled for 5–8 years.
+- Garbage trucks carry 400 units (was 90), landfills hold 150k (was 80k), recycling handles 1,600 a day (was 900) and incinerators 2,400 (was 1,400): with every truck always out and each stop filling a truck, collection couldn't keep up in any town past a few thousand residents, whatever the player built.
+- Mature cities run a large surplus (tens of thousands a month at 15k residents). That's left in on purpose: lower taxes, landmarks, specialisations, the university and nuclear power are what it's for.
+
