@@ -80,7 +80,14 @@ function handle(msg: MainToWorker): void {
       post({ type: 'ready', snapshot: sim.snapshot() });
       break;
     case 'load':
-      sim = Sim.fromSave(msg.save);
+      // A save that can't be read leaves the worker empty; the page falls back to a fresh map.
+      try {
+        sim = Sim.fromSave(msg.save);
+      } catch (err) {
+        sim = null;
+        post({ type: 'loadFailed', message: err instanceof Error ? err.message : String(err) });
+        return;
+      }
       sim.testMode = !!msg.testMode;
       post({ type: 'ready', snapshot: sim.snapshot() });
       break;

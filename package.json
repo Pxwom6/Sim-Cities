@@ -12,6 +12,7 @@
     "test:watch": "vitest",
     "e2e": "npm run build:test && playwright test",
     "soak": "npm run build:test && SOAK=1 playwright test --grep @soak",
+    "playthrough": "npm run build:test && PLAYTHROUGH=1 playwright test --grep @playthrough",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",

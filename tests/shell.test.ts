@@ -1,8 +1,14 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_SETTINGS, parseSettings } from '../src/client/settings';
+import { decodeSave } from '../src/client/saves';
+import { Sim } from '../src/sim/sim';
+import { checkInvariants } from '../src/sim/invariants';
+import { BState } from '../src/sim/world/buildings';
+import { ZONE_NONE } from '../src/data/zones';
 import { DIFFICULTY } from '../src/data/economy';
 import { monthlyRates } from '../src/sim/systems/economy';
-import { TICKS_PER_MONTH } from '../src/sim/time';
+import { TICKS_PER_HOUR, TICKS_PER_MONTH } from '../src/sim/time';
 import { buildTown, newSim, serveTown } from './helpers';
 
 describe('settings', () => {
@@ -72,5 +78,25 @@ describe('difficulty', () => {
     const normal = upkeep('normal');
     expect(upkeep('easy') / normal).toBeCloseTo(DIFFICULTY.easy.upkeep, 5);
     expect(upkeep('hard') / normal).toBeCloseTo(DIFFICULTY.hard.upkeep, 5);
+  });
+});
+
+describe('main menu demo town', () => {
+  it('opens with the current save format and keeps running as a calm, served town', () => {
+    const save = decodeSave(readFileSync('public/demo.citybloom'));
+    const sim = Sim.fromSave(save);
+    sim.testMode = true;
+    expect(sim.state.options.disasters).toBe(false);
+    expect(sim.state.totals.population).toBeGreaterThan(2_000);
+    // Nothing zoned is left empty (the town looks finished behind the menu).
+    for (const b of sim.state.net.blocks.values())
+      for (let k = 0; k < b.zone.length; k++) if (b.zone[k] !== ZONE_NONE) expect(b.bld[k]).not.toBe(0);
+    // A few game hours behind the menu: invariants hold every tick and nobody walks out.
+    const pop = sim.state.totals.population;
+    sim.advance(TICKS_PER_HOUR * 6);
+    checkInvariants(sim);
+    expect(sim.state.totals.population).toBeGreaterThan(pop * 0.95);
+    const abandoned = [...sim.state.buildings.values()].filter((x) => x.state === BState.Abandoned);
+    expect(abandoned.length).toBeLessThan(5);
   });
 });

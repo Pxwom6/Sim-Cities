@@ -335,6 +335,7 @@ export type WorkerToMain =
   | { type: 'ready'; snapshot: Snapshot }
   | { type: 'frame'; diff: FrameDiff; perf: WorkerPerf; speed: Speed }
   | { type: 'reply'; id: number; result: unknown }
+  | { type: 'loadFailed'; message: string }
   | { type: 'error'; message: string };
 
 export type { CommandResult };

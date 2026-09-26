@@ -6,7 +6,7 @@ import { buildBridgeStructure, buildJunction, buildSegmentRibbon, type Approach 
 import { deckAt } from '../sim/world/bridge';
 import { ROAD_STYLES } from './roadStyle';
 
-const CHUNK = 256;
+const CHUNK = 512;
 
 interface Element {
   chunk: number;

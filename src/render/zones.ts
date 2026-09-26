@@ -3,7 +3,7 @@ import type { ClientWorld, NetChanges } from '../client/world';
 import { CELL, ROWS, ZONE_C, ZONE_I, ZONE_R } from '../data/zones';
 import { GeoBuffer, mergeChunks, type GeoChunk } from './geoBuffer';
 
-const CHUNK = 256;
+const CHUNK = 512;
 const INSET = 0.45;
 
 export const ZONE_COLOURS: Record<number, Color> = {

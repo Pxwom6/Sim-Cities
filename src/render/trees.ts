@@ -185,7 +185,7 @@ export class TreeRenderer {
     const gen = this.world.gen;
     const lo = -SCENERY_MARGIN;
     const hi = MAP_SIZE + SCENERY_MARGIN;
-    const bands = 4;
+    const bands = 3; // scenery is always far away: big bands, few draw calls
     const band = (hi - lo) / bands;
     for (let bj = 0; bj < bands; bj++) {
       for (let bi = 0; bi < bands; bi++) {
@@ -244,14 +244,17 @@ export class TreeRenderer {
     }
   }
 
-  /** Swap each region between detailed and low-poly models by distance to the camera. */
-  updateLod(camX: number, camZ: number): void {
+  /** Swap each region between detailed and low-poly models by (3-D) distance to the camera. */
+  updateLod(camX: number, camY: number, camZ: number): void {
     for (const o of this.group.children) {
       const mesh = o as InstancedMesh;
       const u = mesh.userData as { species: 0 | 1; cx: number; cz: number; radius: number };
-      const d = Math.hypot(camX - u.cx, camZ - u.cz) - u.radius;
-      const geo = d > this.lodDistance ? this.lowGeos[u.species]! : this.geos[u.species]!;
+      const d = Math.hypot(Math.max(0, Math.hypot(camX - u.cx, camZ - u.cz) - u.radius), camY);
+      const far = d > this.lodDistance;
+      const geo = far ? this.lowGeos[u.species]! : this.geos[u.species]!;
       if (mesh.geometry !== geo) mesh.geometry = geo;
+      // Far-off trees are a pixel or two across: their shadows aren't worth a shadow-pass draw.
+      mesh.castShadow = !far;
     }
   }
 

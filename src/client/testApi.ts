@@ -1,4 +1,4 @@
-import { Vector3 } from 'three';
+import { Vector3, type Mesh } from 'three';
 import { CIVIC } from '../data/civic';
 import { roadsidePose } from '../sim/world/civic';
 import type { Game } from '../game';
@@ -85,6 +85,8 @@ export interface TestApi {
   setSettings(patch: Record<string, unknown>): number;
   /** Render every sound effect and the ambient bed offline, and measure them. */
   renderSounds(): Promise<SoundCheck[]>;
+  /** Visible meshes per top-level scene object, and how many of them cast shadows (dev). */
+  renderBreakdown(): { name: string; meshes: number; shadow: number }[];
   /** Game shell state: menu or city, open screens, settings and what the renderer applied. */
   getShell(): {
     mode: 'menu' | 'play';
@@ -222,6 +224,19 @@ export function installTestApi(game: Game): TestApi {
       game.updateSettings(patch);
       return game.renderer.tiltShift.frames;
     },
+    renderBreakdown: () =>
+      game.renderer.scene.children.map((o, i) => {
+        let meshes = 0;
+        let shadow = 0;
+        o.traverseVisible((m) => {
+          const mesh = m as Mesh & { count?: number; isMesh?: boolean; isPoints?: boolean };
+          if (!(mesh.isMesh || mesh.isPoints)) return;
+          if (mesh.count === 0) return;
+          meshes++;
+          if (mesh.castShadow) shadow++;
+        });
+        return { name: o.name || `${o.type}#${i}`, meshes, shadow };
+      }),
     getShell: () => ({
       mode: game.mode,
       screens: [...game.screens],

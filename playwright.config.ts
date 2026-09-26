@@ -7,8 +7,8 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: 0,
-  // The long soak test runs only with `npm run soak`.
-  grepInvert: process.env.SOAK ? undefined : /@soak/,
+  // The long soak and playthrough tests run only with `npm run soak` and `npm run playthrough`.
+  grepInvert: process.env.SOAK || process.env.PLAYTHROUGH ? undefined : /@soak|@playthrough/,
   reporter: [['list']],
   use: {
     baseURL: 'http://localhost:4174',

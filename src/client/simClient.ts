@@ -13,6 +13,7 @@ export class SimClient {
   private pending = new Map<number, (v: unknown) => void>();
   private frameListeners: FrameListener[] = [];
   private readyResolve: ((s: Snapshot) => void) | null = null;
+  private readyReject: ((e: Error) => void) | null = null;
   onError: (message: string) => void = (m) => console.error(`[sim] ${m}`);
 
   constructor() {
@@ -25,7 +26,11 @@ export class SimClient {
     switch (msg.type) {
       case 'ready':
         this.readyResolve?.(msg.snapshot);
-        this.readyResolve = null;
+        this.readyResolve = this.readyReject = null;
+        break;
+      case 'loadFailed':
+        this.readyReject?.(new Error(msg.message));
+        this.readyResolve = this.readyReject = null;
         break;
       case 'frame':
         for (const l of this.frameListeners) l(msg.diff, msg.perf, msg.speed);
@@ -61,9 +66,11 @@ export class SimClient {
     });
   }
 
+  /** Open a saved city; rejects if the save can't be read (the worker is then empty). */
   load(save: SaveFile, testMode = false): Promise<Snapshot> {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       this.readyResolve = resolve;
+      this.readyReject = reject;
       this.post({ type: 'load', save, testMode });
     });
   }

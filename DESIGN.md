@@ -629,14 +629,16 @@ menus.
 `SimClient`.
 
 - **Game shell (M11)** (`src/ui/Shell.tsx`, state in `Game.mode`/`Game.screens`). A page opened
-  without city parameters boots a fixed backdrop map, paused, with the camera slowly circling, and
-  shows only the main menu: Continue (the newest save of any kind), New city, Load city, Settings.
+  without city parameters opens a small demo town (`public/demo.citybloom`, a save grown by the
+  balance tool's careful player on the backdrop map; the bare map if it can't be read) running at
+  normal speed with its notices silenced, the camera slowly circling it, and shows only the main menu: Continue (the newest save of any kind), New city, Load city, Settings.
   New city picks a name, one of the four presets (a 128² preview is drawn on a canvas by sampling the
   sim's own `TerrainGen`, so it matches the map exactly), a seed, difficulty, sandbox, random disasters
   and the tutorial, then reloads the page with those as URL parameters (`?new=1&seed=…`); a load is
   `?load=<slot>`. After booting either, the URL is reset to `/`, so a reload returns to the main menu
   rather than re-creating the city; tests and dev links keep using `?seed=…&paused=1` directly, which
-  skips the menu. A loaded city opens paused. Reloading the page is the one way to swap worlds: the worker, renderer and mirror
+  skips the menu. A loaded city opens paused; a save the worker can't read is reported back
+  (`loadFailed`) and the page opens a fresh map with a toast rather than hanging. Reloading the page is the one way to swap worlds: the worker, renderer and mirror
   never need tearing down.
 - **Pause menu**: Escape with nothing left to cancel (no drag, tool, selection or panel), or the ☰
   button. Any menu over a city pauses it (the previous speed returns on close), turns off camera keys
@@ -687,4 +689,11 @@ the main menu's Continue and an exported-then-imported file (e2e `m11-shell`).
   dispatch were made cheaper without changing their results. Exceptions: the first hour after
   loading or founding a big city (cold caches and JIT, one-off ticks of 25–30 ms).
 - Render: < 300 draw calls, < 1.5 M triangles at the default overview; no allocations in per-frame
-  paths (vehicles, camera, animation); chunk rebuilds budgeted per frame.
+  paths (vehicles, camera, animation); chunk rebuilds budgeted per frame. Measured on the ~100k
+  benchmark city (`scripts/dev/bigshot.mjs`, M12): 288 draw calls at the whole-city overview, 156 at
+  the city preset, 92 at street level. Triangles: 2.5 M at the overview, about half of it the shadow
+  pass (over the 1.5 M target; per-building LOD would be the next step if the Mac check shows the GPU
+  struggling). Zoned buildings merge per 256 m chunk and civic buildings per 512 m chunk (a chunk is
+  rebuilt only when a building's look changes), roads and zone cells per 512 m, tree regions use
+  low-poly models and cast no shadows beyond 750 m (3-D distance), and problem icons shrink and fade
+  with distance.

@@ -125,7 +125,8 @@ export class Game {
   ) {
     client.onFrame((diff, perf, speed) => {
       this.world.applyFrame(diff);
-      if (diff.events) this.onEvents(diff.events);
+      // The main menu's demo town runs quietly.
+      if (diff.events && !this.inMenu()) this.onEvents(diff.events);
       const sel = this.selected;
       if (sel?.kind === 'building' && diff.buildings) {
         if (diff.buildings.removed.includes(sel.id)) this.select(null);

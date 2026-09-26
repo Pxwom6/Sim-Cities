@@ -65,6 +65,15 @@ export function DebugPanel() {
         >
           +$100k
         </button>
+        <button
+          class="btn"
+          data-testid="cheat-unlock"
+          disabled={game.world.stats.unlockAll}
+          title="Unlock every building, road, policy and module (densities still follow the city's growth)"
+          onClick={() => void game.dispatch({ type: 'cheat', cheat: 'unlockAll' })}
+        >
+          Unlock all
+        </button>
         <button class="btn" onClick={() => advance(TICKS_PER_HOUR)}>
           +1 hour
         </button>

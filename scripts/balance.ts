@@ -1,7 +1,11 @@
 // Balance tool: plays scripted strategies headlessly for years of game time and prints curves of
 // population, treasury, approval and demand (SPEC §8).
 // Usage: npx tsx scripts/balance.ts [years=20] [careful,greedy,neglectful] [--csv dir] [--seed s]
+//   [--save dir] (keeps each strategy's city as <dir>/<strategy>.citybloom, loadable in the game)
+//   [--demo] (with --save: no random disasters, unused zoning cleared and a mid-afternoon clock, for
+//   the main menu's town)
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { gzipSync, strToU8 } from 'fflate';
 import { Sim } from '../src/sim/sim';
 import { checkInvariants } from '../src/sim/invariants';
 import { CIVIC } from '../src/data/civic';
@@ -26,6 +30,9 @@ const flag = (name: string) => {
   return i >= 0 ? args.splice(i, 2)[1] : undefined;
 };
 const csvDir = flag('--csv');
+const saveDir = flag('--save');
+const demo = args.includes('--demo');
+if (demo) args.splice(args.indexOf('--demo'), 1);
 const verbose = Number(flag('--verbose') ?? 0);
 // --invariants: check the sim's invariants every game hour (a long headless soak).
 const invariants = args.includes('--invariants');
@@ -91,7 +98,7 @@ class Player {
   log: string[] = [];
 
   constructor(readonly strategy: StrategyId) {
-    this.sim = Sim.create({ seed, preset: 'river', cityName: strategy, difficulty });
+    this.sim = Sim.create({ seed, preset: 'river', cityName: demo ? 'Bloomfield' : strategy, difficulty });
     const hw = this.sim.state.net.nodes.get(this.sim.state.highway.connect)!;
     this.c = { x: hw.x, z: hw.z };
   }
@@ -503,6 +510,22 @@ for (const id of strategies) {
   const built = new Map<string, number>();
   for (const c of p.sim.state.civics.values()) built.set(c.def, (built.get(c.def) ?? 0) + 1);
   console.log(`built: ${[...built].map(([d, n]) => `${d}×${n}`).join(' ')}`);
+  if (saveDir) {
+    mkdirSync(saveDir, { recursive: true });
+    if (demo) {
+      p.sim.dispatch({ type: 'setDisasters', on: false });
+      // Clear the zoning nothing has grown on, so the menu shows a finished-looking town.
+      for (const b of p.sim.state.net.blocks.values())
+        for (let k = 0; k < b.zone.length; k++) {
+          if (b.zone[k] === ZONE_NONE || b.bld[k] !== 0) continue;
+          const c = p.sim.net.cellCenter(b.id, k);
+          p.sim.dispatch({ type: 'zone', zone: 'none', area: { kind: 'brush', points: [c, c], radius: 1 } });
+        }
+      // Clocks start at 07:00; open at 15:00 so the town runs into dusk and lit windows.
+      p.sim.advance(TICKS_PER_HOUR * 8);
+    }
+    writeFileSync(`${saveDir}/${id}.citybloom`, gzipSync(strToU8(JSON.stringify(p.sim.save()))));
+  }
   if (csvDir) {
     mkdirSync(csvDir, { recursive: true });
     const keys = Object.keys(samples[0]!) as (keyof Sample)[];

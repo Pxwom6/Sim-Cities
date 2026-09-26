@@ -1,6 +1,6 @@
 import {
   ACESFilmicToneMapping,
-  PCFSoftShadowMap,
+  PCFShadowMap,
   PerspectiveCamera,
   SRGBColorSpace,
   Scene,
@@ -125,7 +125,8 @@ export class GameRenderer {
     this.renderer.toneMapping = ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.0;
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = PCFSoftShadowMap;
+    // PCF is soft-filtered in this three.js (PCFSoftShadowMap is deprecated and falls back to it).
+    this.renderer.shadowMap.type = PCFShadowMap;
     this.renderer.info.autoReset = false;
 
     this.lighting = new Lighting(this.scene);
@@ -170,6 +171,29 @@ export class GameRenderer {
       this.roads.onRoad(x, z, 1.5) || this.onBuilding(x, z) || this.world.civicAt(x, z) !== null;
     this.trees.rebuildAll();
     this.scene.add(this.trees.group);
+    // Names for debugging (the test API's render breakdown).
+    const named: [{ name: string }, string][] = [
+      [this.terrain.group, 'terrain'],
+      [this.water.mesh, 'water'],
+      [this.roads.group, 'roads'],
+      [this.zones.group, 'zones'],
+      [this.buildings.group, 'buildings'],
+      [this.civics.group, 'civics'],
+      [this.vehicles.group, 'vehicles'],
+      [this.icons.points, 'icons'],
+      [this.garbage.mesh, 'garbage'],
+      [this.effects.group, 'effects'],
+      [this.coverageMap.group, 'coverageMap'],
+      [this.traffic.group, 'traffic'],
+      [this.pedestrians.group, 'pedestrians'],
+      [this.disasters.group, 'disasters'],
+      [this.transit.group, 'transit'],
+      [this.streetLights.group, 'streetLights'],
+      [this.routeTint.group, 'routeTint'],
+      [this.ghost.group, 'ghost'],
+      [this.trees.group, 'trees'],
+    ];
+    for (const [o, name] of named) o.name = name;
     world.onCivics((changed) => {
       for (const id of changed) {
         const c = world.civics.get(id);
@@ -336,7 +360,7 @@ export class GameRenderer {
       this.trees.rebuildAround(this.treePoints);
       this.treePoints = [];
     }
-    this.trees.updateLod(this.camera.position.x, this.camera.position.z);
+    this.trees.updateLod(this.camera.position.x, this.camera.position.y, this.camera.position.z);
     this.water.update(this.time);
     const wu = this.water.material.uniforms;
     wu.uSky!.value.copy(l.horizon);

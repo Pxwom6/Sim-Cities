@@ -14,8 +14,8 @@ import { assets } from './assets/registry';
 import type { ModelData } from './assets/builder';
 import type { TerrainUniforms } from './terrain';
 
-const CHUNK = 128;
-const MAX_CHUNK_REBUILDS_PER_FRAME = 3;
+const CHUNK = 256;
+const MAX_CHUNK_REBUILDS_PER_FRAME = 1;
 const STATE_CONSTRUCTION = 0;
 const STATE_ABANDONED = 2;
 const STATE_RUBBLE = 3;
@@ -94,7 +94,7 @@ interface Chunk {
 }
 
 /**
- * Buildings: completed ones are merged per 128 m chunk (one draw call each); buildings under
+ * Buildings: completed ones are merged per 256 m chunk (one draw call each); buildings under
  * construction live in a separate layer that shows scaffolding and the model rising.
  */
 export class BuildingRenderer {

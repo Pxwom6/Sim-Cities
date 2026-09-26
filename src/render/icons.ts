@@ -241,6 +241,7 @@ export class IconRenderer {
       vertexShader: /* glsl */ `
         attribute float icon;
         varying float vIcon;
+        varying float vFade;
         uniform float uTime;
         uniform float uScale;
         void main() {
@@ -249,18 +250,21 @@ export class IconRenderer {
           p.y += sin(uTime * 2.0 + position.x * 0.1) * 0.8;
           vec4 mv = modelViewMatrix * vec4(p, 1.0);
           gl_Position = projectionMatrix * mv;
-          gl_PointSize = clamp(2600.0 / -mv.z, 14.0, 34.0) * uScale;
+          // Smaller and fainter from far away, so a big city's problems read as hotspots, not snow.
+          gl_PointSize = clamp(2600.0 / -mv.z, 8.0, 34.0) * uScale;
+          vFade = mix(1.0, 0.55, smoothstep(1400.0, 2600.0, -mv.z));
         }`,
       fragmentShader: /* glsl */ `
         uniform sampler2D uAtlas;
         varying float vIcon;
+        varying float vFade;
         void main() {
           float col = mod(vIcon, 4.0);
           float row = floor(vIcon / 4.0);
           vec2 uv = vec2((col + gl_PointCoord.x) / 4.0, 1.0 - (row + gl_PointCoord.y) / 3.0);
           vec4 c = texture2D(uAtlas, uv);
           if (c.a < 0.05) discard;
-          gl_FragColor = c;
+          gl_FragColor = vec4(c.rgb, c.a * vFade);
           #include <colorspace_fragment>
         }`,
     });

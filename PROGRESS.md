@@ -15,15 +15,15 @@
 - [ ] M12 Balance, performance and polish
 
 ## In progress
-M12 Balance, performance and polish. Done: balance tool and economy retune (see DECISIONS); the
-100k-resident tick budget (hourly systems spread over the hour, matching over four ticks, cheaper
-land value, coverage and garbage dispatch). Next: soak test, bug bash and SPEC review, README.
+M12 Balance, performance and polish. Done: balance tool and economy retune; the 100k-resident tick
+budget; the render budget at 100k (bigger chunks, tree LOD, icon fade); the soak test (10 min at top
+speed, zero errors) and 20-year invariant runs; the SPEC review (`docs/SPEC_REVIEW.md`); the main
+menu's demo town; README.
 
 ## Next tasks
-1. Soak test: a long run at top speed over a grown city with random disasters on, zero console errors
-   (e2e), plus a long headless run with invariants on.
-2. Bug bash and a final review against every SPEC item (done, or explained in docs/DECISIONS.md).
-3. Main-menu demo town; README; final summary and ideas at the top of this file.
+1. Run the final playthrough (`npm run playthrough`), review its screenshots and fix what it finds.
+2. Check in a browser that an unreadable save falls back to a fresh map (worker `loadFailed`).
+3. Summary and ideas for what's next at the top of this file; tick M12.
 
 ## Known issues
 - Mature cities run a big surplus (≈ +$30k/month at 15k residents with 6 % taxes); intended as money for landmarks and big projects, but worth another look once the 100k benchmark exists.
@@ -34,7 +34,6 @@ land value, coverage and garbage dispatch). Next: soak test, bug bash and SPEC r
 - Bus riders' door-to-door time includes walking and waiting, so a bus line mainly helps by taking cars off jammed roads (≈10–20 % less traffic in the test town), not by being faster than driving.
 - Towns without services still lose many residents over time (approval ≈ 50 %); fire outbreaks are now contained but crime and unanswered emergencies pile up. Part of the M12 balance pass.
 - Commercial demand runs slightly negative in small towns (0.12 shop jobs per resident); revisit in balance.
-- The main menu's backdrop is the bare default map; a small pre-grown demo town there would show the game off better (M12 polish).
 - Visitors (M10) are counted, spend money and shop, but don't drive through the traffic model yet.
 - Growth all the way to 100k residents is only exercised by the M12 large-city benchmark so far; M10 tests the unlock table and each specialisation on the test town.
 - Tree count is high in forests (~25k in-map); LOD switches to low-poly beyond 750 m.
@@ -42,10 +41,12 @@ land value, coverage and garbage dispatch). Next: soak test, bug bash and SPEC r
 ## Performance (M12)
 - `npx tsx scripts/bench.ts 30 --big`: a 16×16 avenue grid grows to ~106k residents by month 5. At 80–106k: tick avg 0.6–0.8 ms, p99 5–8 ms, worst per month 9–14 ms (budget: avg < 1 ms, worst < 15 ms). One-off 25–30 ms ticks in the first game hour of a freshly built or loaded big city (cold caches, JIT).
 - `npx tsx scripts/bench.ts 12 9` (the older ~12k town): tick avg ~0.12–0.21 ms.
+- Rendering the ~100k city (`scripts/dev/bigshot.mjs`, SwiftShader): 288 draw calls / 2.5M triangles at the whole-city overview (about half the triangles are the shadow pass), 156 / 1.8M at the city preset, 92 / 1.05M at street level. Was 1,241 draw calls before civic, building, road and zone chunks were enlarged.
 - Night town (720 residents, M9): ~95 draw calls, ~0.75M triangles on SwiftShader. A tornado adds 3 point systems (~2,200 points); flood water is one mesh; dust bursts share one point system.
 - Procedural models: mean triangles per building R0 139, R1 329, R2 622, C0 102, C1 254, C2 481, I 174–217 (`scripts/dev/modelstats.ts`).
 
 ## To check on the Mac
+- The ~100k city (`npx tsx scripts/bench.ts 6 --big --save city.gz`, then Load city → Import from file): frame rate while panning the overview and the city preset at 3× speed (target 60 fps); 2.5M triangles at the overview, if the GPU struggles, per-building LOD is the next step.
 - Game shell: the main menu's slow orbit over the backdrop should be smooth; the three quality levels should look and perform distinctly; interface size 140 % on a laptop screen (the top bar drops the Jobs stat and city name when it would not fit).
 - Landmarks and specialisation buildings (clock tower, wheel, sky needle, arch, hotel, mine, well, freight terminal, research park): how they look close up at full resolution, and the milestone banner's confetti at 60 fps.
 - Disasters: frame rate with a tornado funnel and flood water on screen; whether the earthquake camera shake feels right at 60 fps.
